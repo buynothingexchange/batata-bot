@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Partials, Events, Message, ChannelType } from "discord.js";
+import { Client, GatewayIntentBits, Partials, Events, Message, ChannelType, EmbedBuilder } from "discord.js";
 import { storage } from "./storage";
 import { insertLogSchema } from "@shared/schema";
 import { log } from "./vite";
@@ -84,7 +84,7 @@ async function handleMessage(message: Message) {
     
     // Check if the message is a reply and contains the command
     if (
-      message.content.trim() === config.commandTrigger &&
+      message.content.trim().startsWith(config.commandTrigger) &&
       message.reference &&
       message.reference.messageId
     ) {
@@ -121,6 +121,29 @@ async function handleMessage(message: Message) {
               : message.channel.type === ChannelType.GuildText
                 ? (message.channel as any).name
                 : 'unknown-channel';
+                
+          // Check if there are user mentions in the message
+          let mentionedUser = null;
+          
+          // Check if the message contains mentions
+          if (message.mentions.users.size > 0) {
+            // Get the first mentioned user
+            mentionedUser = message.mentions.users.first();
+            
+            if (mentionedUser) {
+              // Create an embed message using EmbedBuilder for proper type safety
+              const embed = new EmbedBuilder()
+                .setColor(0x5865F2) // Discord blue color
+                .setTitle("Item Claimed")
+                .setDescription(`This item has been claimed by ${mentionedUser}`)
+                .setTimestamp()
+                .setFooter({ text: `Claimed via ${config.commandTrigger} command` });
+              
+              // Send the embed as a reply to the original message
+              await referencedMessage.reply({ embeds: [embed] });
+              log(`Created claim embed for ${mentionedUser.username} in #${channelName}`, "discord-bot");
+            }
+          }
           
           // Log the successful action
           await storage.createLog({
@@ -130,7 +153,9 @@ async function handleMessage(message: Message) {
             channel: channelName,
             emoji: config.reactionEmoji,
             status: "success",
-            message: "Added claim reaction to user's message",
+            message: mentionedUser ? 
+              `Added claim reaction and created embed for ${mentionedUser.username}` : 
+              "Added claim reaction to user's message",
             guildId: message.guild?.id,
             messageId: message.id,
             referencedMessageId: referencedMessage.id
@@ -214,8 +239,12 @@ export async function processCommand(command: string) {
     }
     
     // For testing purposes, simulate a successful command
-    if (command === config.commandTrigger) {
+    if (command.startsWith(config.commandTrigger)) {
       commandsProcessed++;
+      
+      // Check if there's a mention in the command (format: @username)
+      const hasMention = command.includes('@');
+      const mentionedUsername = hasMention ? command.split('@')[1]?.trim() : null;
       
       // Create a simulated log entry
       const log = await storage.createLog({
@@ -225,7 +254,9 @@ export async function processCommand(command: string) {
         channel: "test-channel",
         emoji: config.reactionEmoji,
         status: "success",
-        message: "Test command processed successfully",
+        message: mentionedUsername ? 
+          `Added claim reaction and created embed for @${mentionedUsername}` : 
+          "Test command processed successfully",
         messageId: "test-message-id",
       });
       
@@ -238,7 +269,7 @@ export async function processCommand(command: string) {
         command,
         channel: "test-channel",
         status: "error",
-        message: `Invalid command. Expected '${config.commandTrigger}'`,
+        message: `Invalid command. Command should start with '${config.commandTrigger}'`,
         messageId: "test-message-id",
       });
       
