@@ -37,7 +37,7 @@ export async function initializeBot() {
     if (!config) {
       await storage.createBotConfig({
         commandTrigger: "!claimed",
-        reactionEmoji: "✅",
+        reactionEmoji: "<:claimed:1358472533304676473>",
         token
       });
     }
@@ -99,31 +99,66 @@ async function handleMessage(message: Message) {
       ) || referencedMessage.embeds.some(embed => embed.image);
       
       if (hasImage) {
-        // Add the reaction to the referenced message
-        await referencedMessage.react(config.reactionEmoji);
-        
-        // Log the successful action
-        await storage.createLog({
-          userId: message.author.id,
-          username: message.author.username,
-          command: message.content,
-          channel: message.channel.name,
-          emoji: config.reactionEmoji,
-          status: "success",
-          message: "Added claim reaction to user's message",
-          guildId: message.guild?.id,
-          messageId: message.id,
-          referencedMessageId: referencedMessage.id
-        });
-        
-        log(`Added reaction ${config.reactionEmoji} to image in #${message.channel.name}`, "discord-bot");
+        try {
+          // Add the reaction to the referenced message
+          // Check if this is a custom emoji (format: <:name:id>)
+          if (config.reactionEmoji.startsWith('<:') && config.reactionEmoji.endsWith('>')) {
+            const emojiId = config.reactionEmoji.split(':').pop()?.slice(0, -1);
+            if (emojiId) {
+              await referencedMessage.react(emojiId);
+            } else {
+              throw new Error("Invalid custom emoji format");
+            }
+          } else {
+            await referencedMessage.react(config.reactionEmoji);
+          }
+          
+          // Get channel name safely
+          const channelName = message.channel.type === ChannelType.DM
+            ? 'DM'
+            : message.channel.type === ChannelType.GuildVoice 
+              ? (message.channel as any).name || 'voice-channel'
+              : message.channel.type === ChannelType.GuildText
+                ? (message.channel as any).name
+                : 'unknown-channel';
+          
+          // Log the successful action
+          await storage.createLog({
+            userId: message.author.id,
+            username: message.author.username,
+            command: message.content,
+            channel: channelName,
+            emoji: config.reactionEmoji,
+            status: "success",
+            message: "Added claim reaction to user's message",
+            guildId: message.guild?.id,
+            messageId: message.id,
+            referencedMessageId: referencedMessage.id
+          });
+          
+          log(`Added reaction ${config.reactionEmoji} to image in #${channelName}`, "discord-bot");
+        } catch (error) {
+          const reactionError = error as Error;
+          log(`Error adding reaction: ${reactionError}`, "discord-bot");
+          await message.reply(`Failed to add reaction: ${reactionError.message}`);
+          throw reactionError;
+        }
       } else {
+        // Get channel name safely
+        const channelName = message.channel.type === ChannelType.DM
+          ? 'DM'
+          : message.channel.type === ChannelType.GuildVoice 
+            ? (message.channel as any).name || 'voice-channel'
+            : message.channel.type === ChannelType.GuildText
+              ? (message.channel as any).name
+              : 'unknown-channel';
+        
         // Log the error for the missing image
         await storage.createLog({
           userId: message.author.id,
           username: message.author.username,
           command: message.content,
-          channel: message.channel.name,
+          channel: channelName,
           emoji: config.reactionEmoji,
           status: "error",
           message: "No image found in referenced message",
@@ -132,7 +167,7 @@ async function handleMessage(message: Message) {
           referencedMessageId: referencedMessage.id
         });
         
-        log(`Failed to add reaction in #${message.channel.name} - No image found`, "discord-bot");
+        log(`Failed to add reaction in #${channelName} - No image found`, "discord-bot");
         // Optionally, respond to the user
         await message.reply("The message you replied to doesn't contain an image.");
       }
@@ -143,11 +178,20 @@ async function handleMessage(message: Message) {
     // Attempt to log the error
     try {
       if (message) {
+        // Get channel name safely
+        const errorChannelName = message.channel.type === ChannelType.DM
+          ? 'DM'
+          : message.channel.type === ChannelType.GuildVoice 
+            ? (message.channel as any).name || 'voice-channel'
+            : message.channel.type === ChannelType.GuildText
+              ? (message.channel as any).name
+              : 'unknown-channel';
+              
         await storage.createLog({
           userId: message.author.id,
           username: message.author.username,
           command: message.content,
-          channel: message.channel.name || "unknown",
+          channel: errorChannelName,
           status: "error",
           message: `Error processing command: ${error}`,
           guildId: message.guild?.id,

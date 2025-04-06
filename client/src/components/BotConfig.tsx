@@ -42,10 +42,26 @@ const BotConfig = ({
   onRestartBot 
 }: BotConfigProps) => {
   const [commandTrigger, setCommandTrigger] = useState(config?.commandTrigger || "!claimed");
-  const [reactionEmoji, setReactionEmoji] = useState(config?.reactionEmoji || "✅");
+  const [reactionEmoji, setReactionEmoji] = useState(config?.reactionEmoji || "<:claimed:1358472533304676473>");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   
+  // Validate and sanitize the emoji input
+  const validateCustomEmoji = (emoji: string): boolean => {
+    // Standard emoji format
+    if (emoji.length === 1 || emoji.length === 2) return true;
+    
+    // Custom emoji format <:name:id>
+    const customEmojiRegex = /^<:[a-zA-Z0-9_]+:[0-9]+>$/;
+    return customEmojiRegex.test(emoji);
+  };
+
   const handleSaveChanges = () => {
+    // Make sure emoji is valid format
+    if (!validateCustomEmoji(reactionEmoji)) {
+      alert("Invalid emoji format. Please use a standard emoji or Discord custom emoji format (<:name:id>)");
+      return;
+    }
+    
     onUpdateConfig({
       commandTrigger,
       reactionEmoji
