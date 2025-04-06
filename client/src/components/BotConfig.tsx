@@ -179,12 +179,35 @@ const BotConfig = ({
         </div>
       </div>
       
+      {/* Command Information */}
+      <div className="mb-6">
+        <h4 className="text-sm uppercase text-[#B9BBBE] font-bold mb-2">Bot Commands</h4>
+        <div className="bg-[#36393f] rounded-md p-3">
+          <div className="mb-3">
+            <div className="text-sm text-[#B9BBBE] mb-3">
+              <p className="mb-2">Batata supports two commands:</p>
+              <p className="flex items-center mb-1">
+                <span className="text-[#5865F2] font-bold mr-2">{commandTrigger}</span>
+                <span>- Marks an image as claimed with {reactionEmoji}</span>
+              </p>
+              <p className="flex items-center">
+                <span className="text-[#57F287] font-bold mr-2">!resol</span>
+                <span>- Marks an issue as resolved with <span className="text-white">{"<:resol:1358566610973102130>"}</span></span>
+              </p>
+              <p className="mt-2">Add @username mentions to attribute claims and resolutions in embeds.</p>
+            </div>
+          </div>
+          
+          <div className="h-px bg-[#4F545C40] mb-3"></div>
+        </div>
+      </div>
+      
       {/* Reaction Configuration */}
       <div className="mb-6">
         <h4 className="text-sm uppercase text-[#B9BBBE] font-bold mb-2">Reaction Settings</h4>
         <div className="bg-[#36393f] rounded-md p-3">
           <div className="mb-3">
-            <label className="block text-sm mb-1">Command Trigger</label>
+            <label className="block text-sm mb-1">Claim Command Trigger</label>
             <div className="relative">
               <input 
                 type="text" 
@@ -196,7 +219,7 @@ const BotConfig = ({
           </div>
           
           <div className="mb-1">
-            <label className="block text-sm mb-1">Reaction Emoji</label>
+            <label className="block text-sm mb-1">Claim Reaction Emoji</label>
             <div className="flex items-center">
               <div className="relative flex-grow">
                 <input 
@@ -247,13 +270,24 @@ const BotConfig = ({
             </div>
           </div>
           
-          <div className="mt-3">
+          <div className="mt-3 mb-2">
             <button 
               className="w-full bg-[#5865F2] hover:bg-opacity-80 text-white py-2 rounded-md transition"
               onClick={handleSaveChanges}
             >
               Save Changes
             </button>
+          </div>
+          
+          <div className="text-xs text-[#B9BBBE] flex items-start">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-[#FEE75C] flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>
+              Note: The !resol command is fixed and cannot be changed. It will always use the <span className="text-white">{"<:resol:1358566610973102130>"}</span> emoji.
+            </span>
           </div>
         </div>
       </div>

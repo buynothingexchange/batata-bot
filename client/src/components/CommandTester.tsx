@@ -26,7 +26,7 @@ const CommandTester = ({ onSendCommand }: CommandTesterProps) => {
       <div className="flex">
         <input 
           type="text" 
-          placeholder="Type !claimed to test the bot..." 
+          placeholder="Type !claimed or !resol @username to test the bot..." 
           className="flex-grow bg-[#40444b] text-white rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#5865F2]" 
           value={command}
           onChange={(e) => setCommand(e.target.value)}

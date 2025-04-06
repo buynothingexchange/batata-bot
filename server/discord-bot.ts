@@ -17,6 +17,21 @@ const intents = [
 
 const partials = [Partials.Message, Partials.Channel, Partials.Reaction];
 
+// Helper function to add default channels for the UI
+async function addDefaultChannels() {
+  const defaultChannels = [
+    { channelId: "items-exchange", channelName: "items-exchange", guildId: "default", enabled: true },
+    { channelId: "trading-post", channelName: "trading-post", guildId: "default", enabled: true },
+    { channelId: "general", channelName: "general", guildId: "default", enabled: true }
+  ];
+  
+  for (const channel of defaultChannels) {
+    await storage.createAllowedChannel(channel);
+  }
+  
+  log("Added default allowed channels", "discord-bot");
+}
+
 // Initialize the Discord bot
 export async function initializeBot() {
   try {
@@ -83,37 +98,122 @@ async function handleMessage(message: Message) {
       return;
     }
     
-    // Check if the message is a reply and contains the command
-    if (
-      message.content.trim().startsWith(config.commandTrigger) &&
-      message.reference &&
-      message.reference.messageId
-    ) {
-      commandsProcessed++;
+    // Check if the message is a reply
+    if (message.reference && message.reference.messageId) {
+      const messageContent = message.content.trim();
       
-      // Get the referenced message
-      const referencedMessage = await message.channel.messages.fetch(message.reference.messageId);
+      // Check for claim command (!claimed)
+      const isClaimCommand = messageContent.startsWith(config.commandTrigger);
+      // Check for resolve command (!resol)
+      const isResolCommand = messageContent.startsWith("!resol");
       
-      // Check if the referenced message has an image
-      const hasImage = referencedMessage.attachments.some(
-        attachment => attachment.contentType?.startsWith('image/')
-      ) || referencedMessage.embeds.some(embed => embed.image);
-      
-      if (hasImage) {
-        try {
-          // Add the reaction to the referenced message
-          // Check if this is a custom emoji (format: <:name:id>)
-          if (config.reactionEmoji.startsWith('<:') && config.reactionEmoji.endsWith('>')) {
-            const emojiId = config.reactionEmoji.split(':').pop()?.slice(0, -1);
-            if (emojiId) {
-              await referencedMessage.react(emojiId);
+      // Process if either command is detected
+      if (isClaimCommand || isResolCommand) {
+        commandsProcessed++;
+        
+        // Get the referenced message
+        const referencedMessage = await message.channel.messages.fetch(message.reference.messageId);
+        
+        // Check if the referenced message has an image
+        const hasImage = referencedMessage.attachments.some(
+          attachment => attachment.contentType?.startsWith('image/')
+        ) || referencedMessage.embeds.some(embed => embed.image);
+        
+        if (hasImage) {
+          try {
+            // Determine which emoji to use based on the command
+            const emojiToUse = isClaimCommand 
+              ? config.reactionEmoji 
+              : "<:resol:1358566610973102130>";
+              
+            // Add the reaction to the referenced message
+            // Check if this is a custom emoji (format: <:name:id>)
+            if (emojiToUse.startsWith('<:') && emojiToUse.endsWith('>')) {
+              const emojiId = emojiToUse.split(':').pop()?.slice(0, -1);
+              if (emojiId) {
+                await referencedMessage.react(emojiId);
+              } else {
+                throw new Error("Invalid custom emoji format");
+              }
             } else {
-              throw new Error("Invalid custom emoji format");
+              await referencedMessage.react(emojiToUse);
             }
-          } else {
-            await referencedMessage.react(config.reactionEmoji);
+            
+            // Get channel name safely
+            const channelName = message.channel.type === ChannelType.DM
+              ? 'DM'
+              : message.channel.type === ChannelType.GuildVoice 
+                ? (message.channel as any).name || 'voice-channel'
+                : message.channel.type === ChannelType.GuildText
+                  ? (message.channel as any).name
+                  : 'unknown-channel';
+                  
+            // Check if there are user mentions in the message
+            let mentionedUser = null;
+            
+            // Check if the message contains mentions
+            if (message.mentions.users.size > 0) {
+              // Get the first mentioned user
+              mentionedUser = message.mentions.users.first();
+              
+              if (mentionedUser) {
+                // Create embed based on command type
+                const embed = new EmbedBuilder()
+                  .setColor(isClaimCommand ? 0x5865F2 : 0x57F287) // Blue for claims, green for resolved
+                  .setTitle(isClaimCommand ? "Item Claimed" : "Issue Resolved")
+                  .setDescription(isClaimCommand
+                    ? `This item has been claimed by ${mentionedUser}`
+                    : `This issue has been resolved by ${mentionedUser}`)
+                  .setTimestamp()
+                  .setFooter({ 
+                    text: isClaimCommand
+                      ? `Claimed via ${config.commandTrigger} command`
+                      : `Resolved via !resol command`
+                  });
+                
+                // Send the embed as a reply to the original message
+                await referencedMessage.reply({ embeds: [embed] });
+                
+                const actionType = isClaimCommand ? "claim" : "resolution";
+                log(`Created ${actionType} embed for ${mentionedUser.username} in #${channelName}`, "discord-bot");
+              }
+            }
+            
+            // Log the successful action
+            await storage.createLog({
+              userId: message.author.id,
+              username: message.author.username,
+              command: message.content,
+              channel: channelName,
+              emoji: emojiToUse,
+              status: "success",
+              message: mentionedUser
+                ? `Added ${isClaimCommand ? "claim" : "resolution"} reaction and created embed for ${mentionedUser.username}`
+                : `Added ${isClaimCommand ? "claim" : "resolution"} reaction to user's message`,
+              guildId: message.guild?.id,
+              messageId: message.id,
+              referencedMessageId: referencedMessage.id
+            });
+            
+            log(`Added reaction ${emojiToUse} to image in #${channelName}`, "discord-bot");
+          } catch (error) {
+            const reactionError = error as Error;
+            log(`Error adding reaction: ${reactionError}`, "discord-bot");
+            
+            // Check if this is a permissions error
+            if (reactionError.message?.includes('Missing Permissions') || 
+                reactionError.message?.includes('50013')) {
+              await message.reply(
+                "I don't have enough permissions to add reactions or send messages. " +
+                "Please ask a server admin to check my role permissions. I need: " +
+                "Read Messages, Send Messages, Read Message History, Add Reactions, and Embed Links."
+              );
+            } else {
+              await message.reply(`Failed to add reaction: ${reactionError.message}`);
+            }
+            throw reactionError;
           }
-          
+        } else {
           // Get channel name safely
           const channelName = message.channel.type === ChannelType.DM
             ? 'DM'
@@ -122,91 +222,25 @@ async function handleMessage(message: Message) {
               : message.channel.type === ChannelType.GuildText
                 ? (message.channel as any).name
                 : 'unknown-channel';
-                
-          // Check if there are user mentions in the message
-          let mentionedUser = null;
           
-          // Check if the message contains mentions
-          if (message.mentions.users.size > 0) {
-            // Get the first mentioned user
-            mentionedUser = message.mentions.users.first();
-            
-            if (mentionedUser) {
-              // Create an embed message using EmbedBuilder for proper type safety
-              const embed = new EmbedBuilder()
-                .setColor(0x5865F2) // Discord blue color
-                .setTitle("Item Claimed")
-                .setDescription(`This item has been claimed by ${mentionedUser}`)
-                .setTimestamp()
-                .setFooter({ text: `Claimed via ${config.commandTrigger} command` });
-              
-              // Send the embed as a reply to the original message
-              await referencedMessage.reply({ embeds: [embed] });
-              log(`Created claim embed for ${mentionedUser.username} in #${channelName}`, "discord-bot");
-            }
-          }
-          
-          // Log the successful action
+          // Log the error for the missing image
           await storage.createLog({
             userId: message.author.id,
             username: message.author.username,
             command: message.content,
             channel: channelName,
-            emoji: config.reactionEmoji,
-            status: "success",
-            message: mentionedUser ? 
-              `Added claim reaction and created embed for ${mentionedUser.username}` : 
-              "Added claim reaction to user's message",
+            emoji: isClaimCommand ? config.reactionEmoji : "<:resol:1358566610973102130>",
+            status: "error",
+            message: "No image found in referenced message",
             guildId: message.guild?.id,
             messageId: message.id,
             referencedMessageId: referencedMessage.id
           });
           
-          log(`Added reaction ${config.reactionEmoji} to image in #${channelName}`, "discord-bot");
-        } catch (error) {
-          const reactionError = error as Error;
-          log(`Error adding reaction: ${reactionError}`, "discord-bot");
-          
-          // Check if this is a permissions error
-          if (reactionError.message?.includes('Missing Permissions') || 
-              reactionError.message?.includes('50013')) {
-            await message.reply(
-              "I don't have enough permissions to add reactions or send messages. " +
-              "Please ask a server admin to check my role permissions. I need: " +
-              "Read Messages, Send Messages, Read Message History, Add Reactions, and Embed Links."
-            );
-          } else {
-            await message.reply(`Failed to add reaction: ${reactionError.message}`);
-          }
-          throw reactionError;
+          log(`Failed to add reaction in #${channelName} - No image found`, "discord-bot");
+          // Optionally, respond to the user
+          await message.reply("The message you replied to doesn't contain an image.");
         }
-      } else {
-        // Get channel name safely
-        const channelName = message.channel.type === ChannelType.DM
-          ? 'DM'
-          : message.channel.type === ChannelType.GuildVoice 
-            ? (message.channel as any).name || 'voice-channel'
-            : message.channel.type === ChannelType.GuildText
-              ? (message.channel as any).name
-              : 'unknown-channel';
-        
-        // Log the error for the missing image
-        await storage.createLog({
-          userId: message.author.id,
-          username: message.author.username,
-          command: message.content,
-          channel: channelName,
-          emoji: config.reactionEmoji,
-          status: "error",
-          message: "No image found in referenced message",
-          guildId: message.guild?.id,
-          messageId: message.id,
-          referencedMessageId: referencedMessage.id
-        });
-        
-        log(`Failed to add reaction in #${channelName} - No image found`, "discord-bot");
-        // Optionally, respond to the user
-        await message.reply("The message you replied to doesn't contain an image.");
       }
     }
   } catch (error) {
@@ -267,12 +301,20 @@ export async function processCommand(command: string) {
     }
     
     // For testing purposes, simulate a successful command
-    if (command.startsWith(config.commandTrigger)) {
+    const isClaimCommand = command.startsWith(config.commandTrigger);
+    const isResolCommand = command.startsWith("!resol");
+    
+    if (isClaimCommand || isResolCommand) {
       commandsProcessed++;
       
       // Check if there's a mention in the command (format: @username)
       const hasMention = command.includes('@');
       const mentionedUsername = hasMention ? command.split('@')[1]?.trim() : null;
+      
+      // Determine which emoji to use based on the command
+      const emojiToUse = isClaimCommand 
+        ? config.reactionEmoji 
+        : "<:resol:1358566610973102130>";
       
       // Create a simulated log entry
       const log = await storage.createLog({
@@ -280,11 +322,15 @@ export async function processCommand(command: string) {
         username: "Dashboard Test",
         command,
         channel: "test-channel",
-        emoji: config.reactionEmoji,
+        emoji: emojiToUse,
         status: "success",
-        message: mentionedUsername ? 
-          `Added claim reaction and created embed for @${mentionedUsername}` : 
-          "Test command processed successfully",
+        message: mentionedUsername 
+          ? isClaimCommand
+            ? `Added claim reaction and created embed for @${mentionedUsername}`
+            : `Added resolution reaction and created embed for @${mentionedUsername}`
+          : isClaimCommand
+            ? "Test claim command processed successfully"
+            : "Test resolution command processed successfully",
         messageId: "test-message-id",
       });
       
@@ -297,7 +343,7 @@ export async function processCommand(command: string) {
         command,
         channel: "test-channel",
         status: "error",
-        message: `Invalid command. Command should start with '${config.commandTrigger}'`,
+        message: `Invalid command. Command should start with '${config.commandTrigger}' or '!resol'`,
         messageId: "test-message-id",
       });
       
@@ -393,19 +439,4 @@ function calculateUptime(startTime: Date): string {
   } else {
     return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
   }
-}
-
-// Helper function to add default channels for the UI
-async function addDefaultChannels() {
-  const defaultChannels = [
-    { channelId: "items-exchange", channelName: "items-exchange", guildId: "default", enabled: true },
-    { channelId: "trading-post", channelName: "trading-post", guildId: "default", enabled: true },
-    { channelId: "general", channelName: "general", guildId: "default", enabled: true }
-  ];
-  
-  for (const channel of defaultChannels) {
-    await storage.createAllowedChannel(channel);
-  }
-  
-  log("Added default allowed channels", "discord-bot");
 }
