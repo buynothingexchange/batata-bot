@@ -339,8 +339,8 @@ function calculateUptime(startTime: Date): string {
 // Helper function to add default channels for the UI
 async function addDefaultChannels() {
   const defaultChannels = [
-    { channelId: "artwork", channelName: "artwork", guildId: "default", enabled: true },
-    { channelId: "commissions", channelName: "commissions", guildId: "default", enabled: true },
+    { channelId: "items-exchange", channelName: "items-exchange", guildId: "default", enabled: true },
+    { channelId: "trading-post", channelName: "trading-post", guildId: "default", enabled: true },
     { channelId: "general", channelName: "general", guildId: "default", enabled: true }
   ];
   

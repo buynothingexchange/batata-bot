@@ -139,7 +139,7 @@ const ActivityLog = ({ logs, isLoading }: ActivityLogProps) => {
                         </div>
                         <div>
                           <div className="flex items-center">
-                            <span className={`font-semibold ${index === 0 && date === 'Today' ? 'text-[#57F287]' : ''}`}>ClaimBot</span>
+                            <span className={`font-semibold ${index === 0 && date === 'Today' ? 'text-[#57F287]' : ''}`}>Batata</span>
                             <span className="text-xs text-[#B9BBBE] ml-2">
                               {format(new Date(log.timestamp), 'p')}
                             </span>

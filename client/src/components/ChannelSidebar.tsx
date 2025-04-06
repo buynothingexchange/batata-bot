@@ -7,7 +7,7 @@ const ChannelSidebar = ({ isOpen, onClose }: ChannelSidebarProps) => {
   return (
     <div className={`w-60 bg-[#2f3136] h-full flex flex-col absolute z-10 md:relative md:block ${isOpen ? 'block' : 'hidden md:block'}`}>
       <div className="p-4 border-b border-[#2C2F33]">
-        <h2 className="font-bold text-xl">ClaimBot</h2>
+        <h2 className="font-bold text-xl">Batata</h2>
         <div className="flex items-center mt-2">
           <div className="w-3 h-3 rounded-full bg-[#57F287] mr-2"></div>
           <span className="text-sm text-[#B9BBBE]">Online</span>
