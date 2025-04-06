@@ -188,12 +188,13 @@ const BotConfig = ({
               <p className="mb-2">Batata supports two commands:</p>
               <p className="flex items-center mb-1">
                 <span className="text-[#5865F2] font-bold mr-2">{commandTrigger}</span>
-                <span>- Marks an image as claimed with {reactionEmoji}</span>
+                <span>- Marks an <span className="underline">image</span> as claimed with {reactionEmoji}</span>
               </p>
               <p className="flex items-center">
                 <span className="text-[#57F287] font-bold mr-2">!resol</span>
-                <span>- Marks an issue as resolved with <span className="text-white">{"<:resol:1358566610973102130>"}</span></span>
+                <span>- Marks <span className="underline">any message</span> as resolved with <span className="text-white">{"<:resol:1358566610973102130>"}</span></span>
               </p>
+              <p className="mt-3 text-xs text-[#B9BBBE]">The !claimed command only works with images, while !resol works with all message types.</p>
               <p className="mt-2">Add @username mentions to attribute claims and resolutions in embeds.</p>
             </div>
           </div>

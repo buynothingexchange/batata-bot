@@ -119,7 +119,9 @@ async function handleMessage(message: Message) {
           attachment => attachment.contentType?.startsWith('image/')
         ) || referencedMessage.embeds.some(embed => embed.image);
         
-        if (hasImage) {
+        // For !resol command, we allow any message type
+        // For !claimed command, we require an image
+        if (isResolCommand || hasImage) {
           try {
             // Determine which emoji to use based on the command
             const emojiToUse = isClaimCommand 
@@ -195,7 +197,12 @@ async function handleMessage(message: Message) {
               referencedMessageId: referencedMessage.id
             });
             
-            log(`Added reaction ${emojiToUse} to image in #${channelName}`, "discord-bot");
+            // Different log message depending on the command and content type
+            if (isClaimCommand) {
+              log(`Added claim reaction ${emojiToUse} to image in #${channelName}`, "discord-bot");
+            } else {
+              log(`Added resolution reaction ${emojiToUse} to message in #${channelName}`, "discord-bot");
+            }
           } catch (error) {
             const reactionError = error as Error;
             log(`Error adding reaction: ${reactionError}`, "discord-bot");
@@ -223,13 +230,13 @@ async function handleMessage(message: Message) {
                 ? (message.channel as any).name
                 : 'unknown-channel';
           
-          // Log the error for the missing image
+          // Log the error for the missing image (only happens with claim command now)
           await storage.createLog({
             userId: message.author.id,
             username: message.author.username,
             command: message.content,
             channel: channelName,
-            emoji: isClaimCommand ? config.reactionEmoji : "<:resol:1358566610973102130>",
+            emoji: config.reactionEmoji,  // This only happens for claim command
             status: "error",
             message: "No image found in referenced message",
             guildId: message.guild?.id,
@@ -237,9 +244,9 @@ async function handleMessage(message: Message) {
             referencedMessageId: referencedMessage.id
           });
           
-          log(`Failed to add reaction in #${channelName} - No image found`, "discord-bot");
-          // Optionally, respond to the user
-          await message.reply("The message you replied to doesn't contain an image.");
+          log(`Failed to add reaction in #${channelName} - No image found for claim command`, "discord-bot");
+          // Respond to the user with specific guidance
+          await message.reply("The !claimed command can only be used on messages containing images.");
         }
       }
     }
@@ -306,6 +313,30 @@ export async function processCommand(command: string) {
     
     if (isClaimCommand || isResolCommand) {
       commandsProcessed++;
+
+      // Handle claim commands on non-image content
+      if (isClaimCommand) {
+        // Add a special test to simulate the image requirement for claim command
+        const isTestSimulateNoImage = command.toLowerCase().includes("noimage") || 
+                                      command.toLowerCase().includes("no image") ||
+                                      command.toLowerCase().includes("no-image");
+        
+        if (isTestSimulateNoImage) {
+          // Create an error log entry for missing image
+          const log = await storage.createLog({
+            userId: "dashboard",
+            username: "Dashboard Test",
+            command,
+            channel: "test-channel",
+            emoji: config.reactionEmoji,
+            status: "error",
+            message: "No image found in referenced message. The !claimed command only works with images.",
+            messageId: "test-message-id",
+          });
+          
+          return { success: false, log };
+        }
+      }
       
       // Check if there's a mention in the command (format: @username)
       const hasMention = command.includes('@');
