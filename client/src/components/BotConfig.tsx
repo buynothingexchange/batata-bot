@@ -260,13 +260,25 @@ const BotConfig = ({
       
       {/* Permissions */}
       <div className="mb-6">
-        <h4 className="text-sm uppercase text-[#B9BBBE] font-bold mb-2">Permissions</h4>
+        <h4 className="text-sm uppercase text-[#B9BBBE] font-bold mb-2">Required Permissions</h4>
         <div className="bg-[#36393f] rounded-md p-3">
+          <p className="text-sm text-[#B9BBBE] mb-3">
+            The bot needs these permissions to function properly. If you're experiencing errors, 
+            please check that Batata has these permissions in your Discord server.
+          </p>
+
           <div className="flex items-center justify-between mb-2">
             <label className="text-sm flex items-center">
-              <span>Manage Messages</span>
+              <span>Read Messages</span>
             </label>
-            <Switch checked={config.permissions.manageMessages} id="manage-messages" disabled />
+            <Switch checked={true} id="read-messages" disabled />
+          </div>
+
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm flex items-center">
+              <span>Send Messages</span>
+            </label>
+            <Switch checked={true} id="send-messages" disabled />
           </div>
           
           <div className="flex items-center justify-between mb-2">
@@ -276,11 +288,36 @@ const BotConfig = ({
             <Switch checked={config.permissions.addReactions} id="add-reactions" disabled />
           </div>
           
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-2">
             <label className="text-sm flex items-center">
               <span>Read Message History</span>
             </label>
             <Switch checked={config.permissions.readMessageHistory} id="read-history" disabled />
+          </div>
+          
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm flex items-center">
+              <span>Embed Links</span>
+            </label>
+            <Switch checked={true} id="embed-links" disabled />
+          </div>
+          
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm flex items-center">
+              <span>Manage Messages</span>
+            </label>
+            <Switch checked={config.permissions.manageMessages} id="manage-messages" disabled />
+          </div>
+
+          <div className="mt-2 px-2 py-1 bg-[#4F545C40] rounded text-sm text-[#B9BBBE]">
+            <p className="flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-[#FEE75C]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              If you see "Missing Permissions" errors, update these in your Discord server settings.
+            </p>
           </div>
         </div>
       </div>

@@ -48,6 +48,7 @@ export async function initializeBot() {
     // Set up event handlers
     bot.on(Events.ClientReady, async () => {
       log(`Bot logged in as ${bot?.user?.tag}`, "discord-bot");
+      log(`Required permissions: READ_MESSAGES, SEND_MESSAGES, READ_MESSAGE_HISTORY, ADD_REACTIONS, EMBED_LINKS`, "discord-bot");
       startTime = new Date();
       
       // Add default allowed channels if none exist
@@ -165,7 +166,18 @@ async function handleMessage(message: Message) {
         } catch (error) {
           const reactionError = error as Error;
           log(`Error adding reaction: ${reactionError}`, "discord-bot");
-          await message.reply(`Failed to add reaction: ${reactionError.message}`);
+          
+          // Check if this is a permissions error
+          if (reactionError.message?.includes('Missing Permissions') || 
+              reactionError.message?.includes('50013')) {
+            await message.reply(
+              "I don't have enough permissions to add reactions or send messages. " +
+              "Please ask a server admin to check my role permissions. I need: " +
+              "Read Messages, Send Messages, Read Message History, Add Reactions, and Embed Links."
+            );
+          } else {
+            await message.reply(`Failed to add reaction: ${reactionError.message}`);
+          }
           throw reactionError;
         }
       } else {
@@ -211,6 +223,22 @@ async function handleMessage(message: Message) {
             : message.channel.type === ChannelType.GuildText
               ? (message.channel as any).name
               : 'unknown-channel';
+              
+        // Check if this is a permissions error and provide helpful feedback
+        if (error instanceof Error && 
+           (error.message?.includes('Missing Permissions') || 
+            error.message?.includes('50013'))) {
+          try {
+            await message.reply(
+              "I don't have enough permissions to perform this action. " +
+              "Please ask a server admin to check my role permissions. I need: " +
+              "Read Messages, Send Messages, Read Message History, Add Reactions, and Embed Links."
+            );
+          } catch (replyError) {
+            // If we can't even reply, the permissions are very restricted
+            log(`Cannot send permission error message: ${replyError}`, "discord-bot");
+          }
+        }
               
         await storage.createLog({
           userId: message.author.id,
