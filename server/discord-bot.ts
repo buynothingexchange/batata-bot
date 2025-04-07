@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Partials, Events, Message, ChannelType, EmbedBuilder } from "discord.js";
+import { Client, GatewayIntentBits, Partials, Events, Message, ChannelType, EmbedBuilder, WebSocketShardEvents } from "discord.js";
 import { storage } from "./storage";
 import { insertLogSchema } from "@shared/schema";
 import { log } from "./vite";
@@ -7,6 +7,9 @@ import { log } from "./vite";
 let bot: Client | null = null;
 let startTime: Date | null = null;
 let commandsProcessed = 0;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 10;
+const RECONNECT_INTERVAL = 60000; // 1 minute
 
 const intents = [
   GatewayIntentBits.Guilds,
@@ -65,6 +68,7 @@ export async function initializeBot() {
       log(`Bot logged in as ${bot?.user?.tag}`, "discord-bot");
       log(`Required permissions: READ_MESSAGES, SEND_MESSAGES, READ_MESSAGE_HISTORY, ADD_REACTIONS, EMBED_LINKS`, "discord-bot");
       startTime = new Date();
+      reconnectAttempts = 0; // Reset reconnect attempts on successful connection
       
       // Add default allowed channels if none exist
       const channels = await storage.getAllowedChannels();
@@ -72,9 +76,45 @@ export async function initializeBot() {
         // Add some default channels for the UI
         await addDefaultChannels();
       }
+      
+      // Set up a health check interval that runs every 5 minutes
+      setInterval(performHealthCheck, 300000); // 5 minutes
     });
     
     bot.on(Events.MessageCreate, handleMessage);
+    
+    // Handle disconnection events
+    bot.on('shardDisconnect' as any, (closeEvent: { code: number; reason: string }) => {
+      log(`Bot disconnected with code ${closeEvent.code}. Reason: ${closeEvent.reason}`, "discord-bot");
+      // Create a log entry for the disconnection
+      storage.createLog({
+        userId: "system",
+        username: "System",
+        command: "N/A",
+        channel: "N/A",
+        status: "error",
+        message: `Bot disconnected with code ${closeEvent.code}. Reason: ${closeEvent.reason}`,
+        messageId: "system-message",
+      }).catch(err => log(`Error logging disconnect: ${err}`, "discord-bot"));
+      
+      // Attempt to reconnect automatically
+      attemptReconnect();
+    });
+    
+    // Handle errors
+    bot.on(Events.Error, (error) => {
+      log(`Bot encountered an error: ${error.message}`, "discord-bot");
+      // Create a log entry for the error
+      storage.createLog({
+        userId: "system",
+        username: "System",
+        command: "N/A",
+        channel: "N/A",
+        status: "error",
+        message: `Bot encountered an error: ${error.message}`,
+        messageId: "system-message",
+      }).catch(err => log(`Error logging bot error: ${err}`, "discord-bot"));
+    });
     
     // Log in to Discord
     await bot.login(token);
@@ -451,6 +491,114 @@ export async function restartBot() {
   } catch (error) {
     log(`Error restarting bot: ${error}`, "discord-bot");
     throw error;
+  }
+}
+
+// Health check function to verify bot is still connected
+async function performHealthCheck() {
+  try {
+    if (!bot || !bot.user) {
+      log("Health check failed: Bot is not initialized or not logged in", "discord-bot");
+      await attemptReconnect();
+      return;
+    }
+    
+    // Check if the bot is connected
+    if (bot.ws.status !== 0) { // 0 = WebSocket.OPEN
+      log(`Health check failed: WebSocket connection not open (status: ${bot.ws.status})`, "discord-bot");
+      await attemptReconnect();
+      return;
+    }
+    
+    // Bot is online and connected
+    log("Health check passed: Bot is online and connected", "discord-bot");
+  } catch (error) {
+    log(`Health check error: ${error}`, "discord-bot");
+    await attemptReconnect();
+  }
+}
+
+// Attempt to reconnect the bot after a disconnect
+async function attemptReconnect() {
+  try {
+    reconnectAttempts++;
+    
+    if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+      log(`Maximum reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached. Please restart the bot manually.`, "discord-bot");
+      
+      // Create a critical log entry
+      await storage.createLog({
+        userId: "system",
+        username: "System",
+        command: "reconnect",
+        channel: "N/A", 
+        status: "error",
+        message: `Maximum reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached. Please restart the bot manually.`,
+        messageId: "system-message"
+      });
+      
+      return;
+    }
+    
+    log(`Attempting to reconnect... (Attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`, "discord-bot");
+    
+    // Create a log entry for the reconnection attempt
+    await storage.createLog({
+      userId: "system",
+      username: "System",
+      command: "reconnect",
+      channel: "N/A", 
+      status: "warning",
+      message: `Attempting to reconnect... (Attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`,
+      messageId: "system-message"
+    });
+    
+    // Destroy the existing connection if it exists
+    if (bot) {
+      await bot.destroy();
+      bot = null;
+    }
+    
+    // Wait for a bit before reconnecting (with exponential backoff)
+    const backoffTime = Math.min(RECONNECT_INTERVAL * Math.pow(1.5, reconnectAttempts-1), 300000); // Max 5 minutes
+    log(`Waiting ${Math.round(backoffTime/1000)} seconds before reconnecting...`, "discord-bot");
+    
+    setTimeout(async () => {
+      try {
+        // Attempt to reinitialize the bot
+        await initializeBot();
+        log("Reconnection successful", "discord-bot");
+        
+        // Create a success log entry
+        await storage.createLog({
+          userId: "system",
+          username: "System",
+          command: "reconnect",
+          channel: "N/A", 
+          status: "success",
+          message: "Bot reconnected successfully",
+          messageId: "system-message"
+        });
+      } catch (error) {
+        log(`Reconnection failed: ${error}`, "discord-bot");
+        
+        // Create an error log entry
+        await storage.createLog({
+          userId: "system",
+          username: "System",
+          command: "reconnect",
+          channel: "N/A", 
+          status: "error",
+          message: `Reconnection failed: ${error}`,
+          messageId: "system-message"
+        });
+        
+        // Try again
+        attemptReconnect();
+      }
+    }, backoffTime);
+  } catch (error) {
+    log(`Error in attemptReconnect: ${error}`, "discord-bot");
   }
 }
 
