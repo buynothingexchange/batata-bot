@@ -8,8 +8,13 @@ let bot: Client | null = null;
 let startTime: Date | null = null;
 let commandsProcessed = 0;
 let reconnectAttempts = 0;
+let lastMessageTimestamp = Date.now();
+let forceReconnectInterval: NodeJS.Timeout | null = null;
+let healthCheckInterval: NodeJS.Timeout | null = null;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_INTERVAL = 60000; // 1 minute
+const HEALTH_CHECK_INTERVAL = 300000; // 5 minutes
+const MESSAGE_INACTIVITY_THRESHOLD = 3600000; // 1 hour - force reconnect if no messages processed
 
 const intents = [
   GatewayIntentBits.Guilds,
@@ -78,7 +83,29 @@ export async function initializeBot() {
       }
       
       // Set up a health check interval that runs every 5 minutes
-      setInterval(performHealthCheck, 300000); // 5 minutes
+      healthCheckInterval = setInterval(performHealthCheck, HEALTH_CHECK_INTERVAL);
+      
+      // Set up a forced reconnect interval based on message activity
+      forceReconnectInterval = setInterval(() => {
+        const now = Date.now();
+        const timeSinceLastMessage = now - lastMessageTimestamp;
+        
+        // If no messages processed in 1 hour, force reconnect
+        if (timeSinceLastMessage > MESSAGE_INACTIVITY_THRESHOLD) {
+          log(`No message activity for ${Math.floor(timeSinceLastMessage / 60000)} minutes. Forcing reconnection...`, "discord-bot");
+          storage.createLog({
+            userId: "system",
+            username: "System",
+            command: "force-reconnect",
+            channel: "N/A",
+            status: "warning",
+            message: `No message activity detected for ${Math.floor(timeSinceLastMessage / 60000)} minutes. Forcing bot reconnection.`,
+            messageId: "system-message"
+          }).catch(err => log(`Error logging force reconnect: ${err}`, "discord-bot"));
+          
+          restartBot().catch(err => log(`Error during forced reconnect: ${err}`, "discord-bot"));
+        }
+      }, 900000); // Check every 15 minutes
     });
     
     bot.on(Events.MessageCreate, handleMessage);
@@ -128,6 +155,9 @@ export async function initializeBot() {
 // Handle incoming messages
 async function handleMessage(message: Message) {
   try {
+    // Update last message timestamp (used for heartbeat monitoring)
+    lastMessageTimestamp = Date.now();
+    
     // Ignore messages from bots
     if (message.author.bot) return;
     
@@ -479,11 +509,25 @@ export async function updateBotConfig(newConfig: { commandTrigger: string; react
 // Restart the bot
 export async function restartBot() {
   try {
+    // Clear existing intervals to avoid duplications
+    if (healthCheckInterval) {
+      clearInterval(healthCheckInterval);
+      healthCheckInterval = null;
+    }
+    
+    if (forceReconnectInterval) {
+      clearInterval(forceReconnectInterval);
+      forceReconnectInterval = null;
+    }
+    
     if (bot) {
       log("Destroying current bot instance", "discord-bot");
       await bot.destroy();
       bot = null;
     }
+    
+    // Reset the message timestamp to now to avoid immediate reconnection
+    lastMessageTimestamp = Date.now();
     
     log("Reinitializing bot", "discord-bot");
     await initializeBot();
@@ -494,7 +538,7 @@ export async function restartBot() {
   }
 }
 
-// Health check function to verify bot is still connected
+// Health check function to verify bot is still connected and active
 async function performHealthCheck() {
   try {
     if (!bot || !bot.user) {
@@ -510,8 +554,49 @@ async function performHealthCheck() {
       return;
     }
     
-    // Bot is online and connected
-    log("Health check passed: Bot is online and connected", "discord-bot");
+    // Check if the bot might be in a stale state (connected but not receiving events)
+    // This is a more aggressive check than the one in the timer interval
+    const now = Date.now();
+    const timeSinceLastMessage = now - lastMessageTimestamp;
+    const CHECK_THRESHOLD = 1800000; // 30 minutes of inactivity triggers a ping test
+    
+    if (timeSinceLastMessage > CHECK_THRESHOLD) {
+      log(`No message activity for ${Math.floor(timeSinceLastMessage / 60000)} minutes. Performing ping test...`, "discord-bot");
+      
+      try {
+        // Try to ping the Discord API - this will fail if the connection is stale
+        const pingStart = Date.now();
+        const guilds = bot.guilds.cache.size;
+        await bot.guilds.fetch();
+        const pingTime = Date.now() - pingStart;
+        
+        // If ping takes too long, consider the connection stale
+        if (pingTime > 5000) { // 5 seconds threshold
+          log(`Ping test took ${pingTime}ms (too long). Forcing reconnection...`, "discord-bot");
+          await storage.createLog({
+            userId: "system",
+            username: "System",
+            command: "health-check",
+            channel: "N/A",
+            status: "warning",
+            message: `Connection appears stale (ping: ${pingTime}ms). Forcing reconnection.`,
+            messageId: "system-message"
+          });
+          
+          await restartBot();
+        } else {
+          log(`Ping test successful (${pingTime}ms). Connection appears healthy despite inactivity.`, "discord-bot");
+          // Update the timestamp to avoid repeated ping tests
+          lastMessageTimestamp = Date.now();
+        }
+      } catch (pingError) {
+        log(`Ping test failed: ${pingError}. Forcing reconnection...`, "discord-bot");
+        await attemptReconnect();
+      }
+    } else {
+      // Bot is online and connected
+      log("Health check passed: Bot is online and connected", "discord-bot");
+    }
   } catch (error) {
     log(`Health check error: ${error}`, "discord-bot");
     await attemptReconnect();
