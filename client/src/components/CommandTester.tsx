@@ -34,7 +34,7 @@ const CommandTester = ({ onSendCommand }: CommandTesterProps) => {
             onKeyDown={handleKeyDown}
           />
           <div className="absolute mt-1 right-1 text-[10px] text-gray-400">
-            Tip: Type "hello" to test welcome message, or "noimage" to test !claimed on non-image content
+            Tip: Try "ISO gaming laptop" or "hello" to test features, or "noimage" with !claimed
           </div>
         </div>
         <button

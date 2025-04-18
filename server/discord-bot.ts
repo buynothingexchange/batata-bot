@@ -194,11 +194,18 @@ async function handleMessage(message: Message) {
     if (channelName === "items-exchange" &&
         message.content.trim().startsWith("ISO")) {
       try {
+        // Extract item name from the ISO request
+        // Remove "ISO " prefix and trim any extra whitespace
+        const itemText = message.content.trim().substring(3).trim();
+        
+        // Create the standardized REQUEST format template with the extracted item
+        const formattedResponse = `@${message.author.username} is looking for a ${itemText}.\n-Features:\n-Urgency:\n-Tags:`;
+        
         // Reply with the standardized REQUEST format template
-        await message.reply(`@${message.author.username} is looking for a [item].\n-Features:\n-Urgency:\n-Tags:`);
+        await message.reply(formattedResponse);
         
         // Log the ISO request formatting
-        log(`Formatted ISO request for ${message.author.username} in #items-exchange`, "discord-bot");
+        log(`Formatted ISO request for ${message.author.username} in #items-exchange: ${itemText}`, "discord-bot");
         
         // Create log entry
         await storage.createLog({
@@ -207,7 +214,7 @@ async function handleMessage(message: Message) {
           command: "ISO",
           channel: "items-exchange",
           status: "success",
-          message: `Formatted REQUEST category post for user`,
+          message: `Formatted REQUEST category post for item: ${itemText}`,
           messageId: message.id,
         }).catch(err => log(`Error logging ISO request formatting: ${err}`, "discord-bot"));
       } catch (error) {
@@ -438,6 +445,9 @@ export async function processCommand(command: string) {
     const isTestISO = command.trim().startsWith("ISO");
     
     if (isTestISO) {
+      // Extract item from the test ISO command
+      const itemText = command.trim().substring(3).trim() || "test item";
+      
       // Process test ISO request
       const log = await storage.createLog({
         userId: "dashboard",
@@ -445,7 +455,7 @@ export async function processCommand(command: string) {
         command,
         channel: "items-exchange",
         status: "success",
-        message: "Formatted REQUEST category post: @Dashboard Test is looking for a [item].",
+        message: `Formatted REQUEST category post: @Dashboard Test is looking for a ${itemText}.`,
         messageId: "test-message-id",
       });
       
