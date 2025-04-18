@@ -190,6 +190,31 @@ async function handleMessage(message: Message) {
       }
     }
     
+    // Check for ISO requests in items-exchange channel
+    if (channelName === "items-exchange" &&
+        message.content.trim().startsWith("ISO")) {
+      try {
+        // Reply with the standardized REQUEST format template
+        await message.reply(`@${message.author.username} is looking for a [item].\n-Features:\n-Urgency:\n-Tags:`);
+        
+        // Log the ISO request formatting
+        log(`Formatted ISO request for ${message.author.username} in #items-exchange`, "discord-bot");
+        
+        // Create log entry
+        await storage.createLog({
+          userId: message.author.id,
+          username: message.author.username,
+          command: "ISO",
+          channel: "items-exchange",
+          status: "success",
+          message: `Formatted REQUEST category post for user`,
+          messageId: message.id,
+        }).catch(err => log(`Error logging ISO request formatting: ${err}`, "discord-bot"));
+      } catch (error) {
+        log(`Error formatting ISO request: ${error}`, "discord-bot");
+      }
+    }
+    
     // Get the bot configuration
     const config = await storage.getBotConfig();
     if (!config) {
@@ -410,8 +435,23 @@ export async function processCommand(command: string) {
     const isClaimCommand = command.startsWith(config.commandTrigger);
     const isResolCommand = command.startsWith("!resol");
     const isTestWelcome = command.toLowerCase().includes("hello") || command.toLowerCase().includes("test welcome");
+    const isTestISO = command.trim().startsWith("ISO");
     
-    if (isTestWelcome) {
+    if (isTestISO) {
+      // Process test ISO request
+      const log = await storage.createLog({
+        userId: "dashboard",
+        username: "Dashboard Test",
+        command,
+        channel: "items-exchange",
+        status: "success",
+        message: "Formatted REQUEST category post: @Dashboard Test is looking for a [item].",
+        messageId: "test-message-id",
+      });
+      
+      return { success: true, log };
+    }
+    else if (isTestWelcome) {
       // Process test welcome message
       const log = await storage.createLog({
         userId: "dashboard",

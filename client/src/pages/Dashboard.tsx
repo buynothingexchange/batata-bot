@@ -8,6 +8,7 @@ import ActivityLog from "@/components/ActivityLog";
 import BotConfig from "@/components/BotConfig";
 import CommandTester from "@/components/CommandTester";
 import { Log } from "@shared/schema";
+import { HelpCircleIcon } from "lucide-react";
 
 const Dashboard = () => {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
