@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits, Partials, Events, Message, ChannelType, Embe
 import { storage } from "./storage";
 import { insertLogSchema } from "@shared/schema";
 import { log } from "./vite";
+import { analyzeISORequest } from "./openai-service";
 
 // Bot instance and state
 let bot: Client | null = null;
@@ -194,31 +195,57 @@ async function handleMessage(message: Message) {
     if (channelName === "items-exchange" &&
         message.content.trim().startsWith("ISO")) {
       try {
-        // Extract item name from the ISO request
-        // Remove "ISO " prefix and trim any extra whitespace
-        const itemText = message.content.trim().substring(3).trim();
+        // Analyze the ISO request using OpenAI
+        const analysis = await analyzeISORequest(message.author.username, message.content);
         
-        // Create the standardized REQUEST format template with the extracted item
-        const formattedResponse = `@${message.author.username} is looking for a ${itemText}.\n-Features:\n-Urgency:\n-Tags:`;
+        // Build features list if available
+        let featuresText = "-Features:";
+        if (analysis.features && analysis.features.length > 0) {
+          featuresText = "-Features: " + analysis.features.join(", ");
+        }
+        
+        // Add urgency if available
+        const urgencyText = `-Urgency: ${analysis.urgency || "Not specified"}`;
+        
+        // Add tags if available
+        let tagsText = "-Tags:";
+        if (analysis.tags && analysis.tags.length > 0) {
+          tagsText = "-Tags: " + analysis.tags.join(", ");
+        }
+        
+        // Create the standardized REQUEST format template with the extracted information
+        const formattedResponse = `@${message.author.username} is looking for a ${analysis.item}.\n${featuresText}\n${urgencyText}\n${tagsText}`;
         
         // Reply with the standardized REQUEST format template
         await message.reply(formattedResponse);
         
         // Log the ISO request formatting
-        log(`Formatted ISO request for ${message.author.username} in #items-exchange: ${itemText}`, "discord-bot");
+        log(`AI-formatted ISO request for ${message.author.username} in #items-exchange: ${analysis.item}`, "discord-bot");
         
-        // Create log entry
+        // Create log entry with AI analysis status
         await storage.createLog({
           userId: message.author.id,
           username: message.author.username,
           command: "ISO",
           channel: "items-exchange",
           status: "success",
-          message: `Formatted REQUEST category post for item: ${itemText}`,
+          message: `AI ${analysis.success ? "successfully" : "attempted to"} format REQUEST category post for item: ${analysis.item}`,
           messageId: message.id,
         }).catch(err => log(`Error logging ISO request formatting: ${err}`, "discord-bot"));
       } catch (error) {
         log(`Error formatting ISO request: ${error}`, "discord-bot");
+        
+        try {
+          // Fallback to basic extraction if AI analysis fails
+          const itemText = message.content.trim().substring(3).trim();
+          const fallbackResponse = `@${message.author.username} is looking for a ${itemText}.\n-Features:\n-Urgency:\n-Tags:`;
+          await message.reply(fallbackResponse);
+          
+          // Log the fallback formatting
+          log(`Fallback formatted ISO request for ${message.author.username} in #items-exchange: ${itemText}`, "discord-bot");
+        } catch (fallbackError) {
+          log(`Error with fallback ISO request formatting: ${fallbackError}`, "discord-bot");
+        }
       }
     }
     
@@ -445,21 +472,62 @@ export async function processCommand(command: string) {
     const isTestISO = command.trim().startsWith("ISO");
     
     if (isTestISO) {
-      // Extract item from the test ISO command
-      const itemText = command.trim().substring(3).trim() || "test item";
-      
-      // Process test ISO request
-      const log = await storage.createLog({
-        userId: "dashboard",
-        username: "Dashboard Test",
-        command,
-        channel: "items-exchange",
-        status: "success",
-        message: `Formatted REQUEST category post: @Dashboard Test is looking for a ${itemText}.`,
-        messageId: "test-message-id",
-      });
-      
-      return { success: true, log };
+      try {
+        // Extract item from the test ISO command
+        const initialItemText = command.trim().substring(3).trim() || "test item";
+        
+        // Try to analyze with OpenAI
+        const analysis = await analyzeISORequest("Dashboard Test", command);
+        
+        // Build features list if available
+        let featuresText = "";
+        if (analysis.features && analysis.features.length > 0) {
+          featuresText = ` Features: ${analysis.features.join(", ")}.`;
+        }
+        
+        // Add urgency if available
+        let urgencyText = "";
+        if (analysis.urgency && analysis.urgency !== "Not specified") {
+          urgencyText = ` Urgency: ${analysis.urgency}.`;
+        }
+        
+        // Add tags if available
+        let tagsText = "";
+        if (analysis.tags && analysis.tags.length > 0) {
+          tagsText = ` Tags: ${analysis.tags.join(", ")}.`;
+        }
+        
+        // Process test ISO request
+        const log = await storage.createLog({
+          userId: "dashboard",
+          username: "Dashboard Test",
+          command,
+          channel: "items-exchange",
+          status: "success",
+          message: `AI-formatted REQUEST category post: @Dashboard Test is looking for a ${analysis.item}.${featuresText}${urgencyText}${tagsText}`,
+          messageId: "test-message-id",
+        });
+        
+        return { success: true, log };
+      } catch (error) {
+        log(`Error analyzing test ISO request: ${error}`, "discord-bot");
+        
+        // Fallback to basic extraction
+        const itemText = command.trim().substring(3).trim() || "test item";
+        
+        // Process test ISO request with fallback
+        const log = await storage.createLog({
+          userId: "dashboard",
+          username: "Dashboard Test",
+          command,
+          channel: "items-exchange",
+          status: "success",
+          message: `Formatted REQUEST category post: @Dashboard Test is looking for a ${itemText}.`,
+          messageId: "test-message-id",
+        });
+        
+        return { success: true, log };
+      }
     }
     else if (isTestWelcome) {
       // Process test welcome message
