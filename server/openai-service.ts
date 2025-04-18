@@ -78,13 +78,56 @@ export async function analyzeISORequest(username: string, messageContent: string
   } catch (error) {
     log(`Error analyzing ISO request with OpenAI: ${error}`, "openai-service");
     
-    // Basic extraction as fallback
-    const itemText = messageContent.substring(3).trim();
+    // Improved basic extraction as fallback
+    const requestText = messageContent.substring(3).trim();
+    
+    // Try to separate the main item from features using common patterns
+    let item = requestText;
+    const features = [];
+    
+    // Check for common separators between item and features
+    const separators = [' with ', ' that ', ' which ', ', ', ' in ', ' for '];
+    
+    for (const separator of separators) {
+      if (requestText.includes(separator)) {
+        const parts = requestText.split(separator);
+        item = parts[0].trim();
+        
+        // Everything after the first separator becomes a feature
+        if (parts.length > 1) {
+          const featureText = parts.slice(1).join(separator).trim();
+          features.push(featureText);
+        }
+        
+        break;
+      }
+    }
+    
+    // Check for size specifications
+    if (item.toLowerCase().includes("size")) {
+      const sizeParts = item.split("size");
+      item = sizeParts[0].trim();
+      features.push(`size${sizeParts[1].trim()}`);
+    } else if (features.length === 0 && (requestText.includes("my size") || requestText.includes("in size"))) {
+      // Extract size as feature if it's not part of item
+      item = requestText.replace(/(\s+that are|\s+in|\s+of|\s+with) my size/i, "").trim();
+      features.push("my size");
+    }
+    
+    // Check for urgency indicators
+    let urgency = "Not specified";
+    const urgencyTerms = ["urgent", "asap", "quickly", "soon", "immediately", "today"];
+    for (const term of urgencyTerms) {
+      if (requestText.toLowerCase().includes(term)) {
+        urgency = term.toUpperCase();
+        break;
+      }
+    }
     
     return {
-      item: itemText || "unknown item",
-      features: [],
-      urgency: "Not specified",
+      item: item || "unknown item",
+      features: features,
+      urgency: urgency,
       tags: [],
       success: false
     };

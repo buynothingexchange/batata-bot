@@ -498,7 +498,7 @@ export async function processCommand(command: string) {
         }
         
         // Process test ISO request
-        const log = await storage.createLog({
+        const logEntry = await storage.createLog({
           userId: "dashboard",
           username: "Dashboard Test",
           command,
@@ -508,15 +508,16 @@ export async function processCommand(command: string) {
           messageId: "test-message-id",
         });
         
-        return { success: true, log };
+        return { success: true, log: logEntry };
       } catch (error) {
+        // Use the imported log function from vite.ts, not a local variable
         log(`Error analyzing test ISO request: ${error}`, "discord-bot");
         
         // Fallback to basic extraction
         const itemText = command.trim().substring(3).trim() || "test item";
         
         // Process test ISO request with fallback
-        const log = await storage.createLog({
+        const fallbackLog = await storage.createLog({
           userId: "dashboard",
           username: "Dashboard Test",
           command,
@@ -526,7 +527,7 @@ export async function processCommand(command: string) {
           messageId: "test-message-id",
         });
         
-        return { success: true, log };
+        return { success: true, log: fallbackLog };
       }
     }
     else if (isTestWelcome) {
