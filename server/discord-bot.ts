@@ -161,6 +161,35 @@ async function handleMessage(message: Message) {
     // Ignore messages from bots
     if (message.author.bot) return;
     
+    // Check for welcome message in items-exchange channel
+    const channelName = message.channel.type === ChannelType.GuildText 
+      ? (message.channel as any).name 
+      : "";
+      
+    if (channelName === "items-exchange" && 
+        message.content.toLowerCase().includes("hello")) {
+      try {
+        // Send welcome message - use reply instead of send to avoid TypeScript errors
+        await message.reply(`Hi ${message.author}, welcome!`);
+        
+        // Log the welcome message
+        log(`Sent welcome message to ${message.author.username} in #items-exchange`, "discord-bot");
+        
+        // Create log entry
+        await storage.createLog({
+          userId: "system",
+          username: "System",
+          command: "welcome",
+          channel: "items-exchange",
+          status: "success",
+          message: `Sent welcome message to ${message.author.username}`,
+          messageId: message.id,
+        }).catch(err => log(`Error logging welcome message: ${err}`, "discord-bot"));
+      } catch (error) {
+        log(`Error sending welcome message: ${error}`, "discord-bot");
+      }
+    }
+    
     // Get the bot configuration
     const config = await storage.getBotConfig();
     if (!config) {
@@ -380,8 +409,23 @@ export async function processCommand(command: string) {
     // For testing purposes, simulate a successful command
     const isClaimCommand = command.startsWith(config.commandTrigger);
     const isResolCommand = command.startsWith("!resol");
+    const isTestWelcome = command.toLowerCase().includes("hello") || command.toLowerCase().includes("test welcome");
     
-    if (isClaimCommand || isResolCommand) {
+    if (isTestWelcome) {
+      // Process test welcome message
+      const log = await storage.createLog({
+        userId: "dashboard",
+        username: "Dashboard Test",
+        command,
+        channel: "items-exchange",
+        status: "success",
+        message: "Sent welcome message: Hi Username, welcome!",
+        messageId: "test-message-id",
+      });
+      
+      return { success: true, log };
+    }
+    else if (isClaimCommand || isResolCommand) {
       commandsProcessed++;
 
       // Handle claim commands on non-image content
