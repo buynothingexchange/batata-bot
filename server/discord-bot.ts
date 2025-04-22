@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Partials, Events, Message, ChannelType, EmbedBuilder, WebSocketShardEvents } from "discord.js";
+import { Client, GatewayIntentBits, Partials, Events, Message, ChannelType, EmbedBuilder, WebSocketShardEvents, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import { storage } from "./storage";
 import { insertLogSchema } from "@shared/schema";
 import { log } from "./vite";
@@ -31,7 +31,16 @@ async function addDefaultChannels() {
   const defaultChannels = [
     { channelId: "items-exchange", channelName: "items-exchange", guildId: "default", enabled: true },
     { channelId: "trading-post", channelName: "trading-post", guildId: "default", enabled: true },
-    { channelId: "general", channelName: "general", guildId: "default", enabled: true }
+    { channelId: "general", channelName: "general", guildId: "default", enabled: true },
+    // Add sub-category channels for tags
+    { channelId: "electronics", channelName: "electronics", guildId: "default", enabled: true },
+    { channelId: "clothing", channelName: "clothing", guildId: "default", enabled: true },
+    { channelId: "furniture", channelName: "furniture", guildId: "default", enabled: true },
+    { channelId: "collectibles", channelName: "collectibles", guildId: "default", enabled: true },
+    { channelId: "books", channelName: "books", guildId: "default", enabled: true },
+    { channelId: "toys", channelName: "toys", guildId: "default", enabled: true },
+    { channelId: "games", channelName: "games", guildId: "default", enabled: true },
+    { channelId: "accessories", channelName: "accessories", guildId: "default", enabled: true }
   ];
   
   for (const channel of defaultChannels) {
@@ -39,6 +48,148 @@ async function addDefaultChannels() {
   }
   
   log("Added default allowed channels", "discord-bot");
+}
+
+// Helper function to create buttons from tags
+function createTagButtons(item: string, features: string[], tags: string[]): ActionRowBuilder<ButtonBuilder>[] {
+  // Combine item words, features, and tags to create a comprehensive set of potential tags
+  const allWords: string[] = [];
+  
+  // Add item words
+  const itemWords = item.toLowerCase().split(/\s+/).filter(word => word.length > 3);
+  allWords.push(...itemWords);
+  
+  // Add feature keywords
+  const featureWords = features
+    .join(' ')
+    .toLowerCase()
+    .split(/\s+|,\s*/)
+    .filter(word => word.length > 3);
+  allWords.push(...featureWords);
+  
+  // Add explicit tags
+  if (tags.length > 0) {
+    allWords.push(...tags);
+  }
+  
+  // Get unique words (use Array.from for better TypeScript compatibility)
+  const uniqueWords = Array.from(new Set(allWords));
+  
+  // Map common terms to standardized categories
+  const categoryMap: Record<string, string> = {
+    // Electronics
+    'computer': 'electronics',
+    'laptop': 'electronics',
+    'phone': 'electronics',
+    'tablet': 'electronics',
+    'electronic': 'electronics',
+    'digital': 'electronics',
+    'tech': 'electronics',
+    'device': 'electronics',
+    'gaming': 'games',
+    
+    // Clothing
+    'shirt': 'clothing',
+    'pants': 'clothing',
+    'jacket': 'clothing',
+    'dress': 'clothing',
+    'clothing': 'clothing',
+    'apparel': 'clothing',
+    'fashion': 'clothing',
+    'wearable': 'clothing',
+    'shoes': 'clothing',
+    'slippers': 'clothing',
+    
+    // Furniture
+    'chair': 'furniture',
+    'table': 'furniture',
+    'desk': 'furniture',
+    'furniture': 'furniture',
+    'sofa': 'furniture',
+    'couch': 'furniture',
+    'shelf': 'furniture',
+    
+    // Collectibles
+    'collectible': 'collectibles',
+    'figure': 'collectibles',
+    'statue': 'collectibles',
+    'collection': 'collectibles',
+    'memorabilia': 'collectibles',
+    'rare': 'collectibles',
+    'vintage': 'collectibles',
+    
+    // Books
+    'book': 'books',
+    'novel': 'books',
+    'magazine': 'books',
+    'comic': 'books',
+    'literature': 'books',
+    'reading': 'books',
+    'textbook': 'books',
+    
+    // Toys
+    'toy': 'toys',
+    'plush': 'toys',
+    'doll': 'toys',
+    'action': 'toys',
+    'puzzle': 'toys',
+    'lego': 'toys',
+    
+    // Games
+    'game': 'games',
+    'video': 'games',
+    'console': 'games',
+    'boardgame': 'games',
+    'controller': 'games',
+    'nintendo': 'games',
+    'playstation': 'games',
+    'xbox': 'games',
+    
+    // Accessories
+    'accessory': 'accessories',
+    'jewelry': 'accessories',
+    'watch': 'accessories',
+    'necklace': 'accessories',
+    'earring': 'accessories',
+    'bracelet': 'accessories',
+    'ring': 'accessories',
+    'bag': 'accessories',
+    'handbag': 'accessories',
+    'backpack': 'accessories'
+  };
+  
+  // Map words to categories and get unique categories
+  const matchedCategories = uniqueWords
+    .map(word => {
+      for (const [key, value] of Object.entries(categoryMap)) {
+        if (word.includes(key)) return value;
+      }
+      return null;
+    })
+    .filter((category): category is string => category !== null);
+  
+  const uniqueCategories = [...new Set(matchedCategories)];
+  
+  // Limit to 5 categories (Discord's limit for buttons in one row)
+  const categoriesToShow = uniqueCategories.slice(0, 5);
+  
+  // If no categories matched, add some default/general ones
+  if (categoriesToShow.length === 0) {
+    categoriesToShow.push('items-exchange', 'trading-post');
+  }
+  
+  // Create buttons for each category
+  const buttons = categoriesToShow.map(category => {
+    return new ButtonBuilder()
+      .setCustomId(`channel:${category}`)
+      .setLabel(category.charAt(0).toUpperCase() + category.slice(1))
+      .setStyle(ButtonStyle.Primary);
+  });
+  
+  // Create action row with buttons
+  const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons);
+  
+  return [actionRow];
 }
 
 // Initialize the Discord bot
@@ -216,8 +367,14 @@ async function handleMessage(message: Message) {
         // Create the standardized REQUEST format template with the extracted information
         const formattedResponse = `@${message.author.username} is looking for a ${analysis.item}.\n${featuresText}\n${urgencyText}\n${tagsText}`;
         
-        // Reply with the standardized REQUEST format template
-        await message.reply(formattedResponse);
+        // Create buttons for relevant tags/categories
+        const tagButtons = createTagButtons(analysis.item, analysis.features, analysis.tags);
+        
+        // Reply with the standardized REQUEST format template and tag buttons
+        await message.reply({
+          content: formattedResponse,
+          components: tagButtons
+        });
         
         // Log the ISO request formatting
         log(`AI-formatted ISO request for ${message.author.username} in #items-exchange: ${analysis.item}`, "discord-bot");
@@ -236,13 +393,50 @@ async function handleMessage(message: Message) {
         log(`Error formatting ISO request: ${error}`, "discord-bot");
         
         try {
-          // Fallback to basic extraction if AI analysis fails
-          const itemText = message.content.trim().substring(3).trim();
-          const fallbackResponse = `@${message.author.username} is looking for a ${itemText}.\n-Features:\n-Urgency:\n-Tags:`;
-          await message.reply(fallbackResponse);
+          // Use our improved fallback extraction
+          const requestText = message.content.trim().substring(3).trim();
+          
+          // Try to extract basic features using our fallback method
+          let item = requestText;
+          const features = [];
+          
+          // Check for common separators
+          const separators = [' with ', ' that ', ' which ', ', ', ' in ', ' for '];
+          for (const separator of separators) {
+            if (requestText.includes(separator)) {
+              const parts = requestText.split(separator);
+              item = parts[0].trim();
+              
+              // Everything after the first separator becomes a feature
+              if (parts.length > 1) {
+                const featureText = parts.slice(1).join(separator).trim();
+                features.push(featureText);
+              }
+              
+              break;
+            }
+          }
+          
+          // Check for size specifications
+          if (requestText.toLowerCase().includes("my size") || requestText.toLowerCase().includes("in size")) {
+            item = requestText.replace(/(\s+that are|\s+in|\s+of|\s+with) my size/i, "").trim();
+            features.push("my size");
+          }
+          
+          // Format the response
+          const fallbackResponse = `@${message.author.username} is looking for a ${item}.\n-Features: ${features.length > 0 ? features.join(", ") : ""}\n-Urgency: Not specified\n-Tags:`;
+          
+          // Create buttons from extracted info
+          const tagButtons = createTagButtons(item, features, []);
+          
+          // Reply with the fallback response and buttons
+          await message.reply({
+            content: fallbackResponse,
+            components: tagButtons
+          });
           
           // Log the fallback formatting
-          log(`Fallback formatted ISO request for ${message.author.username} in #items-exchange: ${itemText}`, "discord-bot");
+          log(`Fallback formatted ISO request for ${message.author.username} in #items-exchange: ${item}`, "discord-bot");
         } catch (fallbackError) {
           log(`Error with fallback ISO request formatting: ${fallbackError}`, "discord-bot");
         }
