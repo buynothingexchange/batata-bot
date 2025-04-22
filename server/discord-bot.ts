@@ -471,8 +471,47 @@ async function handleMessage(message: Message) {
             features.push("my size");
           }
           
+          // Check for urgency indicators with more comprehensive time phrases
+          let urgency = "Not specified";
+          
+          // Simple urgency terms (single words or acronyms)
+          const simpleUrgencyTerms = ["urgent", "asap", "quickly", "soon", "immediately", "today", "tmo", "tomorrow"];
+          for (const term of simpleUrgencyTerms) {
+            if (requestText.toLowerCase().includes(term.toLowerCase())) {
+              // Use the actual phrase from the text to preserve capitalization and context
+              const words = requestText.split(/\s+/);
+              for (const word of words) {
+                if (word.toLowerCase() === term.toLowerCase()) {
+                  urgency = word; // Use the term as it appears in the message
+                  break;
+                }
+              }
+              if (urgency !== "Not specified") break;
+            }
+          }
+          
+          // More complex time phrases
+          if (urgency === "Not specified") {
+            const timePatterns = [
+              /this weekend/i,
+              /next weekend/i,
+              /by (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
+              /by tomorrow/i,
+              /in a week/i,
+              /by next week/i
+            ];
+            
+            for (const pattern of timePatterns) {
+              const match = requestText.match(pattern);
+              if (match) {
+                urgency = match[0]; // Use the actual matched phrase from the text
+                break;
+              }
+            }
+          }
+          
           // Format the response
-          const fallbackResponse = `@${message.author.username} is looking for a ${item}.\n-Features: ${features.length > 0 ? features.join(", ") : ""}\n-Urgency: Not specified\n-Tags:`;
+          const fallbackResponse = `@${message.author.username} is looking for a ${item}.\n-Features: ${features.length > 0 ? features.join(", ") : ""}\n-Urgency: ${urgency}\n-Tags:`;
           
           // Create buttons from extracted info
           const tagButtons = createTagButtons(item, features, []);

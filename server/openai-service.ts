@@ -44,6 +44,17 @@ export async function analyzeISORequest(username: string, messageContent: string
           content: `You are an assistant that analyzes "In Search Of" (ISO) requests for items in a Discord server. 
           Your task is to extract and organize information about what item the user is looking for,
           what features they want, the urgency of their request, and relevant tags.
+          
+          For urgency, pay special attention to any time indicators such as:
+          - "this weekend"
+          - "next weekend"
+          - "tmo" or "tomorrow"
+          - "ASAP"
+          - "today"
+          - "by Friday" (or any other day)
+          - any other time-related phrases
+          
+          Always include these time phrases in the urgency field exactly as written.
           Respond in JSON format only.`
         },
         {
@@ -114,13 +125,42 @@ export async function analyzeISORequest(username: string, messageContent: string
       features.push("my size");
     }
     
-    // Check for urgency indicators
+    // Check for urgency indicators with more comprehensive time phrases
     let urgency = "Not specified";
-    const urgencyTerms = ["urgent", "asap", "quickly", "soon", "immediately", "today"];
-    for (const term of urgencyTerms) {
-      if (requestText.toLowerCase().includes(term)) {
-        urgency = term.toUpperCase();
-        break;
+    
+    // Simple urgency terms (single words or acronyms)
+    const simpleUrgencyTerms = ["urgent", "asap", "quickly", "soon", "immediately", "today", "tmo", "tomorrow"];
+    for (const term of simpleUrgencyTerms) {
+      if (requestText.toLowerCase().includes(term.toLowerCase())) {
+        // Use the actual phrase from the text to preserve capitalization and context
+        const words = requestText.split(/\s+/);
+        for (const word of words) {
+          if (word.toLowerCase() === term.toLowerCase()) {
+            urgency = word; // Use the term as it appears in the message
+            break;
+          }
+        }
+        if (urgency !== "Not specified") break;
+      }
+    }
+    
+    // More complex time phrases
+    if (urgency === "Not specified") {
+      const timePatterns = [
+        /this weekend/i,
+        /next weekend/i,
+        /by (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
+        /by tomorrow/i,
+        /in a week/i,
+        /by next week/i
+      ];
+      
+      for (const pattern of timePatterns) {
+        const match = requestText.match(pattern);
+        if (match) {
+          urgency = match[0]; // Use the actual matched phrase from the text
+          break;
+        }
       }
     }
     
