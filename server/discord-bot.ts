@@ -1,4 +1,18 @@
-import { Client, GatewayIntentBits, Partials, Events, Message, ChannelType, EmbedBuilder, WebSocketShardEvents, ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
+import { 
+  Client, 
+  GatewayIntentBits, 
+  Partials, 
+  Events, 
+  Message, 
+  ChannelType, 
+  EmbedBuilder, 
+  WebSocketShardEvents, 
+  ActionRowBuilder, 
+  ButtonBuilder, 
+  ButtonStyle,
+  ButtonInteraction,
+  Interaction
+} from "discord.js";
 import { storage } from "./storage";
 import { insertLogSchema } from "@shared/schema";
 import { log } from "./vite";
@@ -168,7 +182,7 @@ function createTagButtons(item: string, features: string[], tags: string[]): Act
     })
     .filter((category): category is string => category !== null);
   
-  const uniqueCategories = [...new Set(matchedCategories)];
+  const uniqueCategories = Array.from(new Set(matchedCategories));
   
   // Limit to 5 categories (Discord's limit for buttons in one row)
   const categoriesToShow = uniqueCategories.slice(0, 5);
@@ -260,7 +274,11 @@ export async function initializeBot() {
       }, 900000); // Check every 15 minutes
     });
     
+    // Handle message creation events
     bot.on(Events.MessageCreate, handleMessage);
+    
+    // Handle button interactions
+    bot.on(Events.InteractionCreate, handleInteraction);
     
     // Handle disconnection events
     bot.on('shardDisconnect' as any, (closeEvent: { code: number; reason: string }) => {
@@ -651,6 +669,101 @@ async function handleMessage(message: Message) {
   }
 }
 
+// Handle interaction events (button clicks)
+async function handleInteraction(interaction: Interaction) {
+  // Only handle button interactions
+  if (!interaction.isButton()) return;
+  
+  try {
+    // Get the button's custom ID
+    const customId = interaction.customId;
+    
+    // Check if this is a channel redirect button
+    if (customId.startsWith('channel:')) {
+      // Extract the channel name from the customId
+      const channelName = customId.substring(8); // Remove 'channel:' prefix
+      
+      // Create a message with information about the channel
+      let responseMessage = `Redirecting you to the **#${channelName}** channel where you might find what you're looking for.`;
+      
+      // For demonstration/testing purposes, add some helpful info based on the channel
+      switch (channelName) {
+        case 'electronics':
+          responseMessage += "\n\nThe electronics channel is for tech items like computers, phones, and gadgets.";
+          break;
+        case 'clothing':
+          responseMessage += "\n\nThe clothing channel is for fashion items, apparel, and accessories.";
+          break;
+        case 'furniture':
+          responseMessage += "\n\nThe furniture channel is for home and office furniture items.";
+          break;
+        case 'collectibles':
+          responseMessage += "\n\nThe collectibles channel is for rare items, figures, and memorabilia.";
+          break;
+        case 'books':
+          responseMessage += "\n\nThe books channel is for literature, textbooks, and reading materials.";
+          break;
+        case 'toys':
+          responseMessage += "\n\nThe toys channel is for games, plushies, and children's items.";
+          break;
+        case 'games':
+          responseMessage += "\n\nThe games channel is for video games, consoles, and gaming accessories.";
+          break;
+        case 'accessories':
+          responseMessage += "\n\nThe accessories channel is for jewelry, bags, and other personal accessories.";
+          break;
+        default:
+          responseMessage += "\n\nThis is a general channel for item exchange.";
+      }
+      
+      // Respond to the interaction (only visible to the user who clicked)
+      await interaction.reply({
+        content: responseMessage,
+        ephemeral: true // Only visible to the user who clicked the button
+      });
+      
+      // Log the button click
+      log(`User ${interaction.user.username} clicked the ${channelName} category button`, "discord-bot");
+      
+      // Create a log entry
+      await storage.createLog({
+        userId: interaction.user.id,
+        username: interaction.user.username,
+        command: `button:${customId}`,
+        channel: (interaction.channel as any)?.name || "unknown-channel",
+        status: "success",
+        message: `User clicked the ${channelName} category button`,
+        messageId: interaction.message.id
+      }).catch(err => log(`Error logging button interaction: ${err}`, "discord-bot"));
+    }
+  } catch (error) {
+    log(`Error handling button interaction: ${error}`, "discord-bot");
+    
+    try {
+      // Try to respond to the user with an error message
+      if (!interaction.replied) {
+        await interaction.reply({
+          content: "There was an error processing your request. Please try again later.",
+          ephemeral: true
+        });
+      }
+      
+      // Log the error
+      await storage.createLog({
+        userId: interaction.user.id,
+        username: interaction.user.username,
+        command: `button:${interaction.customId}`,
+        channel: (interaction.channel as any)?.name || "unknown-channel",
+        status: "error",
+        message: `Error handling button interaction: ${error}`,
+        messageId: interaction.message.id
+      }).catch(err => log(`Error logging button interaction error: ${err}`, "discord-bot"));
+    } catch (replyError) {
+      log(`Error replying to interaction: ${replyError}`, "discord-bot");
+    }
+  }
+}
+
 // Process a test command (for the dashboard)
 export async function processCommand(command: string) {
   try {
@@ -698,7 +811,7 @@ export async function processCommand(command: string) {
           command,
           channel: "items-exchange",
           status: "success",
-          message: `AI-formatted REQUEST category post: @Dashboard Test is looking for a ${analysis.item}.${featuresText}${urgencyText}${tagsText}`,
+          message: `AI-formatted REQUEST category post: @Dashboard Test is looking for a ${analysis.item}.${featuresText}${urgencyText}${tagsText} (With interactive category buttons)`,
           messageId: "test-message-id",
         });
         
@@ -717,7 +830,7 @@ export async function processCommand(command: string) {
           command,
           channel: "items-exchange",
           status: "success",
-          message: `Formatted REQUEST category post: @Dashboard Test is looking for a ${itemText}.`,
+          message: `Formatted REQUEST category post: @Dashboard Test is looking for a ${itemText}. (With interactive category buttons)`,
           messageId: "test-message-id",
         });
         
