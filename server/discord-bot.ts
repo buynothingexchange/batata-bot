@@ -11,7 +11,8 @@ import {
   ButtonBuilder, 
   ButtonStyle,
   ButtonInteraction,
-  Interaction
+  Interaction,
+  TextChannel
 } from "discord.js";
 import { storage } from "./storage";
 import { insertLogSchema } from "@shared/schema";
@@ -388,11 +389,30 @@ async function handleMessage(message: Message) {
         // Create buttons for relevant tags/categories
         const tagButtons = createTagButtons(analysis.item, analysis.features, analysis.tags);
         
-        // Reply with the standardized REQUEST format template and tag buttons
-        await message.reply({
-          content: formattedResponse,
-          components: tagButtons
-        });
+        // Send a new message with the formatted response (instead of replying)
+        try {
+          // Cast to TextChannel to access the send method
+          const textChannel = message.channel as TextChannel;
+          await textChannel.send({
+            content: formattedResponse,
+            components: tagButtons
+          });
+        } catch (error) {
+          log(`Error sending message to channel: ${error}`, "discord-bot");
+          // Fallback to reply if we can't use channel.send
+          await message.reply({
+            content: formattedResponse,
+            components: tagButtons
+          });
+        }
+        
+        // Delete the original ISO request message
+        try {
+          await message.delete();
+          log(`Deleted original ISO request from ${message.author.username}`, "discord-bot");
+        } catch (deleteError) {
+          log(`Failed to delete original ISO message: ${deleteError}. The bot may not have permission to delete messages.`, "discord-bot");
+        }
         
         // Log the ISO request formatting
         log(`AI-formatted ISO request for ${message.author.username} in #items-exchange: ${analysis.item}`, "discord-bot");
@@ -447,11 +467,30 @@ async function handleMessage(message: Message) {
           // Create buttons from extracted info
           const tagButtons = createTagButtons(item, features, []);
           
-          // Reply with the fallback response and buttons
-          await message.reply({
-            content: fallbackResponse,
-            components: tagButtons
-          });
+          // Send a new message instead of replying
+          try {
+            // Cast to TextChannel to access the send method
+            const textChannel = message.channel as TextChannel;
+            await textChannel.send({
+              content: fallbackResponse,
+              components: tagButtons
+            });
+          } catch (error) {
+            log(`Error sending message to channel: ${error}`, "discord-bot");
+            // Fallback to reply if we can't use channel.send
+            await message.reply({
+              content: fallbackResponse,
+              components: tagButtons
+            });
+          }
+          
+          // Delete the original ISO request message
+          try {
+            await message.delete();
+            log(`Deleted original ISO request (fallback) from ${message.author.username}`, "discord-bot");
+          } catch (deleteError) {
+            log(`Failed to delete original ISO message (fallback): ${deleteError}. The bot may not have permission to delete messages.`, "discord-bot");
+          }
           
           // Log the fallback formatting
           log(`Fallback formatted ISO request for ${message.author.username} in #items-exchange: ${item}`, "discord-bot");
