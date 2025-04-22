@@ -1,8 +1,15 @@
 import OpenAI from "openai";
 import { log } from "./vite";
 
-// Initialize the OpenAI client
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Initialize the OpenAI client with fallback
+const openai = new OpenAI({ 
+  apiKey: process.env.OPENAI_API_KEY || 'dummy-key'  // Fallback to prevent crash
+});
+
+// Check if API key is missing and log warning
+if (!process.env.OPENAI_API_KEY) {
+  log("Warning: OPENAI_API_KEY is not set. AI features will be disabled.", "openai-service");
+}
 
 /**
  * Analyzes an ISO request to extract structured information
