@@ -281,6 +281,9 @@ export async function initializeBot() {
     // Handle button interactions
     bot.on(Events.InteractionCreate, handleInteraction);
     
+    // Log when interactions are received
+    log("Registered interaction handler for button clicks", "discord-bot");
+    
     // Handle disconnection events
     bot.on('shardDisconnect' as any, (closeEvent: { code: number; reason: string }) => {
       log(`Bot disconnected with code ${closeEvent.code}. Reason: ${closeEvent.reason}`, "discord-bot");
@@ -391,12 +394,19 @@ async function handleMessage(message: Message) {
         
         // Send a new message with the formatted response (instead of replying)
         try {
-          // Cast to TextChannel to access the send method
-          const textChannel = message.channel as TextChannel;
-          await textChannel.send({
-            content: formattedResponse,
-            components: tagButtons
-          });
+          // Only attempt to send to text channels
+          if (message.channel.type === ChannelType.GuildText) {
+            await message.channel.send({
+              content: formattedResponse,
+              components: tagButtons
+            });
+          } else {
+            // Fallback to reply for other channel types
+            await message.reply({
+              content: formattedResponse,
+              components: tagButtons
+            });
+          }
         } catch (error) {
           log(`Error sending message to channel: ${error}`, "discord-bot");
           // Fallback to reply if we can't use channel.send
@@ -469,12 +479,19 @@ async function handleMessage(message: Message) {
           
           // Send a new message instead of replying
           try {
-            // Cast to TextChannel to access the send method
-            const textChannel = message.channel as TextChannel;
-            await textChannel.send({
-              content: fallbackResponse,
-              components: tagButtons
-            });
+            // Only attempt to send to text channels
+            if (message.channel.type === ChannelType.GuildText) {
+              await message.channel.send({
+                content: fallbackResponse,
+                components: tagButtons
+              });
+            } else {
+              // Fallback to reply for other channel types
+              await message.reply({
+                content: fallbackResponse,
+                components: tagButtons
+              });
+            }
           } catch (error) {
             log(`Error sending message to channel: ${error}`, "discord-bot");
             // Fallback to reply if we can't use channel.send
