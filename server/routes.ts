@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { initializeBot, getBotStatus, processCommand, restartBot, updateBotConfig } from "./discord-bot";
 import { z } from "zod";
 import { insertLogSchema } from "@shared/schema";
+import OpenAI from "openai";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize the Discord bot
@@ -109,6 +110,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error getting logs:", error);
       res.status(500).json({ message: "Failed to get activity logs" });
+    }
+  });
+  
+  // API route to test OpenAI API connectivity
+  app.get("/api/openai-test", async (req, res) => {
+    try {
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      
+      // Simple test request to OpenAI API
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: "You are a test assistant. Reply with 'OpenAI API connection successful!'" },
+          { role: "user", content: "Test connection" }
+        ],
+        max_tokens: 15
+      });
+      
+      // Check if the response is valid
+      if (response.choices && response.choices.length > 0) {
+        res.json({
+          success: true,
+          message: "OpenAI API connection test successful",
+          response: response.choices[0].message.content
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          message: "Received empty response from OpenAI API"
+        });
+      }
+    } catch (error) {
+      console.error("Error testing OpenAI API connection:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to connect to OpenAI API",
+        error: error.message
+      });
     }
   });
 
