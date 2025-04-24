@@ -342,27 +342,53 @@ async function handleMessage(message: Message) {
       ? (message.channel as any).name 
       : "";
       
-    if (channelName === "items-exchange" && 
-        message.content.toLowerCase().includes("hello")) {
+    // Check if Batata is mentioned in the message
+    const isBotMentioned = bot && bot.user && message.mentions.users.has(bot.user.id);
+    
+    // Check for various greetings in the message
+    const greetingPatterns = [
+      /\b(hello|hi|hey|hiya|greetings|sup|yo|howdy|hola|bonjour|ciao|good\s+morning|good\s+afternoon|good\s+evening|good\s+day|what'?s\s+up|salut|aloha|namaste)\b/i
+    ];
+    
+    const containsGreeting = greetingPatterns.some(pattern => 
+      pattern.test(message.content.toLowerCase())
+    );
+    
+    // Only respond if bot is specifically mentioned and a greeting is included
+    if (isBotMentioned && containsGreeting) {
       try {
-        // Send welcome message - use reply instead of send to avoid TypeScript errors
-        await message.reply(`Hi ${message.author}, welcome!`);
+        // Choose a random greeting response
+        const greetingResponses = [
+          `Hi ${message.author}! How can I help you today?`,
+          `Hello ${message.author}! Nice to see you!`,
+          `Hey there ${message.author}! What can I do for you?`,
+          `Greetings ${message.author}! I'm here to help!`,
+          `Hi ${message.author}! Ready to assist with any ISO requests or item claiming!`,
+          `Hello ${message.author}! Need help with something?`,
+          `Hey ${message.author}! How's it going?`
+        ];
+        
+        // Select a random response
+        const randomResponse = greetingResponses[Math.floor(Math.random() * greetingResponses.length)];
+        
+        // Send the greeting message
+        await message.reply(randomResponse);
         
         // Log the welcome message
-        log(`Sent welcome message to ${message.author.username} in #items-exchange`, "discord-bot");
+        log(`Sent greeting response to ${message.author.username} after being mentioned`, "discord-bot");
         
         // Create log entry
         await storage.createLog({
           userId: "system",
           username: "System",
-          command: "welcome",
-          channel: "items-exchange",
+          command: "greeting",
+          channel: channelName,
           status: "success",
-          message: `Sent welcome message to ${message.author.username}`,
+          message: `Sent greeting response to ${message.author.username} after being mentioned`,
           messageId: message.id,
-        }).catch(err => log(`Error logging welcome message: ${err}`, "discord-bot"));
+        }).catch(err => log(`Error logging greeting message: ${err}`, "discord-bot"));
       } catch (error) {
-        log(`Error sending welcome message: ${error}`, "discord-bot");
+        log(`Error sending greeting message: ${error}`, "discord-bot");
       }
     }
     
