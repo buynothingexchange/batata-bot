@@ -23,6 +23,9 @@ let reconnectAttempts = 0;
 let commandsProcessed = 0;
 const startTime = new Date();
 
+// Message processing tracker to prevent duplicate processing
+const processedMessages = new Map<string, boolean>();
+
 // Set up gateway intents (permissions)
 const intents = [
   GatewayIntentBits.Guilds,
@@ -172,6 +175,13 @@ export async function initializeBot() {
         // Set up a heartbeat to monitor connection
         setInterval(performHealthCheck, 60000); // Check every minute
         
+        // Set up process to clear processed messages cache periodically (every 6 hours)
+        setInterval(() => {
+          const messageCount = processedMessages.size;
+          processedMessages.clear();
+          log(`Cleared message processing cache (${messageCount} entries)`, "discord-bot");
+        }, 6 * 60 * 60 * 1000);
+        
         // Reset last message timestamp
         lastMessageTimestamp = Date.now();
       }
@@ -248,6 +258,15 @@ async function handleMessage(message: Message) {
     
     // Ignore messages from bots
     if (message.author.bot) return;
+    
+    // Check if we've already processed this message
+    if (processedMessages.has(message.id)) {
+      log(`Skipping already processed message ${message.id}`, "discord-bot");
+      return;
+    }
+    
+    // Mark the message as being processed
+    processedMessages.set(message.id, true);
     
     // Check for welcome message in items-exchange channel
     const channelName = message.channel.type === ChannelType.GuildText 
