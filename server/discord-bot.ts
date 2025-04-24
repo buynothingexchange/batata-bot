@@ -150,9 +150,18 @@ function createTagButtons(item: string, features: string[], tags: string[]): Act
   return [actionRow];
 }
 
+// Flag to track if bot is already initialized
+let isInitialized = false;
+
 // Initialize the Discord bot
 export async function initializeBot() {
   try {
+    // If the bot is already initialized, don't initialize again
+    if (isInitialized && bot && bot.isReady()) {
+      log("Bot is already initialized and connected", "discord-bot");
+      return;
+    }
+    
     // Get the Discord bot token from the environment
     const token = process.env.DISCORD_BOT_TOKEN;
     if (!token) {
@@ -160,6 +169,16 @@ export async function initializeBot() {
     }
     
     log("Required permissions: READ_MESSAGES, SEND_MESSAGES, READ_MESSAGE_HISTORY, ADD_REACTIONS, EMBED_LINKS", "discord-bot");
+    
+    // Destroy existing bot instance if it exists
+    if (bot) {
+      log("Destroying existing bot instance before creating a new one", "discord-bot");
+      await bot.destroy();
+      bot = null;
+    }
+    
+    // Clear processed messages
+    processedMessages.clear();
     
     // Create a new bot instance
     bot = new Client({ intents, partials });
@@ -243,6 +262,9 @@ export async function initializeBot() {
     
     // Log in to Discord
     await bot.login(token);
+    
+    // Set the initialization flag
+    isInitialized = true;
     log("Bot initialized successfully", "discord-bot");
   } catch (error) {
     log(`Error initializing bot: ${error}`, "discord-bot");
@@ -1108,6 +1130,9 @@ export async function updateBotConfig(newConfig: { commandTrigger: string; react
 // Restart the bot
 export async function restartBot() {
   try {
+    // Reset initialization flag
+    isInitialized = false;
+    
     // Check if the bot is already running
     if (bot) {
       // Destroy the current bot instance
@@ -1115,6 +1140,9 @@ export async function restartBot() {
       bot = null;
       log("Bot instance destroyed", "discord-bot");
     }
+    
+    // Clear the message processing cache
+    processedMessages.clear();
     
     // Initialize a new bot instance
     await initializeBot();
@@ -1156,6 +1184,9 @@ async function performHealthCheck() {
 // Attempt to reconnect the bot after a disconnect
 async function attemptReconnect() {
   try {
+    // Reset the initialization flag
+    isInitialized = false;
+    
     reconnectAttempts++;
     log(`Attempting to reconnect (attempt #${reconnectAttempts})...`, "discord-bot");
     
@@ -1164,6 +1195,9 @@ async function attemptReconnect() {
       await bot.destroy();
       bot = null;
     }
+    
+    // Clear the message processing cache
+    processedMessages.clear();
     
     // Wait for a bit before reconnecting (with exponential backoff)
     const backoffTime = Math.min(RECONNECT_INTERVAL * Math.pow(1.5, reconnectAttempts-1), 300000); // Max 5 minutes
