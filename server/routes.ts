@@ -41,14 +41,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Then initialize the Discord bot
   await initializeBot();
 
+  // API route to get server status and health
+  app.get("/api/server/status", (req, res) => {
+    try {
+      const memoryUsage = process.memoryUsage();
+      
+      res.json({
+        status: "online",
+        uptime: getServerUptime(),
+        memory: {
+          rss: `${Math.round(memoryUsage.rss / 1024 / 1024)}MB`,
+          heapUsed: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)}MB`,
+          heapTotal: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)}MB`,
+        },
+        environment: process.env.NODE_ENV || 'development',
+        timestamp: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error("Error getting server status:", error);
+      res.status(500).json({ message: `Failed to get server status: ${error?.message || 'Unknown error'}` });
+    }
+  });
+  
+  // API route to get health status (simplified for monitoring systems)
+  app.get("/api/health", async (req, res) => {
+    try {
+      // Check Discord bot status
+      const botStatus = await getBotStatus();
+      
+      if (botStatus.status === "online") {
+        // Everything is healthy
+        return res.status(200).json({
+          status: "healthy",
+          services: {
+            discord: "connected",
+            server: "running"
+          }
+        });
+      } else {
+        // Bot is having issues
+        return res.status(503).json({
+          status: "degraded",
+          services: {
+            discord: "disconnected",
+            server: "running"
+          },
+          message: "Discord bot is not connected"
+        });
+      }
+    } catch (error: any) {
+      console.error("Health check failed:", error);
+      res.status(500).json({
+        status: "unhealthy",
+        message: `Failed to perform health check: ${error?.message || 'Unknown error'}`
+      });
+    }
+  });
+
   // API route to get bot status
   app.get("/api/bot/status", async (req, res) => {
     try {
       const status = await getBotStatus();
       res.json(status);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error getting bot status:", error);
-      res.status(500).json({ message: "Failed to get bot status" });
+      res.status(500).json({ message: `Failed to get bot status: ${error?.message || 'Unknown error'}` });
     }
   });
   
@@ -172,12 +229,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message: "Received empty response from OpenAI API"
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error testing OpenAI API connection:", error);
       res.status(500).json({
         success: false,
         message: "Failed to connect to OpenAI API",
-        error: error.message
+        error: error?.message || 'Unknown error'
       });
     }
   });
