@@ -68,6 +68,19 @@ async function addDefaultChannels() {
 }
 
 // Helper function to create buttons from tags
+// Helper function to create a Claimed button for DMs
+function createClaimedButton(): ActionRowBuilder<ButtonBuilder>[] {
+  const claimedButton = new ButtonBuilder()
+    .setCustomId('claim:item')
+    .setLabel('Claimed')
+    .setStyle(ButtonStyle.Success); // Green button for claiming
+  
+  // Create action row with the Claimed button
+  const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(claimedButton);
+  
+  return [actionRow];
+}
+
 function createTagButtons(item: string, features: string[], tags: string[]): ActionRowBuilder<ButtonBuilder>[] {
   // Combine item words, features, and tags to create a comprehensive set of potential tags
   const allWords: string[] = [];
@@ -431,6 +444,23 @@ async function handleMessage(message: Message) {
               content: formattedResponse,
               components: tagButtons
             });
+            
+            // Also forward a copy to the original user via DM
+            try {
+              // Create the Claimed button for the DM message
+              const dmButtons = createClaimedButton();
+              
+              // Send a DM to the user with the formatted message and Claimed button
+              await message.author.send({
+                content: `Here's a copy of your ISO request that was posted in #items-exchange:\n\n${formattedResponse}\n\nIf you've found this item, click the button below to mark it as claimed.`,
+                components: dmButtons
+              });
+              
+              log(`Forwarded formatted ISO request to ${message.author.username} via DM with Claimed button`, "discord-bot");
+            } catch (dmError) {
+              // DM might fail if user has DMs disabled
+              log(`Error sending DM to ${message.author.username}: ${dmError}`, "discord-bot");
+            }
           } else {
             // Fallback to reply for other channel types
             await message.reply({
@@ -978,6 +1008,37 @@ async function handleInteraction(interaction: Interaction) {
   try {
     // Get the button's custom ID
     const customId = interaction.customId;
+    
+    // Check if this is a claim button click
+    if (customId === 'claim:item') {
+      try {
+        // Send a confirmation message to the user
+        await interaction.reply({
+          content: "You've marked this item as claimed! The requester has been notified.",
+          ephemeral: true // Only visible to the user who clicked the button
+        });
+        
+        // Log the claim action
+        log(`User ${interaction.user.username} clicked the Claim button on an ISO request`, "discord-bot");
+        
+        // Create a log entry
+        await storage.createLog({
+          userId: interaction.user.id,
+          username: interaction.user.username,
+          command: "claim-button",
+          channel: "DM",
+          status: "success",
+          message: `User clicked the Claim button on an ISO request`,
+          guildId: interaction.guildId,
+          messageId: interaction.message.id
+        });
+        
+        return;
+      } catch (error) {
+        log(`Error handling claim button click: ${error}`, "discord-bot");
+        return;
+      }
+    }
     
     // Check if this is a channel redirect button
     if (customId.startsWith('channel:')) {
