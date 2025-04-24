@@ -421,24 +421,24 @@ async function handleMessage(message: Message) {
         // Delete the original ISO request message
         try {
           // Check if the bot has permission to manage messages in this channel
-          if (message.guild && message.channel.type === ChannelType.GuildText) {
-            const botMember = message.guild.members.cache.get(bot.user!.id);
-            const channel = message.channel as GuildTextBasedChannel;
+          if (message.guild && message.channel.type === ChannelType.GuildText && bot && bot.user) {
+            const botMember = message.guild.members.cache.get(bot.user.id);
+            const channel = message.channel as TextChannel;
             
             if (botMember && botMember.permissionsIn(channel).has(PermissionFlagsBits.ManageMessages)) {
               await message.delete();
               log(`Deleted original ISO request from ${message.author.username}`, "discord-bot");
             } else {
-              log(`Bot does not have permission to delete messages in #${(message.channel as TextChannel).name}`, "discord-bot");
+              log(`Bot does not have permission to delete messages in #${channel.name}`, "discord-bot");
               
               // Add a note to the log about missing permissions
               await storage.createLog({
                 userId: "system",
                 username: "System",
                 command: "permission-check",
-                channel: (message.channel as TextChannel).name,
+                channel: channel.name,
                 status: "warning",
-                message: `Bot does not have ManageMessages permission in channel #${(message.channel as TextChannel).name}`,
+                message: `Bot does not have ManageMessages permission in channel #${channel.name}`,
                 messageId: message.id,
               }).catch(err => log(`Error logging permission warning: ${err}`, "discord-bot"));
             }
@@ -690,8 +690,8 @@ async function handleMessage(message: Message) {
           // Delete the original ISO request message
           try {
             // Check if the bot has permission to manage messages in this channel
-            if (message.guild && message.channel.type === ChannelType.GuildText) {
-              const botMember = message.guild.members.cache.get(bot!.user!.id);
+            if (message.guild && message.channel.type === ChannelType.GuildText && bot && bot.user) {
+              const botMember = message.guild.members.cache.get(bot.user.id);
               const channel = message.channel as TextChannel;
               
               if (botMember && botMember.permissionsIn(channel).has(PermissionFlagsBits.ManageMessages)) {
