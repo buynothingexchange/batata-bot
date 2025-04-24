@@ -395,6 +395,9 @@ async function handleMessage(message: Message) {
     // Check for ISO requests in items-exchange channel
     if (channelName === "items-exchange" &&
         message.content.trim().startsWith("ISO")) {
+      // Flag to track if we've already processed this ISO request
+      let isoRequestProcessed = false;
+      
       try {
         // Analyze the ISO request using OpenAI
         const analysis = await analyzeISORequest(message.author.username, message.content);
@@ -435,6 +438,24 @@ async function handleMessage(message: Message) {
               components: tagButtons
             });
           }
+          
+          // Mark as processed
+          isoRequestProcessed = true;
+          
+          // Log the ISO request formatting
+          log(`AI-formatted ISO request for ${message.author.username} in #items-exchange: ${analysis.item}`, "discord-bot");
+          
+          // Create log entry with AI analysis status
+          await storage.createLog({
+            userId: message.author.id,
+            username: message.author.username,
+            command: "ISO",
+            channel: "items-exchange",
+            status: "success",
+            message: `AI ${analysis.success ? "successfully" : "attempted to"} format REQUEST category post for item: ${analysis.item}`,
+            messageId: message.id,
+          }).catch(err => log(`Error logging ISO request formatting: ${err}`, "discord-bot"));
+          
         } catch (error) {
           log(`Error sending message to channel: ${error}`, "discord-bot");
           // Fallback to reply if we can't use channel.send
@@ -442,9 +463,252 @@ async function handleMessage(message: Message) {
             content: formattedResponse,
             components: tagButtons
           });
+          
+          // Mark as processed
+          isoRequestProcessed = true;
         }
+      } catch (error) {
+        log(`Error formatting ISO request with OpenAI: ${error}`, "discord-bot");
         
-        // Delete the original ISO request message
+        // Only use fallback if the OpenAI attempt failed completely
+        if (!isoRequestProcessed) {
+          try {
+            // Use our improved fallback extraction
+            const requestText = message.content.trim().substring(3).trim();
+            
+            // Try to extract basic features using our fallback method
+            let item = requestText;
+            const features = [];
+            
+            // First, check for common separators between item and features
+            const separators = [' with ', ' that ', ' which ', ', ', ' in ', ' for '];
+            let hasSeparator = false;
+            
+            for (const separator of separators) {
+              if (requestText.includes(separator)) {
+                const parts = requestText.split(separator);
+                item = parts[0].trim();
+                
+                // Everything after the first separator becomes a feature
+                if (parts.length > 1) {
+                  const featureText = parts.slice(1).join(separator).trim();
+                  features.push(featureText);
+                }
+                
+                hasSeparator = true;
+                break;
+              }
+            }
+            
+            // If no separator was found, look for adjectives before the noun
+            if (!hasSeparator) {
+              // Common item categories - expanded list 
+              const itemCategories = [
+                // Clothing & Accessories
+                'shirt', 'pants', 'jacket', 'shoes', 'boots', 'sneakers', 'hat', 'cap',
+                'dress', 'skirt', 'jeans', 'sweater', 'hoodie', 'socks', 'watch', 'gloves',
+                'bag', 'backpack', 'purse', 'wallet', 'sunglasses', 'glasses', 'scarf',
+                'belt', 'tie', 'blazer', 'coat', 'suit', 'shorts', 't-shirt', 'tshirt',
+                'blouse', 'cardigan', 'vest', 'sweatshirt', 'pajamas', 'swimsuit', 'bikini',
+                'necklace', 'bracelet', 'ring', 'earrings', 'pendant', 'jewelry',
+                
+                // Electronics
+                'phone', 'laptop', 'computer', 'tablet', 'camera', 'headphones', 'speaker',
+                'monitor', 'keyboard', 'mouse', 'charger', 'adapter', 'cable', 'drive',
+                'printer', 'scanner', 'router', 'modem', 'microphone', 'earbuds', 'console',
+                'tv', 'television', 'projector', 'drone', 'smartwatch', 'device',
+                
+                // Furniture
+                'chair', 'table', 'desk', 'sofa', 'couch', 'bookshelf', 'cabinet',
+                'bed', 'mattress', 'dresser', 'nightstand', 'shelf', 'stool', 'drawer',
+                'wardrobe', 'bench', 'ottoman', 'rug', 'lamp', 'mirror', 'curtains',
+                
+                // Transportation
+                'car', 'bike', 'bicycle', 'scooter', 'helmet', 'motorcycle', 'skateboard',
+                'vehicle', 'truck', 'van', 'bus', 'tire', 'wheel', 'brake', 'engine',
+                
+                // Other common items
+                'book', 'game', 'toy', 'doll', 'figure', 'poster', 'painting', 'print',
+                'tool', 'drill', 'hammer', 'knife', 'pot', 'pan', 'utensil', 'plate',
+                'bowl', 'mug', 'cup', 'glass', 'bottle', 'container'
+              ];
+              
+              // Search for item category words in the string
+              const words = item.split(' ');
+              if (words.length > 1) {
+                // Look for any item category in the words
+                for (let i = 0; i < words.length; i++) {
+                  const word = words[i].toLowerCase().replace(/[,.;:!?]$/, ''); // Remove punctuation
+                  if (itemCategories.includes(word)) {
+                    // Found an item category - everything before it is adjectives
+                    const adjectives = words.slice(0, i).join(' ');
+                    if (adjectives) {
+                      features.push(adjectives);
+                    }
+                    // The item is the category word and anything after it
+                    item = words.slice(i).join(' ');
+                    break;
+                  }
+                }
+              }
+            }
+            
+            // Check for size specifications
+            if (item.toLowerCase().includes("size")) {
+              const sizeParts = item.split("size");
+              item = sizeParts[0].trim();
+              features.push(`size${sizeParts[1].trim()}`);
+            } else if (requestText.includes("my size") || requestText.includes("in size")) {
+              // Extract size as feature if it's not part of item
+              item = requestText.replace(/(\s+that are|\s+in|\s+of|\s+with) my size/i, "").trim();
+              features.push("my size");
+            }
+            
+            // Look for color words and add them as features if they're part of the item
+            const colors = [
+              // Basic colors
+              'red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'brown',
+              'black', 'white', 'gray', 'grey', 'silver', 'gold', 'beige', 'navy',
+              'teal', 'maroon', 'olive', 'lime', 'aqua', 'turquoise', 'cyan', 'magenta',
+              
+              // Color variations
+              'light blue', 'dark blue', 'sky blue', 'royal blue', 'navy blue',
+              'light green', 'dark green', 'forest green', 'mint green', 'olive green',
+              'light red', 'dark red', 'crimson', 'burgundy', 'scarlet', 'ruby',
+              'light yellow', 'dark yellow', 'mustard', 'lemon', 'golden', 'cream',
+              'light orange', 'dark orange', 'peach', 'coral', 'salmon',
+              'light purple', 'dark purple', 'lavender', 'violet', 'plum', 'indigo',
+              'light pink', 'dark pink', 'hot pink', 'rose', 'fuchsia',
+              'light brown', 'dark brown', 'tan', 'chocolate', 'coffee', 'caramel',
+              'off white', 'ivory', 'eggshell', 'pearl', 'charcoal', 'slate',
+              
+              // Metallic colors
+              'bronze', 'copper', 'chrome', 'platinum', 'metallic'
+            ];
+            
+            // Check if any color words are in the item and not already extracted as features
+            const itemLower = item.toLowerCase();
+            
+            // First check for compound colors (multi-word colors)
+            for (const color of colors) {
+              if (color.includes(' ')) { // Only check multi-word colors first
+                if (itemLower.includes(color)) {
+                  // If a multi-word color is found in the item, move it to features and clean the item
+                  item = item.replace(new RegExp(color, 'i'), '').trim();
+                  
+                  // Avoid duplicate color mentions
+                  if (!features.some(f => f.toLowerCase().includes(color))) {
+                    features.push(color);
+                  }
+                }
+              }
+            }
+            
+            // Then check for single-word colors
+            const itemWords = item.toLowerCase().split(' ');
+            for (const color of colors) {
+              if (!color.includes(' ')) { // Only check single-word colors
+                if (itemWords.includes(color)) {
+                  // If a color is found in the item, move it to features and clean the item
+                  item = item.replace(new RegExp(`\\b${color}\\b`, 'i'), '').trim();
+                  
+                  // Avoid duplicate color mentions
+                  if (!features.some(f => f.toLowerCase().includes(color))) {
+                    features.push(color);
+                  }
+                }
+              }
+            }
+            
+            // Clean up multiple spaces in the item
+            item = item.replace(/\s+/g, ' ').trim();
+            
+            // Check for urgency indicators with more comprehensive time phrases
+            let urgency = "Not specified";
+            
+            // Simple urgency terms (single words or acronyms)
+            const simpleUrgencyTerms = ["urgent", "asap", "quickly", "soon", "immediately", "today", "tmo", "tomorrow"];
+            for (const term of simpleUrgencyTerms) {
+              if (requestText.toLowerCase().includes(term.toLowerCase())) {
+                // Use the actual phrase from the text to preserve capitalization and context
+                const words = requestText.split(/\s+/);
+                for (const word of words) {
+                  if (word.toLowerCase() === term.toLowerCase()) {
+                    urgency = word; // Use the term as it appears in the message
+                    break;
+                  }
+                }
+                if (urgency !== "Not specified") break;
+              }
+            }
+            
+            // More complex time phrases
+            if (urgency === "Not specified") {
+              const timePatterns = [
+                /this weekend/i,
+                /next weekend/i,
+                /by (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
+                /by tomorrow/i,
+                /in a week/i,
+                /by next week/i
+              ];
+              
+              for (const pattern of timePatterns) {
+                const match = requestText.match(pattern);
+                if (match) {
+                  urgency = match[0]; // Use the actual matched phrase from the text
+                  break;
+                }
+              }
+            }
+            
+            // Format the response
+            const fallbackResponse = `@${message.author.username} is looking for a ${item}.\n-Features: ${features.length > 0 ? features.join(", ") : ""}\n-Urgency: ${urgency}\n-Tags:`;
+            
+            // Create buttons from extracted info
+            const tagButtons = createTagButtons(item, features, []);
+            
+            // Send a new message instead of replying
+            try {
+              // Only attempt to send to text channels
+              if (message.channel.type === ChannelType.GuildText) {
+                await message.channel.send({
+                  content: fallbackResponse,
+                  components: tagButtons
+                });
+              } else {
+                // Fallback to reply for other channel types
+                await message.reply({
+                  content: fallbackResponse,
+                  components: tagButtons
+                });
+              }
+              
+              // Mark as processed
+              isoRequestProcessed = true;
+              
+              // Log the fallback formatting
+              log(`Fallback formatted ISO request for ${message.author.username} in #items-exchange: ${item}`, "discord-bot");
+              
+            } catch (error) {
+              log(`Error sending message to channel: ${error}`, "discord-bot");
+              // Fallback to reply if we can't use channel.send
+              await message.reply({
+                content: fallbackResponse,
+                components: tagButtons
+              });
+              
+              // Mark as processed
+              isoRequestProcessed = true;
+            }
+          } catch (fallbackError) {
+            log(`Error with fallback ISO request formatting: ${fallbackError}`, "discord-bot");
+          }
+        }
+      }
+      
+      // Only try to delete the original message if we successfully processed the ISO request
+      if (isoRequestProcessed) {
         try {
           // Check if the bot has permission to manage messages in this channel
           if (message.guild && message.channel.type === ChannelType.GuildText && bot && bot.user) {
@@ -475,281 +739,6 @@ async function handleMessage(message: Message) {
           }
         } catch (deleteError) {
           log(`Failed to delete original ISO message: ${deleteError}. The bot may not have permission to delete messages.`, "discord-bot");
-        }
-        
-        // Log the ISO request formatting
-        log(`AI-formatted ISO request for ${message.author.username} in #items-exchange: ${analysis.item}`, "discord-bot");
-        
-        // Create log entry with AI analysis status
-        await storage.createLog({
-          userId: message.author.id,
-          username: message.author.username,
-          command: "ISO",
-          channel: "items-exchange",
-          status: "success",
-          message: `AI ${analysis.success ? "successfully" : "attempted to"} format REQUEST category post for item: ${analysis.item}`,
-          messageId: message.id,
-        }).catch(err => log(`Error logging ISO request formatting: ${err}`, "discord-bot"));
-      } catch (error) {
-        log(`Error formatting ISO request: ${error}`, "discord-bot");
-        
-        try {
-          // Use our improved fallback extraction
-          const requestText = message.content.trim().substring(3).trim();
-          
-          // Try to extract basic features using our fallback method
-          let item = requestText;
-          const features = [];
-          
-          // First, check for common separators between item and features
-          const separators = [' with ', ' that ', ' which ', ', ', ' in ', ' for '];
-          let hasSeparator = false;
-          
-          for (const separator of separators) {
-            if (requestText.includes(separator)) {
-              const parts = requestText.split(separator);
-              item = parts[0].trim();
-              
-              // Everything after the first separator becomes a feature
-              if (parts.length > 1) {
-                const featureText = parts.slice(1).join(separator).trim();
-                features.push(featureText);
-              }
-              
-              hasSeparator = true;
-              break;
-            }
-          }
-          
-          // If no separator was found, look for adjectives before the noun
-          if (!hasSeparator) {
-            // Common item categories - expanded list 
-            const itemCategories = [
-              // Clothing & Accessories
-              'shirt', 'pants', 'jacket', 'shoes', 'boots', 'sneakers', 'hat', 'cap',
-              'dress', 'skirt', 'jeans', 'sweater', 'hoodie', 'socks', 'watch', 'gloves',
-              'bag', 'backpack', 'purse', 'wallet', 'sunglasses', 'glasses', 'scarf',
-              'belt', 'tie', 'blazer', 'coat', 'suit', 'shorts', 't-shirt', 'tshirt',
-              'blouse', 'cardigan', 'vest', 'sweatshirt', 'pajamas', 'swimsuit', 'bikini',
-              'necklace', 'bracelet', 'ring', 'earrings', 'pendant', 'jewelry',
-              
-              // Electronics
-              'phone', 'laptop', 'computer', 'tablet', 'camera', 'headphones', 'speaker',
-              'monitor', 'keyboard', 'mouse', 'charger', 'adapter', 'cable', 'drive',
-              'printer', 'scanner', 'router', 'modem', 'microphone', 'earbuds', 'console',
-              'tv', 'television', 'projector', 'drone', 'smartwatch', 'device',
-              
-              // Furniture
-              'chair', 'table', 'desk', 'sofa', 'couch', 'bookshelf', 'cabinet',
-              'bed', 'mattress', 'dresser', 'nightstand', 'shelf', 'stool', 'drawer',
-              'wardrobe', 'bench', 'ottoman', 'rug', 'lamp', 'mirror', 'curtains',
-              
-              // Transportation
-              'car', 'bike', 'bicycle', 'scooter', 'helmet', 'motorcycle', 'skateboard',
-              'vehicle', 'truck', 'van', 'bus', 'tire', 'wheel', 'brake', 'engine',
-              
-              // Other common items
-              'book', 'game', 'toy', 'doll', 'figure', 'poster', 'painting', 'print',
-              'tool', 'drill', 'hammer', 'knife', 'pot', 'pan', 'utensil', 'plate',
-              'bowl', 'mug', 'cup', 'glass', 'bottle', 'container'
-            ];
-            
-            // Search for item category words in the string
-            const words = item.split(' ');
-            if (words.length > 1) {
-              // Look for any item category in the words
-              for (let i = 0; i < words.length; i++) {
-                const word = words[i].toLowerCase().replace(/[,.;:!?]$/, ''); // Remove punctuation
-                if (itemCategories.includes(word)) {
-                  // Found an item category - everything before it is adjectives
-                  const adjectives = words.slice(0, i).join(' ');
-                  if (adjectives) {
-                    features.push(adjectives);
-                  }
-                  // The item is the category word and anything after it
-                  item = words.slice(i).join(' ');
-                  break;
-                }
-              }
-            }
-          }
-          
-          // Check for size specifications
-          if (item.toLowerCase().includes("size")) {
-            const sizeParts = item.split("size");
-            item = sizeParts[0].trim();
-            features.push(`size${sizeParts[1].trim()}`);
-          } else if (requestText.includes("my size") || requestText.includes("in size")) {
-            // Extract size as feature if it's not part of item
-            item = requestText.replace(/(\s+that are|\s+in|\s+of|\s+with) my size/i, "").trim();
-            features.push("my size");
-          }
-          
-          // Look for color words and add them as features if they're part of the item
-          const colors = [
-            // Basic colors
-            'red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'brown',
-            'black', 'white', 'gray', 'grey', 'silver', 'gold', 'beige', 'navy',
-            'teal', 'maroon', 'olive', 'lime', 'aqua', 'turquoise', 'cyan', 'magenta',
-            
-            // Color variations
-            'light blue', 'dark blue', 'sky blue', 'royal blue', 'navy blue',
-            'light green', 'dark green', 'forest green', 'mint green', 'olive green',
-            'light red', 'dark red', 'crimson', 'burgundy', 'scarlet', 'ruby',
-            'light yellow', 'dark yellow', 'mustard', 'lemon', 'golden', 'cream',
-            'light orange', 'dark orange', 'peach', 'coral', 'salmon',
-            'light purple', 'dark purple', 'lavender', 'violet', 'plum', 'indigo',
-            'light pink', 'dark pink', 'hot pink', 'rose', 'fuchsia',
-            'light brown', 'dark brown', 'tan', 'chocolate', 'coffee', 'caramel',
-            'off white', 'ivory', 'eggshell', 'pearl', 'charcoal', 'slate',
-            
-            // Metallic colors
-            'bronze', 'copper', 'chrome', 'platinum', 'metallic'
-          ];
-          
-          // Check if any color words are in the item and not already extracted as features
-          const itemLower = item.toLowerCase();
-          
-          // First check for compound colors (multi-word colors)
-          for (const color of colors) {
-            if (color.includes(' ')) { // Only check multi-word colors first
-              if (itemLower.includes(color)) {
-                // If a multi-word color is found in the item, move it to features and clean the item
-                item = item.replace(new RegExp(color, 'i'), '').trim();
-                
-                // Avoid duplicate color mentions
-                if (!features.some(f => f.toLowerCase().includes(color))) {
-                  features.push(color);
-                }
-              }
-            }
-          }
-          
-          // Then check for single-word colors
-          const itemWords = item.toLowerCase().split(' ');
-          for (const color of colors) {
-            if (!color.includes(' ')) { // Only check single-word colors
-              if (itemWords.includes(color)) {
-                // If a color is found in the item, move it to features and clean the item
-                item = item.replace(new RegExp(`\\b${color}\\b`, 'i'), '').trim();
-                
-                // Avoid duplicate color mentions
-                if (!features.some(f => f.toLowerCase().includes(color))) {
-                  features.push(color);
-                }
-              }
-            }
-          }
-          
-          // Clean up multiple spaces in the item
-          item = item.replace(/\s+/g, ' ').trim();
-          
-          // Check for urgency indicators with more comprehensive time phrases
-          let urgency = "Not specified";
-          
-          // Simple urgency terms (single words or acronyms)
-          const simpleUrgencyTerms = ["urgent", "asap", "quickly", "soon", "immediately", "today", "tmo", "tomorrow"];
-          for (const term of simpleUrgencyTerms) {
-            if (requestText.toLowerCase().includes(term.toLowerCase())) {
-              // Use the actual phrase from the text to preserve capitalization and context
-              const words = requestText.split(/\s+/);
-              for (const word of words) {
-                if (word.toLowerCase() === term.toLowerCase()) {
-                  urgency = word; // Use the term as it appears in the message
-                  break;
-                }
-              }
-              if (urgency !== "Not specified") break;
-            }
-          }
-          
-          // More complex time phrases
-          if (urgency === "Not specified") {
-            const timePatterns = [
-              /this weekend/i,
-              /next weekend/i,
-              /by (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
-              /by tomorrow/i,
-              /in a week/i,
-              /by next week/i
-            ];
-            
-            for (const pattern of timePatterns) {
-              const match = requestText.match(pattern);
-              if (match) {
-                urgency = match[0]; // Use the actual matched phrase from the text
-                break;
-              }
-            }
-          }
-          
-          // Format the response
-          const fallbackResponse = `@${message.author.username} is looking for a ${item}.\n-Features: ${features.length > 0 ? features.join(", ") : ""}\n-Urgency: ${urgency}\n-Tags:`;
-          
-          // Create buttons from extracted info
-          const tagButtons = createTagButtons(item, features, []);
-          
-          // Send a new message instead of replying
-          try {
-            // Only attempt to send to text channels
-            if (message.channel.type === ChannelType.GuildText) {
-              await message.channel.send({
-                content: fallbackResponse,
-                components: tagButtons
-              });
-            } else {
-              // Fallback to reply for other channel types
-              await message.reply({
-                content: fallbackResponse,
-                components: tagButtons
-              });
-            }
-          } catch (error) {
-            log(`Error sending message to channel: ${error}`, "discord-bot");
-            // Fallback to reply if we can't use channel.send
-            await message.reply({
-              content: fallbackResponse,
-              components: tagButtons
-            });
-          }
-          
-          // Delete the original ISO request message
-          try {
-            // Check if the bot has permission to manage messages in this channel
-            if (message.guild && message.channel.type === ChannelType.GuildText && bot && bot.user) {
-              const botMember = message.guild.members.cache.get(bot.user.id);
-              const channel = message.channel as TextChannel;
-              
-              if (botMember && botMember.permissionsIn(channel).has(PermissionFlagsBits.ManageMessages)) {
-                await message.delete();
-                log(`Deleted original ISO request (fallback) from ${message.author.username}`, "discord-bot");
-              } else {
-                log(`Bot does not have permission to delete messages in #${channel.name}`, "discord-bot");
-                
-                // Add a note to the log about missing permissions
-                await storage.createLog({
-                  userId: "system",
-                  username: "System",
-                  command: "permission-check",
-                  channel: channel.name,
-                  status: "warning",
-                  message: `Bot does not have ManageMessages permission in channel #${channel.name}`,
-                  messageId: message.id,
-                }).catch(err => log(`Error logging permission warning: ${err}`, "discord-bot"));
-              }
-            } else {
-              // Try deleting anyway for non-guild channels or other channel types
-              await message.delete();
-              log(`Deleted original ISO request (fallback) from ${message.author.username} in non-guild channel`, "discord-bot");
-            }
-          } catch (deleteError) {
-            log(`Failed to delete original ISO message (fallback): ${deleteError}. The bot may not have permission to delete messages.`, "discord-bot");
-          }
-          
-          // Log the fallback formatting
-          log(`Fallback formatted ISO request for ${message.author.username} in #items-exchange: ${item}`, "discord-bot");
-        } catch (fallbackError) {
-          log(`Error with fallback ISO request formatting: ${fallbackError}`, "discord-bot");
         }
       }
     }
