@@ -68,15 +68,15 @@ async function addDefaultChannels() {
 }
 
 // Helper function to create buttons from tags
-// Helper function to create a Claimed button for DMs
+// Helper function to create a Fulfilled button for DMs
 function createClaimedButton(): ActionRowBuilder<ButtonBuilder>[] {
-  const claimedButton = new ButtonBuilder()
-    .setCustomId('claim:item')
-    .setLabel('Claimed')
-    .setStyle(ButtonStyle.Success); // Green button for claiming
+  const fulfilledButton = new ButtonBuilder()
+    .setCustomId('fulfill:item')
+    .setLabel('Fulfilled')
+    .setStyle(ButtonStyle.Success); // Green button for fulfillment (closest to orange available)
   
-  // Create action row with the Claimed button
-  const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(claimedButton);
+  // Create action row with the Fulfilled button
+  const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(fulfilledButton);
   
   return [actionRow];
 }
@@ -452,11 +452,11 @@ async function handleMessage(message: Message) {
               
               // Send a DM to the user with the formatted message and Claimed button
               await message.author.send({
-                content: `Here's a copy of your ISO request that was posted in #items-exchange:\n\n${formattedResponse}\n\nIf you've found this item, click the button below to mark it as claimed.`,
+                content: `Here's a copy of your ISO request that was posted in #items-exchange:\n\n${formattedResponse}\n\nIf you've found this item, click the button below to mark it as fulfilled.`,
                 components: dmButtons
               });
               
-              log(`Forwarded formatted ISO request to ${message.author.username} via DM with Claimed button`, "discord-bot");
+              log(`Forwarded formatted ISO request to ${message.author.username} via DM with Fulfilled button`, "discord-bot");
             } catch (dmError) {
               // DM might fail if user has DMs disabled
               log(`Error sending DM to ${message.author.username}: ${dmError}`, "discord-bot");
@@ -733,7 +733,7 @@ async function handleMessage(message: Message) {
                   
                   // Send a DM to the user with the formatted message and Claimed button
                   await message.author.send({
-                    content: `Here's a copy of your ISO request that was posted in #items-exchange:\n\n${fallbackResponse}\n\nIf you've found this item, click the button below to mark it as claimed.`,
+                    content: `Here's a copy of your ISO request that was posted in #items-exchange:\n\n${fallbackResponse}\n\nIf you've found this item, click the button below to mark it as fulfilled.`,
                     components: dmButtons
                   });
                   
@@ -1026,33 +1026,144 @@ async function handleInteraction(interaction: Interaction) {
     // Get the button's custom ID
     const customId = interaction.customId;
     
-    // Check if this is a claim button click
-    if (customId === 'claim:item') {
+    // Check if this is a fulfill button click
+    if (customId === 'fulfill:item') {
       try {
-        // Send a confirmation message to the user
-        await interaction.reply({
-          content: "You've marked this item as claimed! The requester has been notified.",
-          ephemeral: true // Only visible to the user who clicked the button
-        });
+        // Extract details from the DM message to identify the original channel message
+        const dmMessageContent = interaction.message.content;
         
-        // Log the claim action
-        log(`User ${interaction.user.username} clicked the Claim button on an ISO request`, "discord-bot");
+        // Try to extract username and item from the DM message
+        const usernameMatch = dmMessageContent.match(/@(\w+) is looking for a/);
+        const username = usernameMatch ? usernameMatch[1] : null;
         
-        // Create a log entry
+        const itemMatch = dmMessageContent.match(/looking for a ([^.\n]+)/);
+        const item = itemMatch ? itemMatch[1].trim() : null;
+        
+        // Find the formatted message in the items-exchange channel
+        if (username && item && bot) {
+          try {
+            // Look for the guild with items-exchange channel
+            const guilds = bot.guilds.cache.values();
+            let originalMessage = null;
+            
+            for (const guild of guilds) {
+              // Look for the items-exchange channel
+              const channel = guild.channels.cache.find(
+                ch => ch.type === ChannelType.GuildText && 
+                     (ch as TextChannel).name === 'items-exchange'
+              ) as TextChannel;
+              
+              if (channel) {
+                // Try to find the message in the channel that matches our pattern
+                try {
+                  // Get recent messages in the channel
+                  const messages = await channel.messages.fetch({ limit: 50 });
+                  
+                  // Find the message that matches our pattern
+                  originalMessage = messages.find(msg => 
+                    msg.content.includes(`@${username} is looking for a ${item}`)
+                  );
+                  
+                  if (originalMessage) {
+                    // Create a new embed with orange color to indicate fulfillment
+                    const fulfilledEmbed = new EmbedBuilder()
+                      .setColor(0xFFA500) // Orange color
+                      .setTitle("ISO Request Fulfilled")
+                      .setDescription(`This request has been marked as fulfilled by ${interaction.user}`)
+                      .setTimestamp();
+                    
+                    // Edit the original message to include the embed
+                    await originalMessage.edit({
+                      content: originalMessage.content,
+                      components: originalMessage.components,
+                      embeds: [fulfilledEmbed]
+                    });
+                    
+                    // Send a confirmation message to the user
+                    await interaction.reply({
+                      content: "You've marked this item as fulfilled! The request in the items-exchange channel has been updated with an orange notification.",
+                      ephemeral: true // Only visible to the user who clicked the button
+                    });
+                    
+                    // Log the fulfillment action
+                    log(`User ${interaction.user.username} clicked the Fulfilled button on an ISO request for ${item}`, "discord-bot");
+                    
+                    // Create a log entry
+                    await storage.createLog({
+                      userId: interaction.user.id,
+                      username: interaction.user.username,
+                      command: "fulfill-button",
+                      channel: "items-exchange",
+                      status: "success",
+                      message: `User marked ISO request for ${item} as fulfilled`,
+                      guildId: guild.id,
+                      messageId: originalMessage.id
+                    });
+                    
+                    break; // Break out of the guild loop once we find and update the message
+                  }
+                } catch (searchError) {
+                  log(`Error searching for original message in channel: ${searchError}`, "discord-bot");
+                }
+              }
+            }
+            
+            // If we couldn't find the original message
+            if (!originalMessage) {
+              await interaction.reply({
+                content: "I couldn't find your original ISO request in the items-exchange channel. It may have been deleted or is too old.",
+                ephemeral: true
+              });
+              
+              log(`Could not find original message for ISO request by ${username} for ${item}`, "discord-bot");
+            }
+          } catch (channelError) {
+            log(`Error finding items-exchange channel: ${channelError}`, "discord-bot");
+            
+            // Fallback response if we can't find the channel or message
+            await interaction.reply({
+              content: "I've marked this item as fulfilled, but couldn't update the original message in the items-exchange channel.",
+              ephemeral: true
+            });
+          }
+        } else {
+          // If we couldn't extract the necessary info, give a generic confirmation
+          await interaction.reply({
+            content: "You've marked this item as fulfilled!",
+            ephemeral: true
+          });
+          
+          log(`User ${interaction.user.username} clicked the Fulfilled button on an ISO request, but details couldn't be extracted`, "discord-bot");
+        }
+        
+        // Create a log entry even if we couldn't update the original message
         await storage.createLog({
           userId: interaction.user.id,
           username: interaction.user.username,
-          command: "claim-button",
+          command: "fulfill-button",
           channel: "DM",
           status: "success",
-          message: `User clicked the Claim button on an ISO request`,
+          message: `User clicked the Fulfilled button on an ISO request`,
           guildId: interaction.guildId,
           messageId: interaction.message.id
         });
         
         return;
       } catch (error) {
-        log(`Error handling claim button click: ${error}`, "discord-bot");
+        log(`Error handling fulfill button click: ${error}`, "discord-bot");
+        
+        // Try to give feedback to the user
+        try {
+          if (!interaction.replied) {
+            await interaction.reply({
+              content: "There was an error processing your request. Please try again later.",
+              ephemeral: true
+            });
+          }
+        } catch (replyError) {
+          log(`Error replying to fulfill interaction: ${replyError}`, "discord-bot");
+        }
+        
         return;
       }
     }
