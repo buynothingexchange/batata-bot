@@ -2,6 +2,18 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
+// Track server start time for uptime calculations
+const SERVER_START_TIME = new Date();
+
+// Process-level uncaught exception handler to prevent crashes
+process.on('uncaughtException', (error) => {
+  log(`CRITICAL ERROR: Uncaught exception: ${error.message}`, "server");
+  console.error("Stack trace:", error.stack);
+  
+  // We avoid exiting the process here to keep the server running
+  // Instead, we'll rely on our health check/monitoring to recover
+});
+
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));

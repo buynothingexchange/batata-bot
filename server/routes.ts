@@ -6,6 +6,34 @@ import { z } from "zod";
 import { insertLogSchema } from "@shared/schema";
 import OpenAI from "openai";
 
+// Calculate server uptime in a human-readable format
+function getServerUptime(): string {
+  // Access the server start time from global scope (set in index.ts)
+  const serverStartTime = (global as any).SERVER_START_TIME;
+  
+  if (!serverStartTime) {
+    return "unknown";
+  }
+  
+  const now = new Date();
+  const uptime = now.getTime() - serverStartTime.getTime();
+  
+  const seconds = Math.floor(uptime / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  
+  if (days > 0) {
+    return `${days}d ${hours % 24}h ${minutes % 60}m`;
+  } else if (hours > 0) {
+    return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+  } else if (minutes > 0) {
+    return `${minutes}m ${seconds % 60}s`;
+  } else {
+    return `${seconds}s`;
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize the bot config first
   await initializeBotConfig();

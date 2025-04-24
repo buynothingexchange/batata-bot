@@ -156,10 +156,17 @@ function createTagButtons(item: string, features: string[], tags: string[]): Act
 // Flag to track if bot is already initialized
 let isInitialized = false;
 
-// Initialize the Discord bot
+// Validate Discord token format
+function isValidDiscordToken(token: string): boolean {
+  // Basic validation - tokens usually follow a specific format with dots separating segments
+  // This is a very basic check and does not guarantee the token is valid/active
+  return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token);
+}
+
+// Initialize the Discord bot with comprehensive error handling and recovery
 export async function initializeBot() {
   try {
-    // If the bot is already initialized, don't initialize again
+    // If the bot is already initialized and connected, don't initialize again
     if (isInitialized && bot && bot.isReady()) {
       log("Bot is already initialized and connected", "discord-bot");
       return;
@@ -167,8 +174,43 @@ export async function initializeBot() {
     
     // Get the Discord bot token from the environment
     const token = process.env.DISCORD_BOT_TOKEN;
+    
+    // Thorough token validation
     if (!token) {
-      throw new Error("DISCORD_BOT_TOKEN is not set in the environment variables");
+      const error = new Error("DISCORD_BOT_TOKEN is not set in the environment variables");
+      log(`ERROR: ${error.message}`, "discord-bot");
+      
+      // Create a critical error log
+      await storage.createLog({
+        userId: "system",
+        username: "System",
+        command: "init",
+        channel: "N/A",
+        status: "error",
+        message: "CRITICAL ERROR: Discord token is missing from environment variables. Bot cannot start.",
+        messageId: "system-message"
+      }).catch(err => log(`Error logging token missing error: ${err}`, "discord-bot"));
+      
+      throw error;
+    }
+    
+    // Basic format validation
+    if (!isValidDiscordToken(token)) {
+      const error = new Error("DISCORD_BOT_TOKEN is present but has an invalid format");
+      log(`ERROR: ${error.message}`, "discord-bot");
+      
+      // Create a critical error log
+      await storage.createLog({
+        userId: "system",
+        username: "System",
+        command: "init",
+        channel: "N/A",
+        status: "error",
+        message: "CRITICAL ERROR: Discord token has invalid format. Bot cannot start.",
+        messageId: "system-message"
+      }).catch(err => log(`Error logging token format error: ${err}`, "discord-bot"));
+      
+      throw error;
     }
     
     log("Required permissions: READ_MESSAGES, SEND_MESSAGES, READ_MESSAGE_HISTORY, ADD_REACTIONS, EMBED_LINKS", "discord-bot");
@@ -176,19 +218,34 @@ export async function initializeBot() {
     // Destroy existing bot instance if it exists
     if (bot) {
       log("Destroying existing bot instance before creating a new one", "discord-bot");
-      await bot.destroy();
+      try {
+        await bot.destroy();
+      } catch (destroyError) {
+        log(`Warning: Error destroying existing bot instance: ${destroyError}. Continuing anyway...`, "discord-bot");
+      }
       bot = null;
     }
     
-    // Clear processed messages and ISO requests
+    // Clear all caches for a fresh start
     processedMessages.clear();
     processedISORequests.clear();
     
-    // Create a new bot instance
-    bot = new Client({ intents, partials });
-    
-    // Reset reconnect attempts counter
+    // Reset metrics
     reconnectAttempts = 0;
+    healthCheckFailures = 0;
+    
+    // Create a new bot instance with all necessary intents
+    bot = new Client({ 
+      intents,
+      partials,
+      // This increases the retry limit for REST API calls to Discord
+      rest: {
+        retries: 5, // Increase the default number of retries
+        timeout: 15000 // Increase the default timeout (15 seconds)
+      },
+      // Increase the number of shards if we have many servers (not needed for most bots)
+      shards: 'auto'
+    });
     
     // Register event handlers
     bot.on(Events.ClientReady, () => {
@@ -1058,32 +1115,94 @@ export async function restartBot() {
   }
 }
 
-// Perform a health check
+// Track consecutive health check failures
+let healthCheckFailures = 0;
+const MAX_FAILURES_BEFORE_RESTART = 3;
+const CONSECUTIVE_SUCCESS_TO_RESET = 5;
+let consecutiveSuccessfulChecks = 0;
+
+// Perform a comprehensive health check
 async function performHealthCheck() {
   try {
-    // Check if bot is initialized and connected
+    // Check if bot is initialized and connected to Discord
     if (bot && bot.isReady()) {
-      // Check if we've received messages recently (within the last 5 minutes)
-      const messageTimeout = 5 * 60 * 1000; // 5 minutes
+      // Check if we've received messages recently (within the last 10 minutes)
+      const messageTimeout = 10 * 60 * 1000; // 10 minutes
       const timeSinceLastMessage = Date.now() - lastMessageTimestamp;
       
-      if (timeSinceLastMessage > messageTimeout) {
-        log(`Health check warning: No messages received in ${Math.round(timeSinceLastMessage / 1000 / 60)} minutes`, "discord-bot");
+      const isInactive = timeSinceLastMessage > messageTimeout;
+      
+      if (isInactive) {
+        healthCheckFailures++;
+        log(`Health check warning: No messages received in ${Math.round(timeSinceLastMessage / 1000 / 60)} minutes. Failure #${healthCheckFailures}`, "discord-bot");
+        
+        // Try to ping Discord API to verify connection
+        try {
+          // Try to fetch a small amount of data from Discord to validate the connection
+          await bot.guilds.fetch({ limit: 1 });
+          log("Discord API connection appears to be working despite inactivity", "discord-bot");
+        } catch (pingError) {
+          log(`Discord API ping failed: ${pingError}. Initiating reconnect...`, "discord-bot");
+          await attemptReconnect();
+          return;
+        }
+        
+        // If we've had too many failures in a row, force a restart
+        if (healthCheckFailures >= MAX_FAILURES_BEFORE_RESTART) {
+          log(`Too many consecutive health check failures (${healthCheckFailures}). Forcing bot restart...`, "discord-bot");
+          await restartBot();
+          healthCheckFailures = 0;
+          return;
+        }
       } else {
-        log("Health check passed: Bot is online and connected", "discord-bot");
+        // Success: bot is connected and active
+        log(`Health check passed: Bot is online and connected (${timeSinceLastMessage / 1000}s since last message)`, "discord-bot");
+        
+        // Increment consecutive success counter
+        consecutiveSuccessfulChecks++;
+        
+        // Reset failure counter after consecutive successes
+        if (consecutiveSuccessfulChecks >= CONSECUTIVE_SUCCESS_TO_RESET) {
+          if (healthCheckFailures > 0) {
+            log(`Reset health check failures counter after ${consecutiveSuccessfulChecks} consecutive successes`, "discord-bot");
+            healthCheckFailures = 0;
+          }
+          consecutiveSuccessfulChecks = 0;
+        }
       }
       
       return;
     }
     
-    log("Health check failed: Bot is not initialized or not logged in", "discord-bot");
+    // Bot is not ready or not initialized
+    healthCheckFailures++;
+    log(`Health check failed: Bot is not initialized or not logged in. Failure #${healthCheckFailures}`, "discord-bot");
+    
+    // Create a critical alert log entry
+    await storage.createLog({
+      userId: "system",
+      username: "System",
+      command: "health_check",
+      channel: "N/A",
+      status: "error",
+      message: `Bot is offline! Attempting to reconnect (failure #${healthCheckFailures})`,
+      messageId: "system-message"
+    }).catch(err => log(`Error logging health check failure: ${err}`, "discord-bot"));
+    
     await attemptReconnect();
     return;
   } catch (error) {
-    log(`Health check error: ${error}`, "discord-bot");
+    healthCheckFailures++;
+    log(`Health check error: ${error}. Failure #${healthCheckFailures}`, "discord-bot");
+    
     await attemptReconnect();
   }
 }
+
+// Constants for reconnection strategy
+const MAX_RECONNECT_ATTEMPTS = 20;  // Increase max retry attempts
+const RECONNECT_SUCCESS_RESET_DELAY = 60 * 60 * 1000; // 1 hour
+const TOTAL_RESTART_THRESHOLD = 10; // After this many reconnect attempts, we'll do a complete process restart
 
 // Attempt to reconnect the bot after a disconnect
 async function attemptReconnect() {
@@ -1092,11 +1211,15 @@ async function attemptReconnect() {
     isInitialized = false;
     
     reconnectAttempts++;
-    log(`Attempting to reconnect (attempt #${reconnectAttempts})...`, "discord-bot");
+    log(`Attempting to reconnect (attempt #${reconnectAttempts} of ${MAX_RECONNECT_ATTEMPTS})...`, "discord-bot");
     
     // Clean up existing bot instance if it exists
     if (bot) {
-      await bot.destroy();
+      try {
+        await bot.destroy();
+      } catch (destroyError) {
+        log(`Error destroying bot instance: ${destroyError}. Continuing anyway...`, "discord-bot");
+      }
       bot = null;
     }
     
@@ -1104,9 +1227,43 @@ async function attemptReconnect() {
     processedMessages.clear();
     processedISORequests.clear();
     
-    // Wait for a bit before reconnecting (with exponential backoff)
-    const backoffTime = Math.min(RECONNECT_INTERVAL * Math.pow(1.5, reconnectAttempts-1), 300000); // Max 5 minutes
+    // If we've hit a high number of reconnect attempts, do more drastic measures
+    if (reconnectAttempts >= TOTAL_RESTART_THRESHOLD) {
+      log(`Reached ${reconnectAttempts} reconnect attempts. Preparing emergency diagnostics...`, "discord-bot");
+      
+      // Log network diagnostics
+      try {
+        // Create critical log entry
+        await storage.createLog({
+          userId: "system",
+          username: "System",
+          command: "emergency_reconnect",
+          channel: "N/A",
+          status: "error",
+          message: `CRITICAL: Multiple reconnect attempts (${reconnectAttempts}) have failed. Possible network or service outage.`,
+          messageId: "system-message"
+        }).catch(err => log(`Error logging emergency reconnect: ${err}`, "discord-bot"));
+      } catch (error) {
+        log(`Failed to log emergency diagnostics: ${error}`, "discord-bot");
+      }
+    }
+    
+    // Calculate backoff time with a larger max cap for persistent issues
+    const backoffTime = Math.min(
+      RECONNECT_INTERVAL * Math.pow(1.5, reconnectAttempts-1), 
+      15 * 60 * 1000 // Max 15 minutes for very persistent issues
+    );
+    
     log(`Waiting ${Math.round(backoffTime/1000)} seconds before reconnecting...`, "discord-bot");
+    
+    // Prevent infinite reconnect attempts
+    if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+      log(`WARNING: Exceeded maximum reconnect attempts (${MAX_RECONNECT_ATTEMPTS}). Will continue trying but at reduced frequency.`, "discord-bot");
+      
+      // After max attempts, we start using a fixed longer interval to avoid overwhelming the system
+      setTimeout(attemptReconnect, 30 * 60 * 1000); // 30 minute fixed delay after max attempts
+      return;
+    }
     
     setTimeout(async () => {
       try {
@@ -1124,6 +1281,15 @@ async function attemptReconnect() {
           message: `Bot reconnected successfully after ${reconnectAttempts} attempts`,
           messageId: "system-message"
         }).catch(err => log(`Error logging reconnection: ${err}`, "discord-bot"));
+        
+        // Reset reconnect attempts counter after a delay to avoid quick reset in case of repeated issues
+        setTimeout(() => {
+          if (reconnectAttempts > 0) {
+            const previousAttempts = reconnectAttempts;
+            reconnectAttempts = 0;
+            log(`Reset reconnect attempts counter from ${previousAttempts} to 0 after successful stability period`, "discord-bot");
+          }
+        }, RECONNECT_SUCCESS_RESET_DELAY);
         
       } catch (error) {
         log(`Error reconnecting: ${error}`, "discord-bot");
