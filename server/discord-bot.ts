@@ -207,11 +207,13 @@ export async function initializeBot() {
     log("Registered interaction handler for button clicks", "discord-bot");
     
     // Handle disconnections
-    bot.on(Events.Disconnect, () => {
-      log("Bot disconnected from Discord", "discord-bot");
-      
-      // Attempt to reconnect automatically
-      attemptReconnect();
+    bot.on(Events.Warn, (message) => {
+      if (message.includes("disconnect") || message.includes("connection")) {
+        log(`Bot disconnection warning: ${message}`, "discord-bot");
+        
+        // Attempt to reconnect automatically
+        attemptReconnect();
+      }
     });
     
     // Handle errors
@@ -1228,12 +1230,7 @@ export async function initializeBotConfig() {
       // Create default bot configuration
       await storage.createBotConfig({
         commandTrigger: "!claimed",
-        reactionEmoji: "<:claimed:1358472533304676473>",
-        permissions: {
-          manageMessages: true,
-          addReactions: true,
-          readMessageHistory: true
-        }
+        reactionEmoji: "<:claimed:1358472533304676473>"
       });
       
       log("Created default bot configuration", "discord-bot");

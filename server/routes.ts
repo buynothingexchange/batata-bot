@@ -1,13 +1,16 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { initializeBot, getBotStatus, processCommand, restartBot, updateBotConfig } from "./discord-bot";
+import { initializeBot, initializeBotConfig, getBotStatus, processCommand, restartBot, updateBotConfig } from "./discord-bot";
 import { z } from "zod";
 import { insertLogSchema } from "@shared/schema";
 import OpenAI from "openai";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Initialize the Discord bot
+  // Initialize the bot config first
+  await initializeBotConfig();
+  
+  // Then initialize the Discord bot
   await initializeBot();
 
   // API route to get bot status
