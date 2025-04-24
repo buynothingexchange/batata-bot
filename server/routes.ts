@@ -6,14 +6,11 @@ import { z } from "zod";
 import { insertLogSchema } from "@shared/schema";
 import OpenAI from "openai";
 
+// Server start time - initialize when module is loaded
+const serverStartTime = new Date();
+
 // Calculate server uptime in a human-readable format
 function getServerUptime(): string {
-  // Access the server start time from global scope (set in index.ts)
-  const serverStartTime = (global as any).SERVER_START_TIME;
-  
-  if (!serverStartTime) {
-    return "unknown";
-  }
   
   const now = new Date();
   const uptime = now.getTime() - serverStartTime.getTime();
