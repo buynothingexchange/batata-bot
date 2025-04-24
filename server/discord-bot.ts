@@ -69,7 +69,7 @@ async function addDefaultChannels() {
 
 // Helper function to create buttons from tags
 // Helper function to create a Fulfilled button for DMs
-function createClaimedButton(): ActionRowBuilder<ButtonBuilder>[] {
+function createFulfilledButton(): ActionRowBuilder<ButtonBuilder>[] {
   const fulfilledButton = new ButtonBuilder()
     .setCustomId('fulfill:item')
     .setLabel('Fulfilled')
@@ -448,7 +448,7 @@ async function handleMessage(message: Message) {
             // Also forward a copy to the original user via DM
             try {
               // Create the Fulfilled button for the DM message
-              const dmButtons = createClaimedButton();
+              const dmButtons = createFulfilledButton();
               
               // Send a DM to the user with the formatted message and Fulfilled button
               await message.author.send({
@@ -729,7 +729,7 @@ async function handleMessage(message: Message) {
                 // Also forward a copy to the original user via DM
                 try {
                   // Create the Fulfilled button for the DM message
-                  const dmButtons = createClaimedButton();
+                  const dmButtons = createFulfilledButton();
                   
                   // Send a DM to the user with the formatted message and Fulfilled button
                   await message.author.send({
