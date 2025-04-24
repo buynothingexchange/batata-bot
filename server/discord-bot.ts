@@ -12,7 +12,9 @@ import {
   ButtonStyle,
   ButtonInteraction,
   Interaction,
-  TextChannel
+  TextChannel,
+  PermissionFlagsBits,
+  GuildTextBasedChannel
 } from "discord.js";
 import { storage } from "./storage";
 import { insertLogSchema } from "@shared/schema";
@@ -418,8 +420,33 @@ async function handleMessage(message: Message) {
         
         // Delete the original ISO request message
         try {
-          await message.delete();
-          log(`Deleted original ISO request from ${message.author.username}`, "discord-bot");
+          // Check if the bot has permission to manage messages in this channel
+          if (message.guild && message.channel.type === ChannelType.GuildText) {
+            const botMember = message.guild.members.cache.get(bot.user!.id);
+            const channel = message.channel as GuildTextBasedChannel;
+            
+            if (botMember && botMember.permissionsIn(channel).has(PermissionFlagsBits.ManageMessages)) {
+              await message.delete();
+              log(`Deleted original ISO request from ${message.author.username}`, "discord-bot");
+            } else {
+              log(`Bot does not have permission to delete messages in #${(message.channel as TextChannel).name}`, "discord-bot");
+              
+              // Add a note to the log about missing permissions
+              await storage.createLog({
+                userId: "system",
+                username: "System",
+                command: "permission-check",
+                channel: (message.channel as TextChannel).name,
+                status: "warning",
+                message: `Bot does not have ManageMessages permission in channel #${(message.channel as TextChannel).name}`,
+                messageId: message.id,
+              }).catch(err => log(`Error logging permission warning: ${err}`, "discord-bot"));
+            }
+          } else {
+            // Try deleting anyway for non-guild channels or other channel types
+            await message.delete();
+            log(`Deleted original ISO request from ${message.author.username} in non-guild channel`, "discord-bot");
+          }
         } catch (deleteError) {
           log(`Failed to delete original ISO message: ${deleteError}. The bot may not have permission to delete messages.`, "discord-bot");
         }
@@ -662,8 +689,33 @@ async function handleMessage(message: Message) {
           
           // Delete the original ISO request message
           try {
-            await message.delete();
-            log(`Deleted original ISO request (fallback) from ${message.author.username}`, "discord-bot");
+            // Check if the bot has permission to manage messages in this channel
+            if (message.guild && message.channel.type === ChannelType.GuildText) {
+              const botMember = message.guild.members.cache.get(bot!.user!.id);
+              const channel = message.channel as TextChannel;
+              
+              if (botMember && botMember.permissionsIn(channel).has(PermissionFlagsBits.ManageMessages)) {
+                await message.delete();
+                log(`Deleted original ISO request (fallback) from ${message.author.username}`, "discord-bot");
+              } else {
+                log(`Bot does not have permission to delete messages in #${channel.name}`, "discord-bot");
+                
+                // Add a note to the log about missing permissions
+                await storage.createLog({
+                  userId: "system",
+                  username: "System",
+                  command: "permission-check",
+                  channel: channel.name,
+                  status: "warning",
+                  message: `Bot does not have ManageMessages permission in channel #${channel.name}`,
+                  messageId: message.id,
+                }).catch(err => log(`Error logging permission warning: ${err}`, "discord-bot"));
+              }
+            } else {
+              // Try deleting anyway for non-guild channels or other channel types
+              await message.delete();
+              log(`Deleted original ISO request (fallback) from ${message.author.username} in non-guild channel`, "discord-bot");
+            }
           } catch (deleteError) {
             log(`Failed to delete original ISO message (fallback): ${deleteError}. The bot may not have permission to delete messages.`, "discord-bot");
           }
