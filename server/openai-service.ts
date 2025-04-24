@@ -65,14 +65,16 @@ export async function analyzeISORequest(username: string, messageContent: string
              - Brands should be separate features
              - Size specifications should be separate features
           
-          3. For urgency, pay special attention to any time indicators such as:
-             - "this weekend"
-             - "next weekend"
-             - "tmo" or "tomorrow"
-             - "ASAP"
-             - "today"
-             - "by Friday" (or any other day)
-             - any other time-related phrases
+          3. For urgency, pay special attention to ANY time indicators such as:
+             - Relative timing: "this weekend", "next weekend", "this week", "next week"
+             - Immediate timing: "tmo", "tomorrow", "ASAP", "today", "immediately", "soon", "now"
+             - Days of week with prepositions: "by Monday", "before Tuesday", "after Wednesday", etc.
+             - Time qualifiers with days: "by this Friday", "before next Sunday", etc.
+             - End of period phrases: "by the end of the week", "by the end of the month"
+             - Plain days of week: "Monday", "Tuesday", "this Friday", "next Saturday"
+             - Month-related: "early January", "mid February", "late March", "beginning of April"
+             - General urgency: "urgent", "quickly", "fast"
+             - ALWAYS include the EXACT timing phrase as it appears in the message
           
           Example:
           Input: "ISO a vintage leather jacket with silver buttons, size M, needed by Friday"
@@ -293,12 +295,31 @@ export async function analyzeISORequest(username: string, messageContent: string
     // More complex time phrases
     if (urgency === "Not specified") {
       const timePatterns = [
+        // Weekend patterns
         /this weekend/i,
         /next weekend/i,
-        /by (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
-        /by tomorrow/i,
+        /weekend/i,
+        
+        // Day of week patterns with by/before/after
+        /(?:by|before|after) (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
+        /(?:by|before|after) (?:this|next) (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
+        
+        // General timing patterns
+        /(?:by|before|after) tomorrow/i,
         /in a week/i,
-        /by next week/i
+        /(?:by|before|after) next week/i,
+        /(?:by|before|after) (?:the )?end of (?:the )?(?:this|next)? week/i,
+        /(?:by|before|after) (?:the )?end of (?:the )?month/i,
+        /(?:by|before|after) (?:the )?weekend/i,
+        /(?:by|before|after) (?:the )?end of (?:the )?day/i,
+        
+        // Plain days of the week (without by/before/after)
+        /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+        /\b(?:this|next) (monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+        
+        // Month-related patterns
+        /(?:early|mid|late) (?:january|february|march|april|may|june|july|august|september|october|november|december)/i,
+        /(?:beginning|middle|end) of (?:january|february|march|april|may|june|july|august|september|october|november|december)/i
       ];
       
       for (const pattern of timePatterns) {

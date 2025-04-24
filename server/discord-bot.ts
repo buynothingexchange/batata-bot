@@ -645,12 +645,31 @@ async function handleMessage(message: Message) {
             // More complex time phrases
             if (urgency === "Not specified") {
               const timePatterns = [
+                // Weekend patterns
                 /this weekend/i,
                 /next weekend/i,
-                /by (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
-                /by tomorrow/i,
+                /weekend/i,
+                
+                // Day of week patterns with by/before/after
+                /(?:by|before|after) (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
+                /(?:by|before|after) (?:this|next) (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
+                
+                // General timing patterns
+                /(?:by|before|after) tomorrow/i,
                 /in a week/i,
-                /by next week/i
+                /(?:by|before|after) next week/i,
+                /(?:by|before|after) (?:the )?end of (?:the )?(?:this|next)? week/i,
+                /(?:by|before|after) (?:the )?end of (?:the )?month/i,
+                /(?:by|before|after) (?:the )?weekend/i,
+                /(?:by|before|after) (?:the )?end of (?:the )?day/i,
+                
+                // Plain days of the week (without by/before/after)
+                /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+                /\b(?:this|next) (monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+                
+                // Month-related patterns
+                /(?:early|mid|late) (?:january|february|march|april|may|june|july|august|september|october|november|december)/i,
+                /(?:beginning|middle|end) of (?:january|february|march|april|may|june|july|august|september|october|november|december)/i
               ];
               
               for (const pattern of timePatterns) {
