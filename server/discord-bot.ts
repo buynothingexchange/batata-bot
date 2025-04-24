@@ -26,6 +26,9 @@ const startTime = new Date();
 // Message processing tracker to prevent duplicate processing
 const processedMessages = new Map<string, boolean>();
 
+// ISO request tracker to prevent duplicate processing
+const processedISORequests = new Map<string, boolean>();
+
 // Set up gateway intents (permissions)
 const intents = [
   GatewayIntentBits.Guilds,
@@ -177,8 +180,9 @@ export async function initializeBot() {
       bot = null;
     }
     
-    // Clear processed messages
+    // Clear processed messages and ISO requests
     processedMessages.clear();
+    processedISORequests.clear();
     
     // Create a new bot instance
     bot = new Client({ intents, partials });
@@ -197,8 +201,10 @@ export async function initializeBot() {
         // Set up process to clear processed messages cache periodically (every 6 hours)
         setInterval(() => {
           const messageCount = processedMessages.size;
+          const isoCount = processedISORequests.size;
           processedMessages.clear();
-          log(`Cleared message processing cache (${messageCount} entries)`, "discord-bot");
+          processedISORequests.clear();
+          log(`Cleared message processing cache (${messageCount} entries) and ISO cache (${isoCount} entries)`, "discord-bot");
         }, 6 * 60 * 60 * 1000);
         
         // Reset last message timestamp
