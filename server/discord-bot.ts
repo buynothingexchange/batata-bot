@@ -348,121 +348,18 @@ async function handleMessage(message: Message) {
     // Check for ISO requests in items-exchange channel
     if (channelName === "items-exchange" && 
         message.content.trim().startsWith("ISO")) {
-      // Flag to track if we've already processed this ISO request
-      let isoRequestProcessed = false;
-      let formattedResponse = "";
-      let tagButtons = null;
       
-      try {
-        // Attempt to process with OpenAI first
-        try {
-          // Analyze the ISO request using OpenAI
-          const analysis = await analyzeISORequest(message.author.username, message.content);
-          
-          // Build features list if available
-          let featuresText = "-Features:";
-          if (analysis.features && analysis.features.length > 0) {
-            featuresText = "-Features: " + analysis.features.join(", ");
-          }
-          
-          // Add urgency if available
-          const urgencyText = `-Urgency: ${analysis.urgency || "Not specified"}`;
-          
-          // Add tags if available
-          let tagsText = "-Tags:";
-          if (analysis.tags && analysis.tags.length > 0) {
-            tagsText = "-Tags: " + analysis.tags.join(", ");
-          }
-          
-          // Create the standardized REQUEST format template with the extracted information
-          formattedResponse = `@${message.author.username} is looking for a ${analysis.item}.\n${featuresText}\n${urgencyText}\n${tagsText}`;
-          
-          // Create buttons for relevant tags/categories
-          tagButtons = createTagButtons(analysis.item, analysis.features, analysis.tags);
-          
-          log(`AI-formatted ISO request for ${message.author.username} in #items-exchange: ${analysis.item}`, "discord-bot");
-          
-          // Mark as successfully processed by AI
-          isoRequestProcessed = true;
-        } catch (openaiError) {
-          // OpenAI attempt failed, log it
-          log(`Error formatting ISO request with OpenAI: ${openaiError}`, "discord-bot");
-          
-          // Fall back to our simple extraction method
-          const requestText = message.content.trim().substring(3).trim();
-          let item = requestText;
-          const features = [];
-          
-          // Basic extraction - just use the text after "ISO" as the item
-          // Format the response with minimal formatting
-          formattedResponse = `@${message.author.username} is looking for a ${item}.\n-Features: \n-Urgency: Not specified\n-Tags:`;
-          
-          // Create buttons based on the item text
-          tagButtons = createTagButtons(item, [], []);
-          
-          log(`Fallback formatted ISO request for ${message.author.username} in #items-exchange: ${item}`, "discord-bot");
-          
-          // Mark as processed with fallback method
-          isoRequestProcessed = true;
-        }
-        
-        // Only proceed if we have a formatted response
-        if (isoRequestProcessed && formattedResponse && tagButtons) {
-          // Send the formatted message to the channel
-          if (message.channel.type === ChannelType.GuildText) {
-            await message.channel.send({
-              content: formattedResponse,
-              components: tagButtons
-            });
-            
-            // Forward a copy to the user via DM with Fulfilled button
-            try {
-              const dmButtons = createFulfilledButton();
-              
-              await message.author.send({
-                content: `Here's a copy of your ISO request that was posted in #items-exchange:\n\n${formattedResponse}\n\nIf you've found this item, click the button below to mark it as fulfilled.`,
-                components: dmButtons
-              });
-              
-              log(`Forwarded formatted ISO request to ${message.author.username} via DM with Fulfilled button`, "discord-bot");
-            } catch (dmError) {
-              // DM might fail if user has DMs disabled
-              log(`Error sending DM to ${message.author.username}: ${dmError}`, "discord-bot");
-            }
-            
-            // Create log entry for the successful formatting
-            await storage.createLog({
-              userId: message.author.id,
-              username: message.author.username,
-              command: "ISO",
-              channel: "items-exchange",
-              status: "success",
-              message: `Formatted REQUEST category post successfully`,
-              messageId: message.id,
-            }).catch(err => log(`Error logging ISO request formatting: ${err}`, "discord-bot"));
-            
-            // Try to delete the original message
-            try {
-              // Check if the bot has permission to manage messages
-              if (message.guild && bot && bot.user) {
-                const botMember = message.guild.members.cache.get(bot.user.id);
-                const channel = message.channel as TextChannel;
-                
-                if (botMember && botMember.permissionsIn(channel).has(PermissionFlagsBits.ManageMessages)) {
-                  await message.delete();
-                  log(`Deleted original ISO request from ${message.author.username}`, "discord-bot");
-                } else {
-                  log(`Bot does not have permission to delete messages in #${channel.name}`, "discord-bot");
-                }
-              }
-            } catch (deleteError) {
-              log(`Failed to delete original ISO message: ${deleteError}`, "discord-bot");
-            }
-          }
-        }
-      } catch (error) {
-        log(`Error processing ISO request: ${error}`, "discord-bot");
+      // Check if we've already processed this ISO request
+      if (processedISORequests.has(message.id)) {
+        log(`Skipping already processed ISO request ${message.id}`, "discord-bot");
+        return;
       }
+      
+      // Mark this ISO request as being processed
+      processedISORequests.set(message.id, true);
+      
+      // Process the ISO request in a separate function to isolate the logic
+      await processISORequest(message);
     }
     
     // Get the bot configuration
@@ -1147,8 +1044,9 @@ export async function restartBot() {
       log("Bot instance destroyed", "discord-bot");
     }
     
-    // Clear the message processing cache
+    // Clear the message processing cache and ISO requests
     processedMessages.clear();
+    processedISORequests.clear();
     
     // Initialize a new bot instance
     await initializeBot();
@@ -1202,8 +1100,9 @@ async function attemptReconnect() {
       bot = null;
     }
     
-    // Clear the message processing cache
+    // Clear the message processing cache and ISO requests
     processedMessages.clear();
+    processedISORequests.clear();
     
     // Wait for a bit before reconnecting (with exponential backoff)
     const backoffTime = Math.min(RECONNECT_INTERVAL * Math.pow(1.5, reconnectAttempts-1), 300000); // Max 5 minutes
@@ -1273,6 +1172,139 @@ function calculateUptime(startTime: Date): string {
   const remainingHours = hours % 24;
   
   return `${days} ${days === 1 ? 'day' : 'days'}, ${remainingHours} ${remainingHours === 1 ? 'hour' : 'hours'}`;
+}
+
+// Process ISO request with proper isolation and error handling
+async function processISORequest(message: Message): Promise<void> {
+  // Double check - we should only process ISO messages
+  if (!message.content.trim().startsWith("ISO")) {
+    return;
+  }
+  
+  // Get channel name for logging
+  const channelName = message.channel.type === ChannelType.GuildText 
+    ? (message.channel as any).name 
+    : "unknown";
+  
+  // If this isn't the items-exchange channel, don't process
+  if (channelName !== "items-exchange") {
+    return;
+  }
+  
+  let isoRequestProcessed = false;
+  let formattedResponse = "";
+  let tagButtons = null;
+  
+  try {
+    // Attempt to process with OpenAI first
+    try {
+      // Analyze the ISO request using OpenAI
+      const analysis = await analyzeISORequest(message.author.username, message.content);
+      
+      // Build features list if available
+      let featuresText = "-Features:";
+      if (analysis.features && analysis.features.length > 0) {
+        featuresText = "-Features: " + analysis.features.join(", ");
+      }
+      
+      // Add urgency if available
+      const urgencyText = `-Urgency: ${analysis.urgency || "Not specified"}`;
+      
+      // Add tags if available
+      let tagsText = "-Tags:";
+      if (analysis.tags && analysis.tags.length > 0) {
+        tagsText = "-Tags: " + analysis.tags.join(", ");
+      }
+      
+      // Create the standardized REQUEST format template with the extracted information
+      formattedResponse = `@${message.author.username} is looking for a ${analysis.item}.\n${featuresText}\n${urgencyText}\n${tagsText}`;
+      
+      // Create buttons for relevant tags/categories
+      tagButtons = createTagButtons(analysis.item, analysis.features, analysis.tags);
+      
+      log(`AI-formatted ISO request for ${message.author.username} in #items-exchange: ${analysis.item}`, "discord-bot");
+      
+      // Mark as successfully processed by AI
+      isoRequestProcessed = true;
+    } catch (openaiError) {
+      // OpenAI attempt failed, log it
+      log(`Error formatting ISO request with OpenAI: ${openaiError}`, "discord-bot");
+      
+      // Fall back to our simple extraction method
+      const requestText = message.content.trim().substring(3).trim();
+      let item = requestText;
+      const features = [];
+      
+      // Basic extraction - just use the text after "ISO" as the item
+      // Format the response with minimal formatting
+      formattedResponse = `@${message.author.username} is looking for a ${item}.\n-Features: \n-Urgency: Not specified\n-Tags:`;
+      
+      // Create buttons based on the item text
+      tagButtons = createTagButtons(item, [], []);
+      
+      log(`Fallback formatted ISO request for ${message.author.username} in #items-exchange: ${item}`, "discord-bot");
+      
+      // Mark as processed with fallback method
+      isoRequestProcessed = true;
+    }
+    
+    // Only proceed if we have a formatted response
+    if (isoRequestProcessed && formattedResponse && tagButtons) {
+      // Send the formatted message to the channel
+      if (message.channel.type === ChannelType.GuildText) {
+        await message.channel.send({
+          content: formattedResponse,
+          components: tagButtons
+        });
+        
+        // Forward a copy to the user via DM with Fulfilled button
+        try {
+          const dmButtons = createFulfilledButton();
+          
+          await message.author.send({
+            content: `Here's a copy of your ISO request that was posted in #items-exchange:\n\n${formattedResponse}\n\nIf you've found this item, click the button below to mark it as fulfilled.`,
+            components: dmButtons
+          });
+          
+          log(`Forwarded formatted ISO request to ${message.author.username} via DM with Fulfilled button`, "discord-bot");
+        } catch (dmError) {
+          // DM might fail if user has DMs disabled
+          log(`Error sending DM to ${message.author.username}: ${dmError}`, "discord-bot");
+        }
+        
+        // Create log entry for the successful formatting
+        await storage.createLog({
+          userId: message.author.id,
+          username: message.author.username,
+          command: "ISO",
+          channel: "items-exchange",
+          status: "success",
+          message: `Formatted REQUEST category post successfully`,
+          messageId: message.id,
+        }).catch(err => log(`Error logging ISO request formatting: ${err}`, "discord-bot"));
+        
+        // Try to delete the original message
+        try {
+          // Check if the bot has permission to manage messages
+          if (message.guild && bot && bot.user) {
+            const botMember = message.guild.members.cache.get(bot.user.id);
+            const channel = message.channel as TextChannel;
+            
+            if (botMember && botMember.permissionsIn(channel).has(PermissionFlagsBits.ManageMessages)) {
+              await message.delete();
+              log(`Deleted original ISO request from ${message.author.username}`, "discord-bot");
+            } else {
+              log(`Bot does not have permission to delete messages in #${channel.name}`, "discord-bot");
+            }
+          }
+        } catch (deleteError) {
+          log(`Failed to delete original ISO message: ${deleteError}`, "discord-bot");
+        }
+      }
+    }
+  } catch (error) {
+    log(`Error processing ISO request: ${error}`, "discord-bot");
+  }
 }
 
 // Initialize default configuration if necessary (called from server/index.ts)
