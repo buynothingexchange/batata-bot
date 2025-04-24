@@ -448,8 +448,10 @@ async function handleMessage(message: Message) {
           let item = requestText;
           const features = [];
           
-          // Check for common separators
+          // First, check for common separators between item and features
           const separators = [' with ', ' that ', ' which ', ', ', ' in ', ' for '];
+          let hasSeparator = false;
+          
           for (const separator of separators) {
             if (requestText.includes(separator)) {
               const parts = requestText.split(separator);
@@ -461,15 +463,133 @@ async function handleMessage(message: Message) {
                 features.push(featureText);
               }
               
+              hasSeparator = true;
               break;
             }
           }
           
+          // If no separator was found, look for adjectives before the noun
+          if (!hasSeparator) {
+            // Common item categories - expanded list 
+            const itemCategories = [
+              // Clothing & Accessories
+              'shirt', 'pants', 'jacket', 'shoes', 'boots', 'sneakers', 'hat', 'cap',
+              'dress', 'skirt', 'jeans', 'sweater', 'hoodie', 'socks', 'watch', 'gloves',
+              'bag', 'backpack', 'purse', 'wallet', 'sunglasses', 'glasses', 'scarf',
+              'belt', 'tie', 'blazer', 'coat', 'suit', 'shorts', 't-shirt', 'tshirt',
+              'blouse', 'cardigan', 'vest', 'sweatshirt', 'pajamas', 'swimsuit', 'bikini',
+              'necklace', 'bracelet', 'ring', 'earrings', 'pendant', 'jewelry',
+              
+              // Electronics
+              'phone', 'laptop', 'computer', 'tablet', 'camera', 'headphones', 'speaker',
+              'monitor', 'keyboard', 'mouse', 'charger', 'adapter', 'cable', 'drive',
+              'printer', 'scanner', 'router', 'modem', 'microphone', 'earbuds', 'console',
+              'tv', 'television', 'projector', 'drone', 'smartwatch', 'device',
+              
+              // Furniture
+              'chair', 'table', 'desk', 'sofa', 'couch', 'bookshelf', 'cabinet',
+              'bed', 'mattress', 'dresser', 'nightstand', 'shelf', 'stool', 'drawer',
+              'wardrobe', 'bench', 'ottoman', 'rug', 'lamp', 'mirror', 'curtains',
+              
+              // Transportation
+              'car', 'bike', 'bicycle', 'scooter', 'helmet', 'motorcycle', 'skateboard',
+              'vehicle', 'truck', 'van', 'bus', 'tire', 'wheel', 'brake', 'engine',
+              
+              // Other common items
+              'book', 'game', 'toy', 'doll', 'figure', 'poster', 'painting', 'print',
+              'tool', 'drill', 'hammer', 'knife', 'pot', 'pan', 'utensil', 'plate',
+              'bowl', 'mug', 'cup', 'glass', 'bottle', 'container'
+            ];
+            
+            // Search for item category words in the string
+            const words = item.split(' ');
+            if (words.length > 1) {
+              // Look for any item category in the words
+              for (let i = 0; i < words.length; i++) {
+                const word = words[i].toLowerCase().replace(/[,.;:!?]$/, ''); // Remove punctuation
+                if (itemCategories.includes(word)) {
+                  // Found an item category - everything before it is adjectives
+                  const adjectives = words.slice(0, i).join(' ');
+                  if (adjectives) {
+                    features.push(adjectives);
+                  }
+                  // The item is the category word and anything after it
+                  item = words.slice(i).join(' ');
+                  break;
+                }
+              }
+            }
+          }
+          
           // Check for size specifications
-          if (requestText.toLowerCase().includes("my size") || requestText.toLowerCase().includes("in size")) {
+          if (item.toLowerCase().includes("size")) {
+            const sizeParts = item.split("size");
+            item = sizeParts[0].trim();
+            features.push(`size${sizeParts[1].trim()}`);
+          } else if (requestText.includes("my size") || requestText.includes("in size")) {
+            // Extract size as feature if it's not part of item
             item = requestText.replace(/(\s+that are|\s+in|\s+of|\s+with) my size/i, "").trim();
             features.push("my size");
           }
+          
+          // Look for color words and add them as features if they're part of the item
+          const colors = [
+            // Basic colors
+            'red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'brown',
+            'black', 'white', 'gray', 'grey', 'silver', 'gold', 'beige', 'navy',
+            'teal', 'maroon', 'olive', 'lime', 'aqua', 'turquoise', 'cyan', 'magenta',
+            
+            // Color variations
+            'light blue', 'dark blue', 'sky blue', 'royal blue', 'navy blue',
+            'light green', 'dark green', 'forest green', 'mint green', 'olive green',
+            'light red', 'dark red', 'crimson', 'burgundy', 'scarlet', 'ruby',
+            'light yellow', 'dark yellow', 'mustard', 'lemon', 'golden', 'cream',
+            'light orange', 'dark orange', 'peach', 'coral', 'salmon',
+            'light purple', 'dark purple', 'lavender', 'violet', 'plum', 'indigo',
+            'light pink', 'dark pink', 'hot pink', 'rose', 'fuchsia',
+            'light brown', 'dark brown', 'tan', 'chocolate', 'coffee', 'caramel',
+            'off white', 'ivory', 'eggshell', 'pearl', 'charcoal', 'slate',
+            
+            // Metallic colors
+            'bronze', 'copper', 'chrome', 'platinum', 'metallic'
+          ];
+          
+          // Check if any color words are in the item and not already extracted as features
+          const itemLower = item.toLowerCase();
+          
+          // First check for compound colors (multi-word colors)
+          for (const color of colors) {
+            if (color.includes(' ')) { // Only check multi-word colors first
+              if (itemLower.includes(color)) {
+                // If a multi-word color is found in the item, move it to features and clean the item
+                item = item.replace(new RegExp(color, 'i'), '').trim();
+                
+                // Avoid duplicate color mentions
+                if (!features.some(f => f.toLowerCase().includes(color))) {
+                  features.push(color);
+                }
+              }
+            }
+          }
+          
+          // Then check for single-word colors
+          const itemWords = item.toLowerCase().split(' ');
+          for (const color of colors) {
+            if (!color.includes(' ')) { // Only check single-word colors
+              if (itemWords.includes(color)) {
+                // If a color is found in the item, move it to features and clean the item
+                item = item.replace(new RegExp(`\\b${color}\\b`, 'i'), '').trim();
+                
+                // Avoid duplicate color mentions
+                if (!features.some(f => f.toLowerCase().includes(color))) {
+                  features.push(color);
+                }
+              }
+            }
+          }
+          
+          // Clean up multiple spaces in the item
+          item = item.replace(/\s+/g, ' ').trim();
           
           // Check for urgency indicators with more comprehensive time phrases
           let urgency = "Not specified";
