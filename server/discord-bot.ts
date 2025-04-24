@@ -1,46 +1,39 @@
+// Import required modules
 import { 
-  Client, 
-  GatewayIntentBits, 
-  Partials, 
-  Events, 
-  Message, 
-  ChannelType, 
-  EmbedBuilder, 
-  WebSocketShardEvents, 
-  ActionRowBuilder, 
-  ButtonBuilder, 
-  ButtonStyle,
-  ButtonInteraction,
-  Interaction,
-  TextChannel,
-  PermissionFlagsBits,
-  GuildTextBasedChannel
-} from "discord.js";
-import { storage } from "./storage";
-import { insertLogSchema } from "@shared/schema";
-import { log } from "./vite";
-import { analyzeISORequest } from "./openai-service";
+  Client, ChannelType, Events, GatewayIntentBits, 
+  Interaction, Message, MessageReaction, 
+  PartialMessageReaction, PartialUser, Partials, 
+  User, EmbedBuilder, TextChannel, ButtonBuilder, 
+  ButtonStyle, ActionRowBuilder, 
+  PermissionFlagsBits
+} from 'discord.js';
+import { WebSocketServer } from 'ws';
+import { log } from './vite';
+import { storage } from './storage';
+import { analyzeISORequest } from './openai-service';
+import { Server } from 'http';
 
-// Bot instance and state
+// Bot instance
 let bot: Client | null = null;
-let startTime: Date | null = null;
-let commandsProcessed = 0;
-let reconnectAttempts = 0;
-let lastMessageTimestamp = Date.now();
-let forceReconnectInterval: NodeJS.Timeout | null = null;
-let healthCheckInterval: NodeJS.Timeout | null = null;
-const MAX_RECONNECT_ATTEMPTS = 10;
-const RECONNECT_INTERVAL = 60000; // 1 minute
-const HEALTH_CHECK_INTERVAL = 300000; // 5 minutes
-const MESSAGE_INACTIVITY_THRESHOLD = 3600000; // 1 hour - force reconnect if no messages processed
 
+// Track when we last received messages (for heartbeat)
+let lastMessageTimestamp = Date.now();
+const RECONNECT_INTERVAL = 30000; // 30 seconds
+let reconnectAttempts = 0;
+let commandsProcessed = 0;
+const startTime = new Date();
+
+// Set up gateway intents (permissions)
 const intents = [
   GatewayIntentBits.Guilds,
   GatewayIntentBits.GuildMessages,
   GatewayIntentBits.MessageContent,
-  GatewayIntentBits.GuildMessageReactions
+  GatewayIntentBits.DirectMessages,
+  GatewayIntentBits.GuildMessageReactions,
+  GatewayIntentBits.DirectMessageReactions
 ];
 
+// Set up partials (for handling partial objects)
 const partials = [Partials.Message, Partials.Channel, Partials.Reaction];
 
 // Helper function to add default channels for the UI
@@ -67,138 +60,70 @@ async function addDefaultChannels() {
   log("Added default allowed channels", "discord-bot");
 }
 
-// Helper function to create buttons from tags
 // Helper function to create a Fulfilled button for DMs
 function createFulfilledButton(): ActionRowBuilder<ButtonBuilder>[] {
-  const fulfilledButton = new ButtonBuilder()
+  const button = new ButtonBuilder()
     .setCustomId('fulfill:item')
-    .setLabel('Fulfilled')
-    .setStyle(ButtonStyle.Success); // Green button for fulfillment (closest to orange available)
+    .setLabel('Mark as Fulfilled')
+    .setStyle(ButtonStyle.Success);
   
-  // Create action row with the Fulfilled button
-  const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(fulfilledButton);
+  const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(button);
   
   return [actionRow];
 }
 
+// Helper function to create tag buttons
 function createTagButtons(item: string, features: string[], tags: string[]): ActionRowBuilder<ButtonBuilder>[] {
-  // Combine item words, features, and tags to create a comprehensive set of potential tags
-  const allWords: string[] = [];
-  
-  // Add item words
-  const itemWords = item.toLowerCase().split(/\s+/).filter(word => word.length > 3);
-  allWords.push(...itemWords);
-  
-  // Add feature keywords
-  const featureWords = features
-    .join(' ')
-    .toLowerCase()
-    .split(/\s+|,\s*/)
-    .filter(word => word.length > 3);
-  allWords.push(...featureWords);
-  
-  // Add explicit tags
-  if (tags.length > 0) {
-    allWords.push(...tags);
-  }
-  
-  // Get unique words (use Array.from for better TypeScript compatibility)
-  const uniqueWords = Array.from(new Set(allWords));
-  
-  // Map common terms to standardized categories
-  const categoryMap: Record<string, string> = {
-    // Electronics
-    'computer': 'electronics',
-    'laptop': 'electronics',
-    'phone': 'electronics',
-    'tablet': 'electronics',
-    'electronic': 'electronics',
-    'digital': 'electronics',
-    'tech': 'electronics',
-    'device': 'electronics',
-    'gaming': 'games',
-    
-    // Clothing
-    'shirt': 'clothing',
-    'pants': 'clothing',
-    'jacket': 'clothing',
-    'dress': 'clothing',
-    'clothing': 'clothing',
-    'apparel': 'clothing',
-    'fashion': 'clothing',
-    'wearable': 'clothing',
-    'shoes': 'clothing',
-    'slippers': 'clothing',
-    
-    // Furniture
-    'chair': 'furniture',
-    'table': 'furniture',
-    'desk': 'furniture',
-    'furniture': 'furniture',
-    'sofa': 'furniture',
-    'couch': 'furniture',
-    'shelf': 'furniture',
-    
-    // Collectibles
-    'collectible': 'collectibles',
-    'figure': 'collectibles',
-    'statue': 'collectibles',
-    'collection': 'collectibles',
-    'memorabilia': 'collectibles',
-    'rare': 'collectibles',
-    'vintage': 'collectibles',
-    
-    // Books
-    'book': 'books',
-    'novel': 'books',
-    'magazine': 'books',
-    'comic': 'books',
-    'literature': 'books',
-    'reading': 'books',
-    'textbook': 'books',
-    
-    // Toys
-    'toy': 'toys',
-    'plush': 'toys',
-    'doll': 'toys',
-    'action': 'toys',
-    'puzzle': 'toys',
-    'lego': 'toys',
-    
-    // Games
-    'game': 'games',
-    'video': 'games',
-    'console': 'games',
-    'boardgame': 'games',
-    'controller': 'games',
-    'nintendo': 'games',
-    'playstation': 'games',
-    'xbox': 'games',
-    
-    // Accessories
-    'accessory': 'accessories',
-    'jewelry': 'accessories',
-    'watch': 'accessories',
-    'necklace': 'accessories',
-    'earring': 'accessories',
-    'bracelet': 'accessories',
-    'ring': 'accessories',
-    'bag': 'accessories',
-    'handbag': 'accessories',
-    'backpack': 'accessories'
+  // Define category keywords to match against the item and features
+  const categoryMap: Record<string, string[]> = {
+    'electronics': ['computer', 'laptop', 'phone', 'mobile', 'tablet', 'camera', 'headphones', 'speaker', 'tv', 'monitor', 'keyboard', 'mouse', 'gaming', 'console', 'electronic'],
+    'clothing': ['shirt', 'pants', 'dress', 'jacket', 'coat', 'sweater', 'hoodie', 'jeans', 'shorts', 't-shirt', 'shoes', 'boots', 'hat', 'cap', 'clothing', 'wear', 'outfit'],
+    'furniture': ['chair', 'table', 'desk', 'sofa', 'couch', 'bed', 'mattress', 'shelf', 'cabinet', 'dresser', 'furniture'],
+    'collectibles': ['figure', 'statue', 'collectible', 'rare', 'limited', 'edition', 'memorabilia', 'vintage', 'antique', 'collection'],
+    'books': ['book', 'novel', 'textbook', 'manual', 'guide', 'fiction', 'nonfiction', 'reading'],
+    'toys': ['toy', 'game', 'puzzle', 'doll', 'action figure', 'lego', 'playset', 'plush', 'stuffed'],
+    'games': ['video game', 'board game', 'card game', 'game', 'gaming', 'playstation', 'xbox', 'nintendo', 'switch'],
+    'accessories': ['jewelry', 'watch', 'necklace', 'bracelet', 'ring', 'accessory', 'accessories', 'bag', 'backpack', 'purse', 'wallet']
   };
   
-  // Map words to categories and get unique categories
-  const matchedCategories = uniqueWords
-    .map(word => {
-      for (const [key, value] of Object.entries(categoryMap)) {
-        if (word.includes(key)) return value;
+  // Helper function to check if text matches any keywords from a category
+  function matchesCategory(text: string, keywords: string[]): boolean {
+    const lowerText = text.toLowerCase();
+    return keywords.some(keyword => lowerText.includes(keyword.toLowerCase()));
+  }
+  
+  // Start with the explicitly provided tags
+  const matchedCategories = tags.map(tag => {
+    // Check if tag matches any category name
+    for (const [category, _] of Object.entries(categoryMap)) {
+      if (tag.toLowerCase().includes(category.toLowerCase())) {
+        return category;
       }
-      return null;
-    })
+    }
+    return null;
+  });
+  
+  // Next check the item text
+  for (const [category, keywords] of Object.entries(categoryMap)) {
+    if (matchesCategory(item, keywords)) {
+      matchedCategories.push(category);
+    }
+  }
+  
+  // Check features
+  for (const feature of features) {
+    for (const [category, keywords] of Object.entries(categoryMap)) {
+      if (matchesCategory(feature, keywords)) {
+        matchedCategories.push(category);
+      }
+    }
+  }
+  
+  // Filter out nulls and get unique categories
+  const validCategories = matchedCategories
     .filter((category): category is string => category !== null);
   
-  const uniqueCategories = Array.from(new Set(matchedCategories));
+  const uniqueCategories = Array.from(new Set(validCategories));
   
   // Limit to 5 categories (Discord's limit for buttons in one row)
   const categoriesToShow = uniqueCategories.slice(0, 5);
@@ -225,93 +150,65 @@ function createTagButtons(item: string, features: string[], tags: string[]): Act
 // Initialize the Discord bot
 export async function initializeBot() {
   try {
-    // Check if the bot is already initialized
-    if (bot) {
-      log("Bot is already initialized", "discord-bot");
-      return;
-    }
-
-    // Get the bot token from environment variables
+    // Get the Discord bot token from the environment
     const token = process.env.DISCORD_BOT_TOKEN;
     if (!token) {
-      throw new Error("Missing DISCORD_BOT_TOKEN environment variable");
+      throw new Error("DISCORD_BOT_TOKEN is not set in the environment variables");
     }
-
-    // Create and initialize a bot configuration if it doesn't exist
-    const config = await storage.getBotConfig();
-    if (!config) {
-      await storage.createBotConfig({
-        commandTrigger: "!claimed",
-        reactionEmoji: "<:claimed:1358472533304676473>",
-        token
-      });
-    }
-
-    // Create a new Discord client
+    
+    log("Required permissions: READ_MESSAGES, SEND_MESSAGES, READ_MESSAGE_HISTORY, ADD_REACTIONS, EMBED_LINKS", "discord-bot");
+    
+    // Create a new bot instance
     bot = new Client({ intents, partials });
     
-    // Set up event handlers
-    bot.on(Events.ClientReady, async () => {
-      log(`Bot logged in as ${bot?.user?.tag}`, "discord-bot");
-      log(`Required permissions: READ_MESSAGES, SEND_MESSAGES, READ_MESSAGE_HISTORY, ADD_REACTIONS, EMBED_LINKS`, "discord-bot");
-      startTime = new Date();
-      reconnectAttempts = 0; // Reset reconnect attempts on successful connection
-      
-      // Add default allowed channels if none exist
-      const channels = await storage.getAllowedChannels();
-      if (channels.length === 0) {
-        // Add some default channels for the UI
-        await addDefaultChannels();
-      }
-      
-      // Set up a health check interval that runs every 5 minutes
-      healthCheckInterval = setInterval(performHealthCheck, HEALTH_CHECK_INTERVAL);
-      
-      // Set up a forced reconnect interval based on message activity
-      forceReconnectInterval = setInterval(() => {
-        const now = Date.now();
-        const timeSinceLastMessage = now - lastMessageTimestamp;
+    // Reset reconnect attempts counter
+    reconnectAttempts = 0;
+    
+    // Register event handlers
+    bot.on(Events.ClientReady, () => {
+      if (bot) {
+        log(`Bot logged in as ${bot.user?.tag}`, "discord-bot");
         
-        // If no messages processed in 1 hour, force reconnect
-        if (timeSinceLastMessage > MESSAGE_INACTIVITY_THRESHOLD) {
-          log(`No message activity for ${Math.floor(timeSinceLastMessage / 60000)} minutes. Forcing reconnection...`, "discord-bot");
-          storage.createLog({
-            userId: "system",
-            username: "System",
-            command: "force-reconnect",
-            channel: "N/A",
-            status: "warning",
-            message: `No message activity detected for ${Math.floor(timeSinceLastMessage / 60000)} minutes. Forcing bot reconnection.`,
-            messageId: "system-message"
-          }).catch(err => log(`Error logging force reconnect: ${err}`, "discord-bot"));
-          
-          restartBot().catch(err => log(`Error during forced reconnect: ${err}`, "discord-bot"));
-        }
-      }, 900000); // Check every 15 minutes
+        // Set up a heartbeat to monitor connection
+        setInterval(performHealthCheck, 60000); // Check every minute
+        
+        // Reset last message timestamp
+        lastMessageTimestamp = Date.now();
+      }
     });
     
-    // Handle message creation events
+    // Handle messages
     bot.on(Events.MessageCreate, handleMessage);
     
-    // Handle button interactions
-    bot.on(Events.InteractionCreate, handleInteraction);
+    // Handle reactions
+    bot.on(Events.MessageReactionAdd, async (reaction: MessageReaction | PartialMessageReaction, user: User | PartialUser) => {
+      // Ignore reactions from the bot itself
+      if (user.bot) return;
+      
+      try {
+        // Ensure the reaction is fully fetched
+        if (reaction.partial) {
+          await reaction.fetch();
+        }
+        
+        // Get the full user
+        if (user.partial) {
+          await user.fetch();
+        }
+        
+        log(`Reaction ${reaction.emoji.name} added by ${user.tag}`, "discord-bot");
+      } catch (error) {
+        log(`Error handling reaction: ${error}`, "discord-bot");
+      }
+    });
     
-    // Log when interactions are received
+    // Register interaction handler for button clicks
+    bot.on(Events.InteractionCreate, handleInteraction);
     log("Registered interaction handler for button clicks", "discord-bot");
     
-    // Handle disconnection events
-    bot.on('shardDisconnect' as any, (closeEvent: { code: number; reason: string }) => {
-      log(`Bot disconnected with code ${closeEvent.code}. Reason: ${closeEvent.reason}`, "discord-bot");
-      // Create a log entry for the disconnection
-      storage.createLog({
-        userId: "system",
-        username: "System",
-        command: "N/A",
-        channel: "N/A",
-        status: "error",
-        message: `Bot disconnected with code ${closeEvent.code}. Reason: ${closeEvent.reason}`,
-        messageId: "system-message",
-      }).catch(err => log(`Error logging disconnect: ${err}`, "discord-bot"));
+    // Handle disconnections
+    bot.on(Events.Disconnect, () => {
+      log("Bot disconnected from Discord", "discord-bot");
       
       // Attempt to reconnect automatically
       attemptReconnect();
@@ -353,38 +250,32 @@ async function handleMessage(message: Message) {
     // Check for welcome message in items-exchange channel
     const channelName = message.channel.type === ChannelType.GuildText 
       ? (message.channel as any).name 
-      : "";
-      
-    // Check if Batata is mentioned in the message
-    const isBotMentioned = bot && bot.user && message.mentions.users.has(bot.user.id);
+      : message.channel.type === ChannelType.DM
+        ? "DM"
+        : "unknown";
     
-    // Check for various greetings in the message
-    const greetingPatterns = [
-      /\b(hello|hi|hey|hiya|greetings|sup|yo|howdy|hola|bonjour|ciao|good\s+morning|good\s+afternoon|good\s+evening|good\s+day|what'?s\s+up|salut|aloha|namaste)\b/i
-    ];
+    // Check if the bot is mentioned
+    const isBotMentioned = bot && message.mentions.has(bot.user as User);
     
-    const containsGreeting = greetingPatterns.some(pattern => 
-      pattern.test(message.content.toLowerCase())
+    // Check if the message contains a greeting
+    const greetingWords = ['hi', 'hello', 'hey', 'greetings', 'howdy'];
+    const containsGreeting = greetingWords.some(word => 
+      message.content.toLowerCase().includes(word)
     );
     
-    // Only respond if bot is specifically mentioned and a greeting is included
+    // Respond to users who @mention the bot with a greeting
     if (isBotMentioned && containsGreeting) {
       try {
         // Choose a random greeting response
         const greetingResponses = [
           `Hi ${message.author}! How can I help you today?`,
-          `Hello ${message.author}! Nice to see you!`,
-          `Hey there ${message.author}! What can I do for you?`,
-          `Greetings ${message.author}! I'm here to help!`,
-          `Hi ${message.author}! Ready to assist with any ISO requests or item claiming!`,
-          `Hello ${message.author}! Need help with something?`,
-          `Hey ${message.author}! How's it going?`
+          `Hello ${message.author}! Welcome!`,
+          `Hey there ${message.author}! Nice to meet you!`
         ];
         
-        // Select a random response
         const randomResponse = greetingResponses[Math.floor(Math.random() * greetingResponses.length)];
         
-        // Send the greeting message
+        // Send the greeting
         await message.reply(randomResponse);
         
         // Log the welcome message
@@ -406,51 +297,79 @@ async function handleMessage(message: Message) {
     }
     
     // Check for ISO requests in items-exchange channel
-    if (channelName === "items-exchange" &&
+    if (channelName === "items-exchange" && 
         message.content.trim().startsWith("ISO")) {
       // Flag to track if we've already processed this ISO request
       let isoRequestProcessed = false;
+      let formattedResponse = "";
+      let tagButtons = null;
       
       try {
-        // Analyze the ISO request using OpenAI
-        const analysis = await analyzeISORequest(message.author.username, message.content);
-        
-        // Build features list if available
-        let featuresText = "-Features:";
-        if (analysis.features && analysis.features.length > 0) {
-          featuresText = "-Features: " + analysis.features.join(", ");
-        }
-        
-        // Add urgency if available
-        const urgencyText = `-Urgency: ${analysis.urgency || "Not specified"}`;
-        
-        // Add tags if available
-        let tagsText = "-Tags:";
-        if (analysis.tags && analysis.tags.length > 0) {
-          tagsText = "-Tags: " + analysis.tags.join(", ");
-        }
-        
-        // Create the standardized REQUEST format template with the extracted information
-        const formattedResponse = `@${message.author.username} is looking for a ${analysis.item}.\n${featuresText}\n${urgencyText}\n${tagsText}`;
-        
-        // Create buttons for relevant tags/categories
-        const tagButtons = createTagButtons(analysis.item, analysis.features, analysis.tags);
-        
-        // Send a new message with the formatted response (instead of replying)
+        // Attempt to process with OpenAI first
         try {
-          // Only attempt to send to text channels
+          // Analyze the ISO request using OpenAI
+          const analysis = await analyzeISORequest(message.author.username, message.content);
+          
+          // Build features list if available
+          let featuresText = "-Features:";
+          if (analysis.features && analysis.features.length > 0) {
+            featuresText = "-Features: " + analysis.features.join(", ");
+          }
+          
+          // Add urgency if available
+          const urgencyText = `-Urgency: ${analysis.urgency || "Not specified"}`;
+          
+          // Add tags if available
+          let tagsText = "-Tags:";
+          if (analysis.tags && analysis.tags.length > 0) {
+            tagsText = "-Tags: " + analysis.tags.join(", ");
+          }
+          
+          // Create the standardized REQUEST format template with the extracted information
+          formattedResponse = `@${message.author.username} is looking for a ${analysis.item}.\n${featuresText}\n${urgencyText}\n${tagsText}`;
+          
+          // Create buttons for relevant tags/categories
+          tagButtons = createTagButtons(analysis.item, analysis.features, analysis.tags);
+          
+          log(`AI-formatted ISO request for ${message.author.username} in #items-exchange: ${analysis.item}`, "discord-bot");
+          
+          // Mark as successfully processed by AI
+          isoRequestProcessed = true;
+        } catch (openaiError) {
+          // OpenAI attempt failed, log it
+          log(`Error formatting ISO request with OpenAI: ${openaiError}`, "discord-bot");
+          
+          // Fall back to our simple extraction method
+          const requestText = message.content.trim().substring(3).trim();
+          let item = requestText;
+          const features = [];
+          
+          // Basic extraction - just use the text after "ISO" as the item
+          // Format the response with minimal formatting
+          formattedResponse = `@${message.author.username} is looking for a ${item}.\n-Features: \n-Urgency: Not specified\n-Tags:`;
+          
+          // Create buttons based on the item text
+          tagButtons = createTagButtons(item, [], []);
+          
+          log(`Fallback formatted ISO request for ${message.author.username} in #items-exchange: ${item}`, "discord-bot");
+          
+          // Mark as processed with fallback method
+          isoRequestProcessed = true;
+        }
+        
+        // Only proceed if we have a formatted response
+        if (isoRequestProcessed && formattedResponse && tagButtons) {
+          // Send the formatted message to the channel
           if (message.channel.type === ChannelType.GuildText) {
             await message.channel.send({
               content: formattedResponse,
               components: tagButtons
             });
             
-            // Also forward a copy to the original user via DM
+            // Forward a copy to the user via DM with Fulfilled button
             try {
-              // Create the Fulfilled button for the DM message
               const dmButtons = createFulfilledButton();
               
-              // Send a DM to the user with the formatted message and Fulfilled button
               await message.author.send({
                 content: `Here's a copy of your ISO request that was posted in #items-exchange:\n\n${formattedResponse}\n\nIf you've found this item, click the button below to mark it as fulfilled.`,
                 components: dmButtons
@@ -461,351 +380,39 @@ async function handleMessage(message: Message) {
               // DM might fail if user has DMs disabled
               log(`Error sending DM to ${message.author.username}: ${dmError}`, "discord-bot");
             }
-          } else {
-            // Fallback to reply for other channel types
-            await message.reply({
-              content: formattedResponse,
-              components: tagButtons
-            });
+            
+            // Create log entry for the successful formatting
+            await storage.createLog({
+              userId: message.author.id,
+              username: message.author.username,
+              command: "ISO",
+              channel: "items-exchange",
+              status: "success",
+              message: `Formatted REQUEST category post successfully`,
+              messageId: message.id,
+            }).catch(err => log(`Error logging ISO request formatting: ${err}`, "discord-bot"));
+            
+            // Try to delete the original message
+            try {
+              // Check if the bot has permission to manage messages
+              if (message.guild && bot && bot.user) {
+                const botMember = message.guild.members.cache.get(bot.user.id);
+                const channel = message.channel as TextChannel;
+                
+                if (botMember && botMember.permissionsIn(channel).has(PermissionFlagsBits.ManageMessages)) {
+                  await message.delete();
+                  log(`Deleted original ISO request from ${message.author.username}`, "discord-bot");
+                } else {
+                  log(`Bot does not have permission to delete messages in #${channel.name}`, "discord-bot");
+                }
+              }
+            } catch (deleteError) {
+              log(`Failed to delete original ISO message: ${deleteError}`, "discord-bot");
+            }
           }
-          
-          // Mark as processed
-          isoRequestProcessed = true;
-          
-          // Log the ISO request formatting
-          log(`AI-formatted ISO request for ${message.author.username} in #items-exchange: ${analysis.item}`, "discord-bot");
-          
-          // Create log entry with AI analysis status
-          await storage.createLog({
-            userId: message.author.id,
-            username: message.author.username,
-            command: "ISO",
-            channel: "items-exchange",
-            status: "success",
-            message: `AI ${analysis.success ? "successfully" : "attempted to"} format REQUEST category post for item: ${analysis.item}`,
-            messageId: message.id,
-          }).catch(err => log(`Error logging ISO request formatting: ${err}`, "discord-bot"));
-          
-        } catch (error) {
-          log(`Error sending message to channel: ${error}`, "discord-bot");
-          // Fallback to reply if we can't use channel.send
-          await message.reply({
-            content: formattedResponse,
-            components: tagButtons
-          });
-          
-          // Mark as processed
-          isoRequestProcessed = true;
         }
       } catch (error) {
-        log(`Error formatting ISO request with OpenAI: ${error}`, "discord-bot");
-        
-        // Only use fallback if the OpenAI attempt failed completely
-        if (!isoRequestProcessed) {
-          try {
-            // Use our improved fallback extraction
-            const requestText = message.content.trim().substring(3).trim();
-            
-            // Try to extract basic features using our fallback method
-            let item = requestText;
-            const features = [];
-            
-            // First, check for common separators between item and features
-            const separators = [' with ', ' that ', ' which ', ', ', ' in ', ' for '];
-            let hasSeparator = false;
-            
-            for (const separator of separators) {
-              if (requestText.includes(separator)) {
-                const parts = requestText.split(separator);
-                item = parts[0].trim();
-                
-                // Everything after the first separator becomes a feature
-                if (parts.length > 1) {
-                  const featureText = parts.slice(1).join(separator).trim();
-                  features.push(featureText);
-                }
-                
-                hasSeparator = true;
-                break;
-              }
-            }
-            
-            // If no separator was found, look for adjectives before the noun
-            if (!hasSeparator) {
-              // Common item categories - expanded list 
-              const itemCategories = [
-                // Clothing & Accessories
-                'shirt', 'pants', 'jacket', 'shoes', 'boots', 'sneakers', 'hat', 'cap',
-                'dress', 'skirt', 'jeans', 'sweater', 'hoodie', 'socks', 'watch', 'gloves',
-                'bag', 'backpack', 'purse', 'wallet', 'sunglasses', 'glasses', 'scarf',
-                'belt', 'tie', 'blazer', 'coat', 'suit', 'shorts', 't-shirt', 'tshirt',
-                'blouse', 'cardigan', 'vest', 'sweatshirt', 'pajamas', 'swimsuit', 'bikini',
-                'necklace', 'bracelet', 'ring', 'earrings', 'pendant', 'jewelry',
-                
-                // Electronics
-                'phone', 'laptop', 'computer', 'tablet', 'camera', 'headphones', 'speaker',
-                'monitor', 'keyboard', 'mouse', 'charger', 'adapter', 'cable', 'drive',
-                'printer', 'scanner', 'router', 'modem', 'microphone', 'earbuds', 'console',
-                'tv', 'television', 'projector', 'drone', 'smartwatch', 'device',
-                
-                // Furniture
-                'chair', 'table', 'desk', 'sofa', 'couch', 'bookshelf', 'cabinet',
-                'bed', 'mattress', 'dresser', 'nightstand', 'shelf', 'stool', 'drawer',
-                'wardrobe', 'bench', 'ottoman', 'rug', 'lamp', 'mirror', 'curtains',
-                
-                // Transportation
-                'car', 'bike', 'bicycle', 'scooter', 'helmet', 'motorcycle', 'skateboard',
-                'vehicle', 'truck', 'van', 'bus', 'tire', 'wheel', 'brake', 'engine',
-                
-                // Other common items
-                'book', 'game', 'toy', 'doll', 'figure', 'poster', 'painting', 'print',
-                'tool', 'drill', 'hammer', 'knife', 'pot', 'pan', 'utensil', 'plate',
-                'bowl', 'mug', 'cup', 'glass', 'bottle', 'container'
-              ];
-              
-              // Search for item category words in the string
-              const words = item.split(' ');
-              if (words.length > 1) {
-                // Look for any item category in the words
-                for (let i = 0; i < words.length; i++) {
-                  const word = words[i].toLowerCase().replace(/[,.;:!?]$/, ''); // Remove punctuation
-                  if (itemCategories.includes(word)) {
-                    // Found an item category - everything before it is adjectives
-                    const adjectives = words.slice(0, i).join(' ');
-                    if (adjectives) {
-                      features.push(adjectives);
-                    }
-                    // The item is the category word and anything after it
-                    item = words.slice(i).join(' ');
-                    break;
-                  }
-                }
-              }
-            }
-            
-            // Check for size specifications
-            if (item.toLowerCase().includes("size")) {
-              const sizeParts = item.split("size");
-              item = sizeParts[0].trim();
-              features.push(`size${sizeParts[1].trim()}`);
-            } else if (requestText.includes("my size") || requestText.includes("in size")) {
-              // Extract size as feature if it's not part of item
-              item = requestText.replace(/(\s+that are|\s+in|\s+of|\s+with) my size/i, "").trim();
-              features.push("my size");
-            }
-            
-            // Look for color words and add them as features if they're part of the item
-            const colors = [
-              // Basic colors
-              'red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'brown',
-              'black', 'white', 'gray', 'grey', 'silver', 'gold', 'beige', 'navy',
-              'teal', 'maroon', 'olive', 'lime', 'aqua', 'turquoise', 'cyan', 'magenta',
-              
-              // Color variations
-              'light blue', 'dark blue', 'sky blue', 'royal blue', 'navy blue',
-              'light green', 'dark green', 'forest green', 'mint green', 'olive green',
-              'light red', 'dark red', 'crimson', 'burgundy', 'scarlet', 'ruby',
-              'light yellow', 'dark yellow', 'mustard', 'lemon', 'golden', 'cream',
-              'light orange', 'dark orange', 'peach', 'coral', 'salmon',
-              'light purple', 'dark purple', 'lavender', 'violet', 'plum', 'indigo',
-              'light pink', 'dark pink', 'hot pink', 'rose', 'fuchsia',
-              'light brown', 'dark brown', 'tan', 'chocolate', 'coffee', 'caramel',
-              'off white', 'ivory', 'eggshell', 'pearl', 'charcoal', 'slate',
-              
-              // Metallic colors
-              'bronze', 'copper', 'chrome', 'platinum', 'metallic'
-            ];
-            
-            // Check if any color words are in the item and not already extracted as features
-            const itemLower = item.toLowerCase();
-            
-            // First check for compound colors (multi-word colors)
-            for (const color of colors) {
-              if (color.includes(' ')) { // Only check multi-word colors first
-                if (itemLower.includes(color)) {
-                  // If a multi-word color is found in the item, move it to features and clean the item
-                  item = item.replace(new RegExp(color, 'i'), '').trim();
-                  
-                  // Avoid duplicate color mentions
-                  if (!features.some(f => f.toLowerCase().includes(color))) {
-                    features.push(color);
-                  }
-                }
-              }
-            }
-            
-            // Then check for single-word colors
-            const itemWords = item.toLowerCase().split(' ');
-            for (const color of colors) {
-              if (!color.includes(' ')) { // Only check single-word colors
-                if (itemWords.includes(color)) {
-                  // If a color is found in the item, move it to features and clean the item
-                  item = item.replace(new RegExp(`\\b${color}\\b`, 'i'), '').trim();
-                  
-                  // Avoid duplicate color mentions
-                  if (!features.some(f => f.toLowerCase().includes(color))) {
-                    features.push(color);
-                  }
-                }
-              }
-            }
-            
-            // Clean up multiple spaces in the item
-            item = item.replace(/\s+/g, ' ').trim();
-            
-            // Check for urgency indicators with more comprehensive time phrases
-            let urgency = "Not specified";
-            
-            // Simple urgency terms (single words or acronyms)
-            const simpleUrgencyTerms = ["urgent", "asap", "quickly", "soon", "immediately", "today", "tmo", "tomorrow"];
-            for (const term of simpleUrgencyTerms) {
-              if (requestText.toLowerCase().includes(term.toLowerCase())) {
-                // Use the actual phrase from the text to preserve capitalization and context
-                const words = requestText.split(/\s+/);
-                for (const word of words) {
-                  if (word.toLowerCase() === term.toLowerCase()) {
-                    urgency = word; // Use the term as it appears in the message
-                    break;
-                  }
-                }
-                if (urgency !== "Not specified") break;
-              }
-            }
-            
-            // More complex time phrases
-            if (urgency === "Not specified") {
-              const timePatterns = [
-                // Weekend patterns
-                /this weekend/i,
-                /next weekend/i,
-                /weekend/i,
-                
-                // Day of week patterns with by/before/after
-                /(?:by|before|after) (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
-                /(?:by|before|after) (?:this|next) (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
-                
-                // General timing patterns
-                /(?:by|before|after) tomorrow/i,
-                /in a week/i,
-                /(?:by|before|after) next week/i,
-                /(?:by|before|after) (?:the )?end of (?:the )?(?:this|next)? week/i,
-                /(?:by|before|after) (?:the )?end of (?:the )?month/i,
-                /(?:by|before|after) (?:the )?weekend/i,
-                /(?:by|before|after) (?:the )?end of (?:the )?day/i,
-                
-                // Plain days of the week (without by/before/after)
-                /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
-                /\b(?:this|next) (monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
-                
-                // Month-related patterns
-                /(?:early|mid|late) (?:january|february|march|april|may|june|july|august|september|october|november|december)/i,
-                /(?:beginning|middle|end) of (?:january|february|march|april|may|june|july|august|september|october|november|december)/i
-              ];
-              
-              for (const pattern of timePatterns) {
-                const match = requestText.match(pattern);
-                if (match) {
-                  urgency = match[0]; // Use the actual matched phrase from the text
-                  break;
-                }
-              }
-            }
-            
-            // Format the response
-            const fallbackResponse = `@${message.author.username} is looking for a ${item}.\n-Features: ${features.length > 0 ? features.join(", ") : ""}\n-Urgency: ${urgency}\n-Tags:`;
-            
-            // Create buttons from extracted info
-            const tagButtons = createTagButtons(item, features, []);
-            
-            // Send a new message instead of replying
-            try {
-              // Only attempt to send to text channels
-              if (message.channel.type === ChannelType.GuildText) {
-                await message.channel.send({
-                  content: fallbackResponse,
-                  components: tagButtons
-                });
-
-                // Also forward a copy to the original user via DM
-                try {
-                  // Create the Fulfilled button for the DM message
-                  const dmButtons = createFulfilledButton();
-                  
-                  // Send a DM to the user with the formatted message and Fulfilled button
-                  await message.author.send({
-                    content: `Here's a copy of your ISO request that was posted in #items-exchange:\n\n${fallbackResponse}\n\nIf you've found this item, click the button below to mark it as fulfilled.`,
-                    components: dmButtons
-                  });
-                  
-                  log(`Forwarded fallback formatted ISO request to ${message.author.username} via DM with Fulfilled button`, "discord-bot");
-                } catch (dmError) {
-                  // DM might fail if user has DMs disabled
-                  log(`Error sending DM to ${message.author.username}: ${dmError}`, "discord-bot");
-                }
-              } else {
-                // Fallback to reply for other channel types
-                await message.reply({
-                  content: fallbackResponse,
-                  components: tagButtons
-                });
-              }
-              
-              // Mark as processed
-              isoRequestProcessed = true;
-              
-              // Log the fallback formatting
-              log(`Fallback formatted ISO request for ${message.author.username} in #items-exchange: ${item}`, "discord-bot");
-              
-            } catch (error) {
-              log(`Error sending message to channel: ${error}`, "discord-bot");
-              // Fallback to reply if we can't use channel.send
-              await message.reply({
-                content: fallbackResponse,
-                components: tagButtons
-              });
-              
-              // Mark as processed
-              isoRequestProcessed = true;
-            }
-          } catch (fallbackError) {
-            log(`Error with fallback ISO request formatting: ${fallbackError}`, "discord-bot");
-          }
-        }
-      }
-      
-      // Only try to delete the original message if we successfully processed the ISO request
-      if (isoRequestProcessed) {
-        try {
-          // Check if the bot has permission to manage messages in this channel
-          if (message.guild && message.channel.type === ChannelType.GuildText && bot && bot.user) {
-            const botMember = message.guild.members.cache.get(bot.user.id);
-            const channel = message.channel as TextChannel;
-            
-            if (botMember && botMember.permissionsIn(channel).has(PermissionFlagsBits.ManageMessages)) {
-              await message.delete();
-              log(`Deleted original ISO request from ${message.author.username}`, "discord-bot");
-            } else {
-              log(`Bot does not have permission to delete messages in #${channel.name}`, "discord-bot");
-              
-              // Add a note to the log about missing permissions
-              await storage.createLog({
-                userId: "system",
-                username: "System",
-                command: "permission-check",
-                channel: channel.name,
-                status: "warning",
-                message: `Bot does not have ManageMessages permission in channel #${channel.name}`,
-                messageId: message.id,
-              }).catch(err => log(`Error logging permission warning: ${err}`, "discord-bot"));
-            }
-          } else {
-            // Try deleting anyway for non-guild channels or other channel types
-            await message.delete();
-            log(`Deleted original ISO request from ${message.author.username} in non-guild channel`, "discord-bot");
-          }
-        } catch (deleteError) {
-          log(`Failed to delete original ISO message: ${deleteError}. The bot may not have permission to delete messages.`, "discord-bot");
-        }
+        log(`Error processing ISO request: ${error}`, "discord-bot");
       }
     }
     
@@ -1054,20 +661,20 @@ async function handleInteraction(interaction: Interaction) {
               ) as TextChannel;
               
               if (channel) {
-                // Try to find the message in the channel that matches our pattern
                 try {
-                  // Get recent messages in the channel
+                  // Get recent messages from the channel
                   const messages = await channel.messages.fetch({ limit: 50 });
                   
-                  // Find the message that matches our pattern
+                  // Look for a message that matches our request format
                   originalMessage = messages.find(msg => 
-                    msg.content.includes(`@${username} is looking for a ${item}`)
+                    msg.content.includes(`@${username}`) &&
+                    msg.content.includes(`is looking for a ${item}`)
                   );
                   
                   if (originalMessage) {
-                    // Create a new embed with orange color to indicate fulfillment
+                    // Create a new embed with green color to indicate fulfillment
                     const fulfilledEmbed = new EmbedBuilder()
-                      .setColor(0xFFA500) // Orange color
+                      .setColor(0x57F287) // Green color (Discord success color)
                       .setTitle("ISO Request Fulfilled")
                       .setDescription(`This request has been marked as fulfilled by ${interaction.user}`)
                       .setTimestamp();
@@ -1081,7 +688,7 @@ async function handleInteraction(interaction: Interaction) {
                     
                     // Send a confirmation message to the user
                     await interaction.reply({
-                      content: "You've marked this item as fulfilled! The request in the items-exchange channel has been updated with an orange notification.",
+                      content: "You've marked this item as fulfilled! The request in the items-exchange channel has been updated with a green notification.",
                       ephemeral: true // Only visible to the user who clicked the button
                     });
                     
@@ -1364,102 +971,113 @@ export async function processCommand(command: string) {
             messageId: "test-message-id",
           });
           
-          return { success: false, log };
+          return { success: false, log, error: "No image found in referenced message" };
         }
       }
       
-      // Check if there's a mention in the command (format: @username)
-      const hasMention = command.includes('@');
-      const mentionedUsername = hasMention ? command.split('@')[1]?.trim() : null;
+      // Get channel name from command if specified
+      const channelMatch = command.match(/channel:(\w+)/);
+      const channelName = channelMatch ? channelMatch[1] : "test-channel";
       
-      // Determine which emoji to use based on the command
-      const emojiToUse = isClaimCommand 
-        ? config.reactionEmoji 
-        : "<:resol:1358566610973102130>";
+      // Extract mentioned user if present
+      const mentionMatch = command.match(/@(\w+)/);
+      const mentionedUsername = mentionMatch ? mentionMatch[1] : null;
       
-      // Create a simulated log entry
+      // Build success message based on command type and mentions
+      let successMessage = "";
+      if (isClaimCommand) {
+        if (mentionedUsername) {
+          successMessage = `Added claim reaction ${config.reactionEmoji} to image and created embed for @${mentionedUsername}`;
+        } else {
+          successMessage = `Added claim reaction ${config.reactionEmoji} to image`;
+        }
+      } else {
+        if (mentionedUsername) {
+          successMessage = `Added resolution reaction <:resol:1358566610973102130> to message and created embed for @${mentionedUsername}`;
+        } else {
+          successMessage = `Added resolution reaction <:resol:1358566610973102130> to message`;
+        }
+      }
+      
+      // Create a log entry
       const log = await storage.createLog({
         userId: "dashboard",
         username: "Dashboard Test",
         command,
-        channel: "test-channel",
-        emoji: emojiToUse,
+        channel: channelName,
+        emoji: isClaimCommand ? config.reactionEmoji : "<:resol:1358566610973102130>",
         status: "success",
-        message: mentionedUsername 
-          ? isClaimCommand
-            ? `Added claim reaction and created embed for @${mentionedUsername}`
-            : `Added resolution reaction and created embed for @${mentionedUsername}`
-          : isClaimCommand
-            ? "Test claim command processed successfully"
-            : "Test resolution command processed successfully",
-        messageId: "test-message-id",
+        message: successMessage,
+        messageId: "test-message-id"
       });
       
       return { success: true, log };
-    } else {
-      // Create an error log entry
+    }
+    else {
+      // Unknown command for testing
       const log = await storage.createLog({
         userId: "dashboard",
         username: "Dashboard Test",
         command,
         channel: "test-channel",
         status: "error",
-        message: `Invalid command. Command should start with '${config.commandTrigger}' or '!resol'`,
+        message: `Unknown command: ${command}`,
         messageId: "test-message-id",
       });
       
-      return { success: false, log };
+      return { success: false, log, error: "Unknown command" };
     }
   } catch (error) {
     log(`Error processing test command: ${error}`, "discord-bot");
-    throw error;
+    return { success: false, error: `${error}` };
   }
 }
 
-// Get the bot status information
+// Get bot status (for the dashboard)
 export async function getBotStatus() {
-  if (!bot || !bot.user) {
-    return {
-      status: "offline",
-      uptime: "0 seconds",
+  try {
+    const botStatus = {
+      status: bot && bot.isReady() ? "online" : "offline",
+      uptime: calculateUptime(startTime),
       memory: {
-        used: "0MB",
-        total: "0MB"
+        used: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
+        total: `${Math.round(process.memoryUsage().heapTotal / 1024 / 1024)}MB`
       },
+      commandsProcessed
+    };
+    
+    return botStatus;
+  } catch (error) {
+    log(`Error getting bot status: ${error}`, "discord-bot");
+    return {
+      status: "error",
+      uptime: "unknown",
+      memory: { used: "unknown", total: "unknown" },
       commandsProcessed: 0
     };
   }
-  
-  // Calculate uptime
-  const uptime = startTime ? calculateUptime(startTime) : "0 seconds";
-  
-  // Get memory usage
-  const memoryUsage = process.memoryUsage();
-  const usedMemory = `${Math.round(memoryUsage.heapUsed / 1024 / 1024)}MB`;
-  const totalMemory = `${Math.round(memoryUsage.heapTotal / 1024 / 1024)}MB`;
-  
-  return {
-    status: "online",
-    uptime,
-    memory: {
-      used: usedMemory,
-      total: totalMemory
-    },
-    commandsProcessed
-  };
 }
 
-// Update the bot configuration
+// Update bot configuration
 export async function updateBotConfig(newConfig: { commandTrigger: string; reactionEmoji: string }) {
   try {
-    if (!bot || !bot.user) {
-      throw new Error("Bot is not initialized");
+    // Get the current config
+    const currentConfig = await storage.getBotConfig();
+    
+    if (!currentConfig) {
+      throw new Error("Bot configuration not found");
     }
     
-    await storage.updateBotConfig(newConfig);
+    // Update the configuration in the database
+    const updatedConfig = await storage.updateBotConfig({
+      id: currentConfig.id,
+      commandTrigger: newConfig.commandTrigger,
+      reactionEmoji: newConfig.reactionEmoji
+    });
+    
     log(`Bot configuration updated: ${JSON.stringify(newConfig)}`, "discord-bot");
     
-    return true;
+    return updatedConfig;
   } catch (error) {
     log(`Error updating bot configuration: ${error}`, "discord-bot");
     throw error;
@@ -1469,94 +1087,45 @@ export async function updateBotConfig(newConfig: { commandTrigger: string; react
 // Restart the bot
 export async function restartBot() {
   try {
-    // Clear existing intervals to avoid duplications
-    if (healthCheckInterval) {
-      clearInterval(healthCheckInterval);
-      healthCheckInterval = null;
-    }
-    
-    if (forceReconnectInterval) {
-      clearInterval(forceReconnectInterval);
-      forceReconnectInterval = null;
-    }
-    
+    // Check if the bot is already running
     if (bot) {
-      log("Destroying current bot instance", "discord-bot");
+      // Destroy the current bot instance
       await bot.destroy();
       bot = null;
+      log("Bot instance destroyed", "discord-bot");
     }
     
-    // Reset the message timestamp to now to avoid immediate reconnection
-    lastMessageTimestamp = Date.now();
-    
-    log("Reinitializing bot", "discord-bot");
+    // Initialize a new bot instance
     await initializeBot();
-    return true;
+    
+    return { success: true, message: "Bot restarted successfully" };
   } catch (error) {
     log(`Error restarting bot: ${error}`, "discord-bot");
-    throw error;
+    return { success: false, message: `Error restarting bot: ${error}` };
   }
 }
 
-// Health check function to verify bot is still connected and active
+// Perform a health check
 async function performHealthCheck() {
   try {
-    if (!bot || !bot.user) {
-      log("Health check failed: Bot is not initialized or not logged in", "discord-bot");
-      await attemptReconnect();
-      return;
-    }
-    
-    // Check if the bot is connected
-    if (bot.ws.status !== 0) { // 0 = WebSocket.OPEN
-      log(`Health check failed: WebSocket connection not open (status: ${bot.ws.status})`, "discord-bot");
-      await attemptReconnect();
-      return;
-    }
-    
-    // Check if the bot might be in a stale state (connected but not receiving events)
-    // This is a more aggressive check than the one in the timer interval
-    const now = Date.now();
-    const timeSinceLastMessage = now - lastMessageTimestamp;
-    const CHECK_THRESHOLD = 1800000; // 30 minutes of inactivity triggers a ping test
-    
-    if (timeSinceLastMessage > CHECK_THRESHOLD) {
-      log(`No message activity for ${Math.floor(timeSinceLastMessage / 60000)} minutes. Performing ping test...`, "discord-bot");
+    // Check if bot is initialized and connected
+    if (bot && bot.isReady()) {
+      // Check if we've received messages recently (within the last 5 minutes)
+      const messageTimeout = 5 * 60 * 1000; // 5 minutes
+      const timeSinceLastMessage = Date.now() - lastMessageTimestamp;
       
-      try {
-        // Try to ping the Discord API - this will fail if the connection is stale
-        const pingStart = Date.now();
-        const guilds = bot.guilds.cache.size;
-        await bot.guilds.fetch();
-        const pingTime = Date.now() - pingStart;
-        
-        // If ping takes too long, consider the connection stale
-        if (pingTime > 5000) { // 5 seconds threshold
-          log(`Ping test took ${pingTime}ms (too long). Forcing reconnection...`, "discord-bot");
-          await storage.createLog({
-            userId: "system",
-            username: "System",
-            command: "health-check",
-            channel: "N/A",
-            status: "warning",
-            message: `Connection appears stale (ping: ${pingTime}ms). Forcing reconnection.`,
-            messageId: "system-message"
-          });
-          
-          await restartBot();
-        } else {
-          log(`Ping test successful (${pingTime}ms). Connection appears healthy despite inactivity.`, "discord-bot");
-          // Update the timestamp to avoid repeated ping tests
-          lastMessageTimestamp = Date.now();
-        }
-      } catch (pingError) {
-        log(`Ping test failed: ${pingError}. Forcing reconnection...`, "discord-bot");
-        await attemptReconnect();
+      if (timeSinceLastMessage > messageTimeout) {
+        log(`Health check warning: No messages received in ${Math.round(timeSinceLastMessage / 1000 / 60)} minutes`, "discord-bot");
+      } else {
+        log("Health check passed: Bot is online and connected", "discord-bot");
       }
-    } else {
-      // Bot is online and connected
-      log("Health check passed: Bot is online and connected", "discord-bot");
+      
+      return;
     }
+    
+    log("Health check failed: Bot is not initialized or not logged in", "discord-bot");
+    await attemptReconnect();
+    return;
   } catch (error) {
     log(`Health check error: ${error}`, "discord-bot");
     await attemptReconnect();
@@ -1567,38 +1136,9 @@ async function performHealthCheck() {
 async function attemptReconnect() {
   try {
     reconnectAttempts++;
+    log(`Attempting to reconnect (attempt #${reconnectAttempts})...`, "discord-bot");
     
-    if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
-      log(`Maximum reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached. Please restart the bot manually.`, "discord-bot");
-      
-      // Create a critical log entry
-      await storage.createLog({
-        userId: "system",
-        username: "System",
-        command: "reconnect",
-        channel: "N/A", 
-        status: "error",
-        message: `Maximum reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached. Please restart the bot manually.`,
-        messageId: "system-message"
-      });
-      
-      return;
-    }
-    
-    log(`Attempting to reconnect... (Attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`, "discord-bot");
-    
-    // Create a log entry for the reconnection attempt
-    await storage.createLog({
-      userId: "system",
-      username: "System",
-      command: "reconnect",
-      channel: "N/A", 
-      status: "warning",
-      message: `Attempting to reconnect... (Attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`,
-      messageId: "system-message"
-    });
-    
-    // Destroy the existing connection if it exists
+    // Clean up existing bot instance if it exists
     if (bot) {
       await bot.destroy();
       bot = null;
@@ -1610,57 +1150,98 @@ async function attemptReconnect() {
     
     setTimeout(async () => {
       try {
-        // Attempt to reinitialize the bot
+        // Initialize a new bot instance
         await initializeBot();
-        log("Reconnection successful", "discord-bot");
+        log("Bot reconnected successfully", "discord-bot");
         
-        // Create a success log entry
+        // Add a reconnection log entry
         await storage.createLog({
           userId: "system",
           username: "System",
           command: "reconnect",
-          channel: "N/A", 
+          channel: "N/A",
           status: "success",
-          message: "Bot reconnected successfully",
+          message: `Bot reconnected successfully after ${reconnectAttempts} attempts`,
           messageId: "system-message"
-        });
-      } catch (error) {
-        log(`Reconnection failed: ${error}`, "discord-bot");
+        }).catch(err => log(`Error logging reconnection: ${err}`, "discord-bot"));
         
-        // Create an error log entry
+      } catch (error) {
+        log(`Error reconnecting: ${error}`, "discord-bot");
+        
+        // Try to log the reconnection error
         await storage.createLog({
           userId: "system",
           username: "System",
           command: "reconnect",
-          channel: "N/A", 
+          channel: "N/A",
           status: "error",
-          message: `Reconnection failed: ${error}`,
+          message: `Error reconnecting: ${error}`,
           messageId: "system-message"
-        });
+        }).catch(err => log(`Error logging reconnection error: ${err}`, "discord-bot"));
         
-        // Try again
-        attemptReconnect();
+        // Try again later
+        await attemptReconnect();
       }
     }, backoffTime);
-  } catch (error) {
-    log(`Error in attemptReconnect: ${error}`, "discord-bot");
+  } catch (reconnectError) {
+    log(`Error during reconnect attempt: ${reconnectError}`, "discord-bot");
+    
+    // Wait a bit and try again
+    setTimeout(attemptReconnect, RECONNECT_INTERVAL);
   }
 }
 
 // Helper function to calculate uptime
 function calculateUptime(startTime: Date): string {
-  const now = new Date();
-  const diffMs = now.getTime() - startTime.getTime();
+  const uptime = new Date().getTime() - startTime.getTime();
   
-  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+  const minutes = Math.floor(uptime / 1000 / 60);
   
-  if (days > 0) {
-    return `${days} day${days !== 1 ? 's' : ''}, ${hours} hour${hours !== 1 ? 's' : ''}`;
-  } else if (hours > 0) {
-    return `${hours} hour${hours !== 1 ? 's' : ''}, ${minutes} minute${minutes !== 1 ? 's' : ''}`;
-  } else {
-    return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+  if (minutes < 60) {
+    return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+  }
+  
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  
+  if (hours < 24) {
+    return `${hours} ${hours === 1 ? 'hour' : 'hours'}, ${remainingMinutes} ${remainingMinutes === 1 ? 'minute' : 'minutes'}`;
+  }
+  
+  const days = Math.floor(hours / 24);
+  const remainingHours = hours % 24;
+  
+  return `${days} ${days === 1 ? 'day' : 'days'}, ${remainingHours} ${remainingHours === 1 ? 'hour' : 'hours'}`;
+}
+
+// Initialize default configuration if necessary (called from server/index.ts)
+export async function initializeBotConfig() {
+  try {
+    // Get the current config
+    const config = await storage.getBotConfig();
+    
+    // If there's no config yet, create a default one
+    if (!config) {
+      // Create default allowed channels for UI and testing
+      await addDefaultChannels();
+      
+      // Create default bot configuration
+      await storage.createBotConfig({
+        commandTrigger: "!claimed",
+        reactionEmoji: "<:claimed:1358472533304676473>",
+        permissions: {
+          manageMessages: true,
+          addReactions: true,
+          readMessageHistory: true
+        }
+      });
+      
+      log("Created default bot configuration", "discord-bot");
+    }
+    
+    return true;
+  } catch (error) {
+    log(`Error initializing bot configuration: ${error}`, "discord-bot");
+    return false;
   }
 }
