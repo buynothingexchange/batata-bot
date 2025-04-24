@@ -447,10 +447,10 @@ async function handleMessage(message: Message) {
             
             // Also forward a copy to the original user via DM
             try {
-              // Create the Claimed button for the DM message
+              // Create the Fulfilled button for the DM message
               const dmButtons = createClaimedButton();
               
-              // Send a DM to the user with the formatted message and Claimed button
+              // Send a DM to the user with the formatted message and Fulfilled button
               await message.author.send({
                 content: `Here's a copy of your ISO request that was posted in #items-exchange:\n\n${formattedResponse}\n\nIf you've found this item, click the button below to mark it as fulfilled.`,
                 components: dmButtons
@@ -728,16 +728,16 @@ async function handleMessage(message: Message) {
 
                 // Also forward a copy to the original user via DM
                 try {
-                  // Create the Claimed button for the DM message
+                  // Create the Fulfilled button for the DM message
                   const dmButtons = createClaimedButton();
                   
-                  // Send a DM to the user with the formatted message and Claimed button
+                  // Send a DM to the user with the formatted message and Fulfilled button
                   await message.author.send({
                     content: `Here's a copy of your ISO request that was posted in #items-exchange:\n\n${fallbackResponse}\n\nIf you've found this item, click the button below to mark it as fulfilled.`,
                     components: dmButtons
                   });
                   
-                  log(`Forwarded fallback formatted ISO request to ${message.author.username} via DM with Claimed button`, "discord-bot");
+                  log(`Forwarded fallback formatted ISO request to ${message.author.username} via DM with Fulfilled button`, "discord-bot");
                 } catch (dmError) {
                   // DM might fail if user has DMs disabled
                   log(`Error sending DM to ${message.author.username}: ${dmError}`, "discord-bot");
@@ -1043,13 +1043,13 @@ async function handleInteraction(interaction: Interaction) {
         if (username && item && bot) {
           try {
             // Look for the guild with items-exchange channel
-            const guilds = bot.guilds.cache.values();
+            const guilds = Array.from(bot.guilds.cache.values());
             let originalMessage = null;
             
             for (const guild of guilds) {
               // Look for the items-exchange channel
               const channel = guild.channels.cache.find(
-                ch => ch.type === ChannelType.GuildText && 
+                (ch: any) => ch.type === ChannelType.GuildText && 
                      (ch as TextChannel).name === 'items-exchange'
               ) as TextChannel;
               
