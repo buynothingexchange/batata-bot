@@ -725,6 +725,23 @@ async function handleMessage(message: Message) {
                   content: fallbackResponse,
                   components: tagButtons
                 });
+
+                // Also forward a copy to the original user via DM
+                try {
+                  // Create the Claimed button for the DM message
+                  const dmButtons = createClaimedButton();
+                  
+                  // Send a DM to the user with the formatted message and Claimed button
+                  await message.author.send({
+                    content: `Here's a copy of your ISO request that was posted in #items-exchange:\n\n${fallbackResponse}\n\nIf you've found this item, click the button below to mark it as claimed.`,
+                    components: dmButtons
+                  });
+                  
+                  log(`Forwarded fallback formatted ISO request to ${message.author.username} via DM with Claimed button`, "discord-bot");
+                } catch (dmError) {
+                  // DM might fail if user has DMs disabled
+                  log(`Error sending DM to ${message.author.username}: ${dmError}`, "discord-bot");
+                }
               } else {
                 // Fallback to reply for other channel types
                 await message.reply({
