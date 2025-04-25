@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { initializeBot, initializeBotConfig, getBotStatus, processCommand, restartBot, updateBotConfig } from "./discord-bot";
+import { initializeBot, initializeBotConfig, getBotStatus, processCommand, restartBot, updateBotConfig, ensureCategoryChannels } from "./discord-bot";
 import { z } from "zod";
 import { insertLogSchema } from "@shared/schema";
 import OpenAI from "openai";
@@ -167,6 +167,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error restarting bot:", error);
       res.status(500).json({ message: "Failed to restart bot" });
+    }
+  });
+  
+  // API route to create category channels
+  app.post("/api/bot/create-category-channels", async (req, res) => {
+    try {
+      const result = await ensureCategoryChannels();
+      res.json(result);
+    } catch (error) {
+      console.error("Error creating category channels:", error);
+      res.status(500).json({ success: false, message: "Failed to create category channels" });
     }
   });
   

@@ -1160,6 +1160,85 @@ export async function updateBotConfig(newConfig: { commandTrigger: string; react
 }
 
 // Restart the bot
+// Create category channels if they don't exist
+export async function ensureCategoryChannels() {
+  try {
+    if (!bot || !bot.isReady()) {
+      log("Bot not ready, cannot create category channels", "discord-bot");
+      return { success: false, message: "Bot not initialized" };
+    }
+    
+    // Get the first guild (server) the bot is in
+    const guilds = await bot.guilds.fetch();
+    if (guilds.size === 0) {
+      log("Bot is not in any Discord servers", "discord-bot");
+      return { success: false, message: "Bot is not in any Discord servers" };
+    }
+    
+    // Use the first guild
+    const firstGuild = guilds.first();
+    if (!firstGuild) {
+      log("Could not get first guild", "discord-bot");
+      return { success: false, message: "Could not get first guild" };
+    }
+    
+    const guild = await firstGuild.fetch();
+    log(`Creating category channels in guild: ${guild.name}`, "discord-bot");
+    
+    // Define our category channels
+    const categoryChannels = [
+      { name: "clothing", color: 0x00FF00 },  // Green
+      { name: "electronics", color: 0x0000FF },  // Blue
+      { name: "accessories", color: 0x808080 },  // Gray
+      { name: "home-and-furniture", color: 0xFF0000 }  // Red
+    ];
+    
+    let createdChannels = [];
+    
+    // Create each category channel if it doesn't exist
+    for (const category of categoryChannels) {
+      // Check if channel already exists
+      const existingChannel = guild.channels.cache.find(
+        ch => ch.type === ChannelType.GuildText && 
+              ch.name.toLowerCase() === category.name.toLowerCase()
+      );
+      
+      if (!existingChannel) {
+        try {
+          // Create the channel
+          const newChannel = await guild.channels.create({
+            name: category.name,
+            type: ChannelType.GuildText,
+            topic: `Category channel for ${category.name} ISO requests`
+          });
+          
+          log(`Created category channel #${category.name}`, "discord-bot");
+          createdChannels.push(category.name);
+        } catch (createError) {
+          log(`Error creating channel ${category.name}: ${createError}`, "discord-bot");
+        }
+      } else {
+        log(`Channel #${category.name} already exists, skipping creation`, "discord-bot");
+      }
+    }
+    
+    if (createdChannels.length > 0) {
+      return { 
+        success: true, 
+        message: `Created channels: ${createdChannels.join(", ")}` 
+      };
+    } else {
+      return { 
+        success: true, 
+        message: "All category channels already exist" 
+      };
+    }
+  } catch (error) {
+    log(`Error ensuring category channels: ${error}`, "discord-bot");
+    return { success: false, message: `Error: ${error}` };
+  }
+}
+
 export async function restartBot() {
   try {
     // Reset initialization flag
@@ -1179,6 +1258,12 @@ export async function restartBot() {
     
     // Initialize a new bot instance
     await initializeBot();
+    
+    // Create category channels if they don't exist (only after bot is initialized)
+    const channelsResult = await ensureCategoryChannels();
+    if (channelsResult.success) {
+      log(channelsResult.message, "discord-bot");
+    }
     
     return { success: true, message: "Bot restarted successfully" };
   } catch (error) {
