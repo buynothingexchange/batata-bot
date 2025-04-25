@@ -26,49 +26,21 @@ let commandsProcessed = 0;
 let connectionStartTime = new Date(); // When the current connection was established
 const processStartTime = new Date(); // When the entire process started
 
-// DIRECT FIX: Set the expiration extremely short
-// The issue is that we're using two different code paths for test messages vs actual Discord messages
-// For production use, this can be increased but for now we'll keep it very short to fix the issue
-const MESSAGE_CACHE_EXPIRY_MS = 5 * 1000; // 5 seconds - make this much shorter for testing
+// COMPLETE REWRITE: Instead of tracking messages with a timestamp, we'll use a simpler global toggle
+// for processing ISO requests. This way we can completely bypass any caching issues.
+let isProcessingIsoRequest = false;
 
-// Store the message ID with its timestamp instead of just a boolean
-interface CacheEntry {
-  timestamp: number;
-}
-
-// Message processing tracker to prevent duplicate processing
-let processedMessages = new Map<string, CacheEntry>();
-
-// ISO request tracker to prevent duplicate processing
-// Separate ISO cache with the same expiration logic
-let processedISORequests = new Map<string, CacheEntry>();
-
-// Helper function to clean up expired cache entries
-function removeExpiredCacheEntries() {
-  const now = Date.now();
-  let expiredMessagesCount = 0;
-  let expiredISOCount = 0;
+// Simple timer-based toggle - prevent rapid-fire processing
+function setIsoProcessingLock(locked: boolean) {
+  isProcessingIsoRequest = locked;
+  log(`ISO processing lock ${locked ? 'ENABLED' : 'DISABLED'}`, "discord-bot");
   
-  // Remove expired message entries
-  // Use a simple loop that's compatible with all TypeScript target versions
-  processedMessages.forEach((entry, id) => {
-    if (now - entry.timestamp > MESSAGE_CACHE_EXPIRY_MS) {
-      processedMessages.delete(id);
-      expiredMessagesCount++;
-    }
-  });
-  
-  // Remove expired ISO entries
-  processedISORequests.forEach((entry, id) => {
-    if (now - entry.timestamp > MESSAGE_CACHE_EXPIRY_MS) {
-      processedISORequests.delete(id);
-      expiredISOCount++;
-    }
-  });
-  
-  // Only log if we actually removed something
-  if (expiredMessagesCount > 0 || expiredISOCount > 0) {
-    log(`Auto-removed ${expiredMessagesCount} expired message entries and ${expiredISOCount} expired ISO entries from cache`, "discord-bot");
+  // If we lock it, automatically unlock after a brief delay (2 seconds)
+  if (locked) {
+    setTimeout(() => {
+      isProcessingIsoRequest = false;
+      log("ISO processing lock auto-released after timeout", "discord-bot");
+    }, 2000);
   }
 }
 
@@ -299,12 +271,9 @@ export async function initializeBot() {
       bot = null;
     }
     
-    // Clear all caches for a fresh start
-    const messageCount = processedMessages.size;
-    const isoCount = processedISORequests.size;
-    processedMessages.clear();
-    processedISORequests.clear();
-    log(`Cleared message processing cache (${messageCount} entries) and ISO cache (${isoCount} entries) during initialization`, "discord-bot");
+    // Reset ISO processing lock to ensure it starts in the unlocked state
+    isProcessingIsoRequest = false;
+    log("Reset ISO processing lock during initialization", "discord-bot");
     
     // Reset metrics
     reconnectAttempts = 0;
@@ -332,22 +301,17 @@ export async function initializeBot() {
         setInterval(performHealthCheck, 60000); // Check every minute
         
         // Set up process to run cache cleanup periodically
+        // COMPLETE REWRITE: Simple heartbeat to log ISO processing status
         setInterval(() => {
-          // Run our clean expired cache entries function
-          removeExpiredCacheEntries();
+          // Log whether ISO processing is active
+          log(`ISO processing status: ${isProcessingIsoRequest ? 'ACTIVE' : 'IDLE'}`, "discord-bot");
           
-          // Log the current cache sizes
-          const messageCount = processedMessages.size;
-          const isoCount = processedISORequests.size;
-          log(`Cache status: Currently tracking ${messageCount} message(s) and ${isoCount} ISO request(s)`, "discord-bot");
-          
-          // Force a periodic full clearing as an extra safety measure (every hour)
-          if (Math.random() < 0.1) { // 10% chance on each check to do a full clear
-            processedMessages.clear();
-            processedISORequests.clear();
-            log(`Performed full cache clear (periodic safety measure)`, "discord-bot");
+          // Auto-release lock if it's been on for too long (safety measure)
+          if (isProcessingIsoRequest) {
+            log(`Auto-releasing ISO processing lock as safety measure`, "discord-bot");
+            setIsoProcessingLock(false);
           }
-        }, 15 * 1000); // CRITICAL FIX: Run every 15 SECONDS - was 15 minutes (too long)
+        }, 15 * 1000); // Check every 15 seconds
         
         // Reset last message timestamp
         lastMessageTimestamp = Date.now();
@@ -429,18 +393,6 @@ async function handleMessage(message: Message) {
     // Ignore messages from bots
     if (message.author.bot) return;
     
-    // SIMPLIFIED APPROACH: First, automatically clean expired cache entries
-    removeExpiredCacheEntries();
-    
-    // Check if we've already processed this message
-    if (processedMessages.has(message.id)) {
-      log(`Skipping already processed message ${message.id}`, "discord-bot");
-      return;
-    }
-    
-    // Mark the message as being processed with current timestamp
-    processedMessages.set(message.id, { timestamp: Date.now() });
-    
     // Check for welcome message in items-exchange channel
     const channelName = message.channel.type === ChannelType.GuildText 
       ? (message.channel as any).name 
@@ -494,26 +446,25 @@ async function handleMessage(message: Message) {
     if (channelName === "items-exchange" && 
         message.content.trim().startsWith("ISO")) {
       
-      // Clean up any expired cache entries
-      removeExpiredCacheEntries();
-      
-      // Check if we've already processed this ISO request
-      if (processedISORequests.has(message.id)) {
-        log(`DUPLICATE DETECTION: Skipping already processed ISO request ${message.id} (messageContent: "${message.content.substring(0, 20)}...")`, "discord-bot");
-        
-        // EMERGENCY FIX: Always process ISO messages regardless of cache status
-        // This completely disables duplicate detection for ISO requests to ensure they always work
-        log(`EMERGENCY OVERRIDE in handleMessage(): Processing ISO message ${message.id} despite being in cache - ISO requests must always work`, "discord-bot");
-        
-        // Delete this message from the cache immediately
-        processedISORequests.delete(message.id);
+      // COMPLETE REWRITE: Simple global lock to prevent duplicate processing
+      if (isProcessingIsoRequest) {
+        log(`ISO processing lock is ON - waiting for current ISO request to finish`, "discord-bot");
+        return;
       }
       
-      // Mark this ISO request as being processed with current timestamp
-      processedISORequests.set(message.id, { timestamp: Date.now() });
+      // Set processing lock
+      setIsoProcessingLock(true);
       
-      // Process the ISO request in a separate function to isolate the logic
-      await processISORequest(message);
+      try {
+        // Process the ISO request in a separate function to isolate the logic
+        log(`Processing ISO request from ${message.author.username} in #${channelName}`, "discord-bot");
+        await processISORequest(message);
+      } catch (isoError) {
+        log(`Error in ISO request processing: ${isoError}`, "discord-bot");
+      } finally {
+        // Make sure we always release the lock, even if there's an error
+        setIsoProcessingLock(false);
+      }
     }
     
     // Get the bot configuration
@@ -1704,29 +1655,11 @@ async function processISORequest(message: Message): Promise<void> {
     return;
   }
   
-  // SIMPLIFIED APPROACH: Run cache expiration to remove old entries
-  removeExpiredCacheEntries();
-  
-  // CRITICAL FIX: Enhanced cache handling with a force-process option
-  // By adding a time-based override, we make sure no message gets stuck in the cache
-  if (processedISORequests.has(message.id)) {
-    // Log a WARNING with the specific message ID to help diagnose persistent issues
-    log(`DUPLICATE DETECTION in processISORequest(): Duplicate message ${message.id} (content: "${message.content.substring(0, 25)}...")`, "discord-bot");
-    
-    // EMERGENCY FIX: Always process ISO messages regardless of cache status
-    // This overrides previous duplicate detection to ensure ISO requests always work
-    log(`EMERGENCY OVERRIDE: Processing message ${message.id} despite being in cache - ISO requests must always work`, "discord-bot");
-    
-    // Clear this message from the cache immediately to prevent infinite reprocessing
-    processedISORequests.delete(message.id);
-  }
+  // COMPLETE REWRITE: No need for cache checking anymore since we're using a global lock
+  // The isProcessingIsoRequest flag already prevents duplicates
   
   // Add extra debugging for this particular message
   log(`Processing NEW ISO request: ${message.id} from ${message.author.username} (messageContent: "${message.content.substring(0, 50)}...")`, "discord-bot");
-  
-  // Mark this ISO request as being processed to prevent duplicates
-  // Setting this as early as possible in the processing flow with timestamp
-  processedISORequests.set(message.id, { timestamp: Date.now() });
   
   let isoRequestProcessed = false;
   let formattedResponse = "";
