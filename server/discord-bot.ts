@@ -501,18 +501,12 @@ async function handleMessage(message: Message) {
       if (processedISORequests.has(message.id)) {
         log(`DUPLICATE DETECTION: Skipping already processed ISO request ${message.id} (messageContent: "${message.content.substring(0, 20)}...")`, "discord-bot");
         
-        // CRITICAL FIX: Even if we've seen this message before, we'll reprocess it if it's been in the cache for more than 2 seconds
-        // This prevents messages from getting permanently stuck in the cache
-        const entry = processedISORequests.get(message.id);
-        const now = Date.now();
-        if (entry && (now - entry.timestamp) > 2000) {
-          log(`OVERRIDE: Message ${message.id} has been in cache for ${(now - entry.timestamp)/1000}s, reprocessing anyway`, "discord-bot");
-          // Update the timestamp instead of just deleting, to prevent infinite reprocessing
-          processedISORequests.set(message.id, { timestamp: now });
-        } else {
-          // If the message was just recently processed, we'll skip it
-          return;
-        }
+        // EMERGENCY FIX: Always process ISO messages regardless of cache status
+        // This completely disables duplicate detection for ISO requests to ensure they always work
+        log(`EMERGENCY OVERRIDE in handleMessage(): Processing ISO message ${message.id} despite being in cache - ISO requests must always work`, "discord-bot");
+        
+        // Delete this message from the cache immediately
+        processedISORequests.delete(message.id);
       }
       
       // Mark this ISO request as being processed with current timestamp
@@ -1719,17 +1713,12 @@ async function processISORequest(message: Message): Promise<void> {
     // Log a WARNING with the specific message ID to help diagnose persistent issues
     log(`DUPLICATE DETECTION in processISORequest(): Duplicate message ${message.id} (content: "${message.content.substring(0, 25)}...")`, "discord-bot");
     
-    // CRITICAL FIX: Force process even if it's a duplicate if it's been in cache for more than 2 seconds
-    const entry = processedISORequests.get(message.id);
-    const now = Date.now();
-    if (entry && (now - entry.timestamp) > 2000) {
-      log(`OVERRIDE in processISORequest(): Message ${message.id} has been in cache for ${(now - entry.timestamp)/1000}s, force processing anyway`, "discord-bot");
-      // Update the timestamp to prevent getting stuck in a loop
-      processedISORequests.set(message.id, { timestamp: now });
-    } else {
-      // Only skip if it was processed very recently
-      return;
-    }
+    // EMERGENCY FIX: Always process ISO messages regardless of cache status
+    // This overrides previous duplicate detection to ensure ISO requests always work
+    log(`EMERGENCY OVERRIDE: Processing message ${message.id} despite being in cache - ISO requests must always work`, "discord-bot");
+    
+    // Clear this message from the cache immediately to prevent infinite reprocessing
+    processedISORequests.delete(message.id);
   }
   
   // Add extra debugging for this particular message
