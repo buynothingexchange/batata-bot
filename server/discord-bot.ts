@@ -26,13 +26,50 @@ let commandsProcessed = 0;
 let connectionStartTime = new Date(); // When the current connection was established
 const processStartTime = new Date(); // When the entire process started
 
+// SIMPLIFIED APPROACH: Use timestamps with the cached IDs to enable automatic expiration
+// Set a 30-second time limit for message cache entries (this is deliberately short for testing)
+const MESSAGE_CACHE_EXPIRY_MS = 30 * 1000; // 30 seconds
+
+// Store the message ID with its timestamp instead of just a boolean
+interface CacheEntry {
+  timestamp: number;
+}
+
 // Message processing tracker to prevent duplicate processing
-// Using 'let' instead of 'const' to allow full replacement of the Maps for stale cache prevention
-let processedMessages = new Map<string, boolean>();
+let processedMessages = new Map<string, CacheEntry>();
 
 // ISO request tracker to prevent duplicate processing
-// Clear this to ensure we don't skip ISO requests after restart
-let processedISORequests = new Map<string, boolean>();
+// Separate ISO cache with the same expiration logic
+let processedISORequests = new Map<string, CacheEntry>();
+
+// Helper function to clean up expired cache entries
+function removeExpiredCacheEntries() {
+  const now = Date.now();
+  let expiredMessagesCount = 0;
+  let expiredISOCount = 0;
+  
+  // Remove expired message entries
+  // Use a simple loop that's compatible with all TypeScript target versions
+  processedMessages.forEach((entry, id) => {
+    if (now - entry.timestamp > MESSAGE_CACHE_EXPIRY_MS) {
+      processedMessages.delete(id);
+      expiredMessagesCount++;
+    }
+  });
+  
+  // Remove expired ISO entries
+  processedISORequests.forEach((entry, id) => {
+    if (now - entry.timestamp > MESSAGE_CACHE_EXPIRY_MS) {
+      processedISORequests.delete(id);
+      expiredISOCount++;
+    }
+  });
+  
+  // Only log if we actually removed something
+  if (expiredMessagesCount > 0 || expiredISOCount > 0) {
+    log(`Auto-removed ${expiredMessagesCount} expired message entries and ${expiredISOCount} expired ISO entries from cache`, "discord-bot");
+  }
+}
 
 // Set up gateway intents (permissions)
 const intents = [
@@ -293,14 +330,23 @@ export async function initializeBot() {
         // Set up a heartbeat to monitor connection
         setInterval(performHealthCheck, 60000); // Check every minute
         
-        // Set up process to clear processed messages cache periodically (every 6 hours)
+        // Set up process to run cache cleanup periodically
         setInterval(() => {
+          // Run our clean expired cache entries function
+          removeExpiredCacheEntries();
+          
+          // Log the current cache sizes
           const messageCount = processedMessages.size;
           const isoCount = processedISORequests.size;
-          processedMessages.clear();
-          processedISORequests.clear();
-          log(`Cleared message processing cache (${messageCount} entries) and ISO cache (${isoCount} entries)`, "discord-bot");
-        }, 6 * 60 * 60 * 1000);
+          log(`Cache status: Currently tracking ${messageCount} message(s) and ${isoCount} ISO request(s)`, "discord-bot");
+          
+          // Force a periodic full clearing as an extra safety measure (every hour)
+          if (Math.random() < 0.1) { // 10% chance on each check to do a full clear
+            processedMessages.clear();
+            processedISORequests.clear();
+            log(`Performed full cache clear (periodic safety measure)`, "discord-bot");
+          }
+        }, 15 * 60 * 1000); // Run every 15 minutes
         
         // Reset last message timestamp
         lastMessageTimestamp = Date.now();
@@ -382,14 +428,17 @@ async function handleMessage(message: Message) {
     // Ignore messages from bots
     if (message.author.bot) return;
     
+    // SIMPLIFIED APPROACH: First, automatically clean expired cache entries
+    removeExpiredCacheEntries();
+    
     // Check if we've already processed this message
     if (processedMessages.has(message.id)) {
       log(`Skipping already processed message ${message.id}`, "discord-bot");
       return;
     }
     
-    // Mark the message as being processed
-    processedMessages.set(message.id, true);
+    // Mark the message as being processed with current timestamp
+    processedMessages.set(message.id, { timestamp: Date.now() });
     
     // Check for welcome message in items-exchange channel
     const channelName = message.channel.type === ChannelType.GuildText 
@@ -444,14 +493,17 @@ async function handleMessage(message: Message) {
     if (channelName === "items-exchange" && 
         message.content.trim().startsWith("ISO")) {
       
+      // Clean up any expired cache entries
+      removeExpiredCacheEntries();
+      
       // Check if we've already processed this ISO request
       if (processedISORequests.has(message.id)) {
         log(`Skipping already processed ISO request ${message.id}`, "discord-bot");
         return;
       }
       
-      // Mark this ISO request as being processed
-      processedISORequests.set(message.id, true);
+      // Mark this ISO request as being processed with current timestamp
+      processedISORequests.set(message.id, { timestamp: Date.now() });
       
       // Process the ISO request in a separate function to isolate the logic
       await processISORequest(message);
@@ -1635,6 +1687,9 @@ async function processISORequest(message: Message): Promise<void> {
     return;
   }
   
+  // SIMPLIFIED APPROACH: Run cache expiration to remove old entries
+  removeExpiredCacheEntries();
+  
   // CRITICAL FIX: Forceful check for duplicate messages with enhanced logging
   // By moving this check higher in the flow, we catch duplicates earlier
   if (processedISORequests.has(message.id)) {
@@ -1647,8 +1702,8 @@ async function processISORequest(message: Message): Promise<void> {
   log(`Processing NEW ISO request: ${message.id} from ${message.author.username} (messageContent: "${message.content.substring(0, 50)}...")`, "discord-bot");
   
   // Mark this ISO request as being processed to prevent duplicates
-  // Setting this as early as possible in the processing flow
-  processedISORequests.set(message.id, true);
+  // Setting this as early as possible in the processing flow with timestamp
+  processedISORequests.set(message.id, { timestamp: Date.now() });
   
   let isoRequestProcessed = false;
   let formattedResponse = "";
