@@ -816,10 +816,34 @@ async function handleInteraction(interaction: Interaction) {
       // Extract the channel name from the customId
       const channelName = customId.substring(8); // Remove 'channel:' prefix
       
-      // Create a message with information about the channel
-      let responseMessage = `Redirecting you to the **#${channelName}** channel where you might find what you're looking for.`;
+      // Find the actual channel in the guild
+      const guild = interaction.guild;
+      if (!guild) {
+        await interaction.reply({
+          content: "Unable to find server information.",
+          ephemeral: true
+        });
+        return;
+      }
       
-      // For demonstration/testing purposes, add some helpful info based on the channel
+      // Find the channel with this name
+      const targetChannel = guild.channels.cache.find(
+        (ch: any) => ch.type === ChannelType.GuildText && 
+                   (ch as TextChannel).name.toLowerCase() === channelName.toLowerCase()
+      ) as TextChannel;
+      
+      // Create a message with information about the channel
+      let responseMessage = '';
+      
+      if (targetChannel) {
+        // If we found the channel, create a clickable link to it
+        responseMessage = `Click here to visit the <#${targetChannel.id}> channel where you might find what you're looking for.`;
+      } else {
+        // If channel not found, just provide information about the category
+        responseMessage = `The **#${channelName}** channel might have what you're looking for.`;
+      }
+      
+      // Add descriptive information about the channel category
       switch (channelName) {
         case 'electronics':
           responseMessage += "\n\nThe electronics channel is for tech items like computers, phones, and gadgets.";
@@ -827,8 +851,8 @@ async function handleInteraction(interaction: Interaction) {
         case 'clothing':
           responseMessage += "\n\nThe clothing channel is for fashion items, apparel, and accessories.";
           break;
-        case 'furniture':
-          responseMessage += "\n\nThe furniture channel is for home and office furniture items.";
+        case 'home-and-furniture':
+          responseMessage += "\n\nThe home-and-furniture channel is for home and office furniture items.";
           break;
         case 'collectibles':
           responseMessage += "\n\nThe collectibles channel is for rare items, figures, and memorabilia.";
