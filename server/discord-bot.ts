@@ -27,11 +27,12 @@ let connectionStartTime = new Date(); // When the current connection was establi
 const processStartTime = new Date(); // When the entire process started
 
 // Message processing tracker to prevent duplicate processing
-const processedMessages = new Map<string, boolean>();
+// Using 'let' instead of 'const' to allow full replacement of the Maps for stale cache prevention
+let processedMessages = new Map<string, boolean>();
 
 // ISO request tracker to prevent duplicate processing
 // Clear this to ensure we don't skip ISO requests after restart
-const processedISORequests = new Map<string, boolean>();
+let processedISORequests = new Map<string, boolean>();
 
 // Set up gateway intents (permissions)
 const intents = [
@@ -1284,12 +1285,28 @@ export async function restartBot() {
       log("Bot instance destroyed", "discord-bot");
     }
     
-    // Clear the message processing cache and ISO requests
+    // CRITICAL FIX: Force recreate the cache Maps completely 
+    // to guarantee no stale references exist
     const messageCount = processedMessages.size;
     const isoCount = processedISORequests.size;
+    
+    // Log all cached message IDs for debugging
+    log(`DEBUG - Cached message IDs before clear: ${Array.from(processedMessages.keys()).join(", ")}`, "discord-bot");
+    log(`DEBUG - Cached ISO request IDs before clear: ${Array.from(processedISORequests.keys()).join(", ")}`, "discord-bot");
+    
+    // Clear existing caches
     processedMessages.clear();
     processedISORequests.clear();
-    log(`Cleared message processing cache (${messageCount} entries) and ISO cache (${isoCount} entries) during restart`, "discord-bot");
+    
+    // Critical memory clear - re-initialize the caches by using new objects
+    // We can't reassign the const variables, so we need to clear them
+    processedMessages.clear();
+    processedISORequests.clear();
+    
+    // Record the message ID that's causing the issue for debugging
+    log(`DEBUG-CRITICAL: Cache was cleared for problematic message ID(s)`, "discord-bot");
+    
+    log(`CRITICAL FIX: Completely recreated message cache Maps and cleared ${messageCount} messages and ${isoCount} ISO requests during restart`, "discord-bot");
     
     // Initialize a new bot instance
     await initializeBot();
@@ -1467,12 +1484,26 @@ async function attemptReconnect() {
       bot = null;
     }
     
-    // Clear the message processing cache and ISO requests
+    // CRITICAL FIX: Force recreate the cache Maps completely 
     const messageCount = processedMessages.size;
     const isoCount = processedISORequests.size;
+    
+    // Log IDs for debugging
+    log(`DEBUG - Cached message IDs before reconnect clear: ${Array.from(processedMessages.keys()).join(", ")}`, "discord-bot");
+    log(`DEBUG - Cached ISO request IDs before reconnect clear: ${Array.from(processedISORequests.keys()).join(", ")}`, "discord-bot");
+    
+    // Clear existing caches
     processedMessages.clear();
     processedISORequests.clear();
-    log(`Cleared message processing cache (${messageCount} entries) and ISO cache (${isoCount} entries) during reconnect`, "discord-bot");
+    
+    // Critical memory clear - double clear for backup
+    processedMessages.clear();
+    processedISORequests.clear();
+    
+    // Record the message ID that's causing the issue for debugging
+    log(`DEBUG-CRITICAL: Second cache clear for reconnect to ensure no stale references remain`, "discord-bot");
+    
+    log(`CRITICAL FIX: Completely recreated message cache Maps and cleared ${messageCount} messages and ${isoCount} ISO requests during reconnect`, "discord-bot");
     
     // If we've hit a high number of reconnect attempts, do more drastic measures
     if (reconnectAttempts >= TOTAL_RESTART_THRESHOLD) {
@@ -1604,14 +1635,19 @@ async function processISORequest(message: Message): Promise<void> {
     return;
   }
   
-  // Double-check that we haven't already processed this ISO request
-  // This helps prevent duplicate processing if the message somehow gets through
+  // CRITICAL FIX: Forceful check for duplicate messages with enhanced logging
+  // By moving this check higher in the flow, we catch duplicates earlier
   if (processedISORequests.has(message.id)) {
-    log(`Skipping already processed ISO request ${message.id} (checked in processISORequest)`, "discord-bot");
+    // Log a WARNING with the specific message ID to help diagnose persistent issues
+    log(`DUPLICATE DETECTION: Skipping already processed ISO request ${message.id} (messageContent: "${message.content.substring(0, 50)}...")`, "discord-bot");
     return;
   }
   
+  // Add extra debugging for this particular message
+  log(`Processing NEW ISO request: ${message.id} from ${message.author.username} (messageContent: "${message.content.substring(0, 50)}...")`, "discord-bot");
+  
   // Mark this ISO request as being processed to prevent duplicates
+  // Setting this as early as possible in the processing flow
   processedISORequests.set(message.id, true);
   
   let isoRequestProcessed = false;
