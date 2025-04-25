@@ -18,10 +18,13 @@ let bot: Client | null = null;
 
 // Track when we last received messages (for heartbeat)
 let lastMessageTimestamp = Date.now();
+let lastSuccessfulActivity = Date.now(); // Track successful interactions with Discord
 const RECONNECT_INTERVAL = 30000; // 30 seconds
 let reconnectAttempts = 0;
+let healthCheckFailures = 0; // Track consecutive health check failures
 let commandsProcessed = 0;
-const startTime = new Date();
+let connectionStartTime = new Date(); // When the current connection was established
+const processStartTime = new Date(); // When the entire process started
 
 // Message processing tracker to prevent duplicate processing
 const processedMessages = new Map<string, boolean>();
@@ -1041,12 +1044,17 @@ export async function getBotStatus() {
   try {
     const botStatus = {
       status: bot && bot.isReady() ? "online" : "offline",
-      uptime: calculateUptime(startTime),
+      uptime: calculateUptime(connectionStartTime),
+      processUptime: calculateUptime(processStartTime),
       memory: {
         used: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
         total: `${Math.round(process.memoryUsage().heapTotal / 1024 / 1024)}MB`
       },
-      commandsProcessed
+      commandsProcessed,
+      healthStatus: {
+        healthCheckFailures,
+        reconnectAttempts
+      }
     };
     
     return botStatus;
@@ -1055,8 +1063,13 @@ export async function getBotStatus() {
     return {
       status: "error",
       uptime: "unknown",
+      processUptime: "unknown",
       memory: { used: "unknown", total: "unknown" },
-      commandsProcessed: 0
+      commandsProcessed: 0,
+      healthStatus: {
+        healthCheckFailures: 0,
+        reconnectAttempts: 0
+      }
     };
   }
 }
@@ -1115,34 +1128,86 @@ export async function restartBot() {
   }
 }
 
-// Track consecutive health check failures
-let healthCheckFailures = 0;
+// Track consecutive health check failures and success
 const MAX_FAILURES_BEFORE_RESTART = 3;
 const CONSECUTIVE_SUCCESS_TO_RESET = 5;
 let consecutiveSuccessfulChecks = 0;
 
-// Perform a comprehensive health check
+// Perform a comprehensive health check with persistence
 async function performHealthCheck() {
   try {
     // Check if bot is initialized and connected to Discord
     if (bot && bot.isReady()) {
-      // Check if we've received messages recently (within the last 10 minutes)
+      // Check for multiple types of activity
+      const checkTime = Date.now();
       const messageTimeout = 10 * 60 * 1000; // 10 minutes
-      const timeSinceLastMessage = Date.now() - lastMessageTimestamp;
+      const activityTimeout = 5 * 60 * 1000; // 5 minutes 
       
-      const isInactive = timeSinceLastMessage > messageTimeout;
+      const timeSinceLastMessage = checkTime - lastMessageTimestamp;
+      const timeSinceLastActivity = checkTime - lastSuccessfulActivity;
       
-      if (isInactive) {
+      // Check both message and general activity timeouts
+      const isMessageInactive = timeSinceLastMessage > messageTimeout;
+      const isActivityInactive = timeSinceLastActivity > activityTimeout;
+      
+      if (isMessageInactive || isActivityInactive) {
         healthCheckFailures++;
-        log(`Health check warning: No messages received in ${Math.round(timeSinceLastMessage / 1000 / 60)} minutes. Failure #${healthCheckFailures}`, "discord-bot");
         
-        // Try to ping Discord API to verify connection
+        // Log the specific issue
+        if (isMessageInactive) {
+          log(`Health check warning: No messages received in ${Math.round(timeSinceLastMessage / 1000 / 60)} minutes. Failure #${healthCheckFailures}`, "discord-bot");
+        }
+        
+        if (isActivityInactive) {
+          log(`Health check warning: No Discord activity in ${Math.round(timeSinceLastActivity / 1000 / 60)} minutes. Failure #${healthCheckFailures}`, "discord-bot");
+        }
+        
+        // Record a healthcheck failure in storage
+        await storage.createLog({
+          userId: "system",
+          username: "System",
+          command: "health_check",
+          channel: "N/A",
+          status: "warning",
+          message: `Health check failure #${healthCheckFailures}: No recent activity detected`,
+          messageId: "system-message"
+        }).catch(err => log(`Error logging health check: ${err}`, "discord-bot"));
+        
+        // Try multiple connection tests to verify Discord connection
         try {
-          // Try to fetch a small amount of data from Discord to validate the connection
-          await bot.guilds.fetch({ limit: 1 });
-          log("Discord API connection appears to be working despite inactivity", "discord-bot");
+          // First try to fetch guilds (servers)
+          try {
+            await bot.guilds.fetch({ limit: 1 });
+            log("Discord API guilds fetch successful despite inactivity", "discord-bot");
+            lastSuccessfulActivity = Date.now(); // Update activity timestamp
+          } catch (guildError) {
+            log(`Discord guild fetch failed: ${guildError}`, "discord-bot");
+            throw new Error("Guild fetch failed");
+          }
+          
+          // If that worked, try another API check as double verification
+          try {
+            await bot.user?.fetch();
+            log("Discord API user fetch successful despite inactivity", "discord-bot");
+            lastSuccessfulActivity = Date.now(); // Update activity timestamp
+          } catch (userError) {
+            log(`Discord user fetch failed: ${userError}`, "discord-bot");
+            throw new Error("User fetch failed");
+          }
         } catch (pingError) {
-          log(`Discord API ping failed: ${pingError}. Initiating reconnect...`, "discord-bot");
+          log(`Discord API checks failed: ${pingError}. Initiating reconnect...`, "discord-bot");
+          
+          // Create a critical error log
+          await storage.createLog({
+            userId: "system",
+            username: "System",
+            command: "health_check",
+            channel: "N/A",
+            status: "error",
+            message: `Discord connection test failed: ${pingError}. Initiating reconnection...`,
+            messageId: "system-message"
+          }).catch(err => log(`Error logging connection failure: ${err}`, "discord-bot"));
+          
           await attemptReconnect();
           return;
         }

@@ -20,11 +20,16 @@ interface BotConfigProps {
   botStatus: {
     status: string;
     uptime: string;
+    processUptime?: string;
     memory: {
       used: string;
       total: string;
     };
     commandsProcessed: number;
+    healthStatus?: {
+      healthCheckFailures: number;
+      reconnectAttempts: number;
+    };
   } | undefined;
   isStatusLoading: boolean;
   onUpdateConfig: (config: { commandTrigger: string; reactionEmoji: string }) => void;
@@ -164,9 +169,15 @@ const BotConfig = ({
           </div>
           <div className="mt-2 text-sm text-[#B9BBBE]">
             <div className="flex justify-between">
-              <span>Uptime:</span>
+              <span>Connection uptime:</span>
               <span>{botStatus?.uptime || '0 minutes'}</span>
             </div>
+            {botStatus?.processUptime && (
+              <div className="flex justify-between mt-1">
+                <span>Process uptime:</span>
+                <span>{botStatus.processUptime}</span>
+              </div>
+            )}
             <div className="flex justify-between mt-1">
               <span>Memory:</span>
               <span>{botStatus?.memory?.used || '0MB'} / {botStatus?.memory?.total || '0MB'}</span>
@@ -175,6 +186,41 @@ const BotConfig = ({
               <span>Commands processed:</span>
               <span>{botStatus?.commandsProcessed || 0}</span>
             </div>
+            
+            {/* Health monitoring information */}
+            {botStatus?.healthStatus && (
+              <>
+                <div className="h-px bg-[#4F545C40] my-2"></div>
+                <div className="text-xs font-semibold uppercase text-[#B9BBBE] mt-2 mb-1">Health Monitoring</div>
+                
+                <div className="flex justify-between text-xs mt-1">
+                  <span>Health check failures:</span>
+                  <span className={botStatus.healthStatus.healthCheckFailures > 0 ? 'text-[#FEE75C]' : 'text-[#57F287]'}>
+                    {botStatus.healthStatus.healthCheckFailures}
+                  </span>
+                </div>
+                
+                <div className="flex justify-between text-xs mt-1">
+                  <span>Reconnect attempts:</span>
+                  <span className={botStatus.healthStatus.reconnectAttempts > 0 ? 'text-[#FEE75C]' : 'text-[#57F287]'}>
+                    {botStatus.healthStatus.reconnectAttempts}
+                  </span>
+                </div>
+                
+                <div className="mt-2 text-xs">
+                  <div className={`px-2 py-1 rounded ${botStatus.healthStatus.healthCheckFailures === 0 && botStatus.healthStatus.reconnectAttempts === 0 ? 'bg-[#57F28720]' : 'bg-[#FEE75C20]'}`}>
+                    <div className="flex items-start">
+                      <div className={`flex-shrink-0 w-2 h-2 rounded-full mt-1 mr-1.5 ${botStatus.healthStatus.healthCheckFailures === 0 && botStatus.healthStatus.reconnectAttempts === 0 ? 'bg-[#57F287]' : 'bg-[#FEE75C]'}`}></div>
+                      <span>
+                        {botStatus.healthStatus.healthCheckFailures === 0 && botStatus.healthStatus.reconnectAttempts === 0 
+                          ? 'System healthy with persistent database connection' 
+                          : 'System recovered from temporary connectivity issues'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
