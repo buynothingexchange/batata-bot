@@ -981,9 +981,19 @@ async function handleInteraction(interaction: Interaction) {
 // Process a test command (for the dashboard)
 export async function processCommand(command: string) {
   try {
+    // DISCOVERY: We found a critical issue here!
+    // The test command function is explicitly clearing the cache for API test commands
+    // but not for real Discord messages. This makes our test cases work while real Discord
+    // messages would still get cached. Let's leave this in place but add diagnostics to identify
+    // what's happening in production:
+    
+    log(`DEBUG CACHE STATE before clearing: Message cache has ${processedMessages.size} entries, ISO cache has ${processedISORequests.size} entries`, "discord-bot");
+    
     // Clear the message processing cache - this ensures processing test commands works when repeatedly testing
     processedMessages.clear();
     processedISORequests.clear();
+    
+    log(`DEBUG CACHE STATE after clearing: Message cache has ${processedMessages.size} entries, ISO cache has ${processedISORequests.size} entries`, "discord-bot");
     
     const config = await storage.getBotConfig();
     if (!config) {
