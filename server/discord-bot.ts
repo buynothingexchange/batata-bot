@@ -261,8 +261,11 @@ export async function initializeBot() {
     }
     
     // Clear all caches for a fresh start
+    const messageCount = processedMessages.size;
+    const isoCount = processedISORequests.size;
     processedMessages.clear();
     processedISORequests.clear();
+    log(`Cleared message processing cache (${messageCount} entries) and ISO cache (${isoCount} entries) during initialization`, "discord-bot");
     
     // Reset metrics
     reconnectAttempts = 0;
@@ -1282,8 +1285,11 @@ export async function restartBot() {
     }
     
     // Clear the message processing cache and ISO requests
+    const messageCount = processedMessages.size;
+    const isoCount = processedISORequests.size;
     processedMessages.clear();
     processedISORequests.clear();
+    log(`Cleared message processing cache (${messageCount} entries) and ISO cache (${isoCount} entries) during restart`, "discord-bot");
     
     // Initialize a new bot instance
     await initializeBot();
@@ -1462,8 +1468,11 @@ async function attemptReconnect() {
     }
     
     // Clear the message processing cache and ISO requests
+    const messageCount = processedMessages.size;
+    const isoCount = processedISORequests.size;
     processedMessages.clear();
     processedISORequests.clear();
+    log(`Cleared message processing cache (${messageCount} entries) and ISO cache (${isoCount} entries) during reconnect`, "discord-bot");
     
     // If we've hit a high number of reconnect attempts, do more drastic measures
     if (reconnectAttempts >= TOTAL_RESTART_THRESHOLD) {
