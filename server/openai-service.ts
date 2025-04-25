@@ -264,10 +264,10 @@ export async function analyzeISORequest(username: string, messageContent: string
     }
     
     // Then check for single-word colors
-    const itemWords = item.toLowerCase().split(' ');
+    const itemWordsArray = item.toLowerCase().split(' ');
     for (const color of colors) {
       if (!color.includes(' ')) { // Only check single-word colors
-        if (itemWords.includes(color)) {
+        if (itemWordsArray.includes(color)) {
           // If a color is found in the item, move it to features and clean the item
           item = item.replace(new RegExp(`\\b${color}\\b`, 'i'), '').trim();
           
@@ -371,11 +371,11 @@ export async function analyzeISORequest(username: string, messageContent: string
     };
     
     // First check if the item directly matches any category
-    const itemWords = item.toLowerCase().split(/\s+/);
+    const itemWordsSplit = item.toLowerCase().split(/\s+/);
     
     for (const [category, keywords] of Object.entries(categoryKeywords)) {
       for (const keyword of keywords) {
-        if (itemWords.includes(keyword) || item.toLowerCase().includes(keyword)) {
+        if (itemWordsSplit.includes(keyword) || item.toLowerCase().includes(keyword)) {
           tags.push(category);
           break; // Only add each category once
         }

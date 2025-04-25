@@ -948,6 +948,21 @@ export async function processCommand(command: string) {
           messageId: "test-message-id",
         });
         
+        // Add test cross-post logs for each identified category
+        if (analysis.tags && analysis.tags.length > 0) {
+          for (const category of analysis.tags) {
+            await storage.createLog({
+              userId: "dashboard",
+              username: "Dashboard Test",
+              command: "ISO-crosspost",
+              channel: category.replace(/\s+/g, '-'),
+              status: "success",
+              message: `Cross-posted ISO request to #${category.replace(/\s+/g, '-')} channel`,
+              messageId: "test-crosspost-id",
+            }).catch(err => log(`Error creating test cross-post log: ${err}`, "discord-bot"));
+          }
+        }
+        
         return { success: true, log: logEntry };
       } catch (error) {
         // Use the imported log function from vite.ts, not a local variable
@@ -966,6 +981,17 @@ export async function processCommand(command: string) {
           message: `Formatted REQUEST category post: @Dashboard Test is looking for a ${itemText}. (With interactive category buttons)`,
           messageId: "test-message-id",
         });
+        
+        // Add a fallback cross-post to the default category
+        await storage.createLog({
+          userId: "dashboard",
+          username: "Dashboard Test",
+          command: "ISO-crosspost",
+          channel: "home-and-furniture",
+          status: "success",
+          message: `Cross-posted ISO request to #home-and-furniture channel (fallback category)`,
+          messageId: "test-crosspost-id",
+        }).catch(err => log(`Error creating test cross-post log: ${err}`, "discord-bot"));
         
         return { success: true, log: fallbackLog };
       }
@@ -1455,12 +1481,13 @@ async function processISORequest(message: Message): Promise<void> {
   let isoRequestProcessed = false;
   let formattedResponse = "";
   let tagButtons = null;
+  let analysis = null;
   
   try {
     // Attempt to process with OpenAI first
     try {
       // Analyze the ISO request using OpenAI
-      const analysis = await analyzeISORequest(message.author.username, message.content);
+      analysis = await analyzeISORequest(message.author.username, message.content);
       
       // Build features list if available
       let featuresText = "-Features:";
@@ -1505,18 +1532,81 @@ async function processISORequest(message: Message): Promise<void> {
       
       log(`Fallback formatted ISO request for ${message.author.username} in #items-exchange: ${item}`, "discord-bot");
       
+      // Create a minimal analysis object for fallback
+      analysis = {
+        item: item,
+        features: [],
+        urgency: "Not specified",
+        tags: ["home-and-furniture"] // Default fallback category
+      };
+      
       // Mark as processed with fallback method
       isoRequestProcessed = true;
     }
     
     // Only proceed if we have a formatted response
     if (isoRequestProcessed && formattedResponse && tagButtons) {
-      // Send the formatted message to the channel
+      // Send the formatted message to the original channel
+      let sentMainMessage = null;
       if (message.channel.type === ChannelType.GuildText) {
-        await message.channel.send({
+        sentMainMessage = await message.channel.send({
           content: formattedResponse,
           components: tagButtons
         });
+        
+        log(`Sent formatted ISO request in main channel #${channelName}`, "discord-bot");
+        
+        // Now cross-post to appropriate category channels if we have tags and this is in a guild
+        if (message.guild && analysis && analysis.tags && analysis.tags.length > 0) {
+          for (const categoryTag of analysis.tags) {
+            try {
+              // Clean up the tag name to match potential channel names
+              // Convert "home-and-furniture" to "home-and-furniture" or "home-furniture" format
+              const cleanedTagName = categoryTag.toLowerCase().replace(/\s+/g, '-');
+              
+              // Find the category channel (exact match or similar)
+              const categoryChannel = message.guild.channels.cache.find(
+                ch => ch.type === ChannelType.GuildText && 
+                     (ch.name.toLowerCase() === cleanedTagName ||
+                      ch.name.toLowerCase() === categoryTag.toLowerCase())
+              ) as TextChannel;
+              
+              if (categoryChannel && categoryChannel.id !== message.channel.id) {
+                // Don't cross-post to the same channel
+                // Create a copy of the message for the category channel
+                // Add an intro line to clarify this is a cross-post
+                const crosspostContent = `*[Cross-posted from #${channelName}]*\n${formattedResponse}`;
+                
+                // Send to the category channel
+                const sentCategoryMessage = await categoryChannel.send({
+                  content: crosspostContent,
+                  components: tagButtons
+                });
+                
+                log(`Cross-posted ISO request to category channel #${categoryChannel.name}`, "discord-bot");
+                
+                // Log the cross-post
+                await storage.createLog({
+                  userId: message.author.id,
+                  username: message.author.username,
+                  command: "ISO-crosspost",
+                  channel: categoryChannel.name,
+                  status: "success",
+                  message: `Cross-posted ISO request to #${categoryChannel.name}`,
+                  messageId: sentCategoryMessage.id,
+                }).catch(err => log(`Error logging ISO cross-post: ${err}`, "discord-bot"));
+              } else {
+                if (!categoryChannel) {
+                  log(`Could not find channel for category: ${categoryTag}`, "discord-bot");
+                } else {
+                  log(`Skipping cross-post to same channel: ${categoryChannel.name}`, "discord-bot");
+                }
+              }
+            } catch (crossPostError) {
+              log(`Error cross-posting to category ${categoryTag}: ${crossPostError}`, "discord-bot");
+            }
+          }
+        }
         
         // Forward a copy to the user via DM with Fulfilled button
         try {
@@ -1541,7 +1631,7 @@ async function processISORequest(message: Message): Promise<void> {
           channel: "items-exchange",
           status: "success",
           message: `Formatted REQUEST category post successfully`,
-          messageId: message.id,
+          messageId: sentMainMessage.id,
         }).catch(err => log(`Error logging ISO request formatting: ${err}`, "discord-bot"));
         
         // Try to delete the original message
