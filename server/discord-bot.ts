@@ -30,6 +30,7 @@ const processStartTime = new Date(); // When the entire process started
 const processedMessages = new Map<string, boolean>();
 
 // ISO request tracker to prevent duplicate processing
+// Clear this to ensure we don't skip ISO requests after restart
 const processedISORequests = new Map<string, boolean>();
 
 // Set up gateway intents (permissions)
@@ -924,6 +925,10 @@ async function handleInteraction(interaction: Interaction) {
 // Process a test command (for the dashboard)
 export async function processCommand(command: string) {
   try {
+    // Clear the message processing cache - this ensures processing test commands works when repeatedly testing
+    processedMessages.clear();
+    processedISORequests.clear();
+    
     const config = await storage.getBotConfig();
     if (!config) {
       throw new Error("Bot configuration not found");
