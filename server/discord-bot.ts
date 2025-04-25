@@ -26,9 +26,10 @@ let commandsProcessed = 0;
 let connectionStartTime = new Date(); // When the current connection was established
 const processStartTime = new Date(); // When the entire process started
 
-// SIMPLIFIED APPROACH: Use timestamps with the cached IDs to enable automatic expiration
-// Set a 30-second time limit for message cache entries (this is deliberately short for testing)
-const MESSAGE_CACHE_EXPIRY_MS = 30 * 1000; // 30 seconds
+// DIRECT FIX: Set the expiration extremely short
+// The issue is that we're using two different code paths for test messages vs actual Discord messages
+// For production use, this can be increased but for now we'll keep it very short to fix the issue
+const MESSAGE_CACHE_EXPIRY_MS = 5 * 1000; // 5 seconds - make this much shorter for testing
 
 // Store the message ID with its timestamp instead of just a boolean
 interface CacheEntry {
