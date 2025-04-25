@@ -1590,6 +1590,16 @@ async function processISORequest(message: Message): Promise<void> {
     return;
   }
   
+  // Double-check that we haven't already processed this ISO request
+  // This helps prevent duplicate processing if the message somehow gets through
+  if (processedISORequests.has(message.id)) {
+    log(`Skipping already processed ISO request ${message.id} (checked in processISORequest)`, "discord-bot");
+    return;
+  }
+  
+  // Mark this ISO request as being processed to prevent duplicates
+  processedISORequests.set(message.id, true);
+  
   let isoRequestProcessed = false;
   let formattedResponse = "";
   let tagButtons = null;
