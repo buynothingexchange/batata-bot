@@ -50,7 +50,7 @@ export async function analyzeISORequest(username: string, messageContent: string
           role: "system",
           content: `You are an assistant that analyzes "In Search Of" (ISO) requests for items in a Discord server. 
           Your task is to extract and organize information about what item the user is looking for,
-          what features they want, the urgency of their request, and relevant tags.
+          what features they want, the urgency of their request, and categorize them into specific tags.
           
           Important guidelines:
           
@@ -76,6 +76,15 @@ export async function analyzeISORequest(username: string, messageContent: string
              - General urgency: "urgent", "quickly", "fast"
              - ALWAYS include the EXACT timing phrase as it appears in the message
           
+          4. For tags, you MUST ONLY use these FOUR specific categories:
+             - "clothing": For all wearable items like shirts, pants, dresses, jackets, shoes, etc.
+             - "electronics": For all electronic devices like computers, phones, TVs, cameras, etc.
+             - "accessories": For wearable/carryable accessories like jewelry, watches, bags, wallets, etc.
+             - "home-and-furniture": For household items, furniture, and home decor
+             
+             Every item MUST be categorized into AT LEAST ONE of these four categories.
+             DO NOT create new categories or use tags outside of these four options.
+          
           Example:
           Input: "ISO a vintage leather jacket with silver buttons, size M, needed by Friday"
           
@@ -84,7 +93,7 @@ export async function analyzeISORequest(username: string, messageContent: string
             "item": "jacket",
             "features": ["vintage", "leather", "silver buttons", "size M"],
             "urgency": "by Friday",
-            "tags": ["clothing", "outerwear"]
+            "tags": ["clothing"]
           }
           
           Always include time phrases in the urgency field exactly as written.
@@ -331,11 +340,72 @@ export async function analyzeISORequest(username: string, messageContent: string
       }
     }
     
+    // Generate tags based on our 4 specific categories
+    const tags = [];
+    const categoryKeywords = {
+      clothing: [
+        'shirt', 'pants', 'jacket', 'shoes', 'boots', 'sneakers', 'hat', 'cap',
+        'dress', 'skirt', 'jeans', 'sweater', 'hoodie', 'socks', 'gloves',
+        'belt', 'tie', 'blazer', 'coat', 'suit', 'shorts', 't-shirt', 'tshirt',
+        'blouse', 'cardigan', 'vest', 'sweatshirt', 'pajamas', 'swimsuit', 'bikini',
+        'clothing', 'wear', 'outfit', 'apparel'
+      ],
+      electronics: [
+        'phone', 'laptop', 'computer', 'tablet', 'camera', 'headphones', 'speaker',
+        'monitor', 'keyboard', 'mouse', 'charger', 'adapter', 'cable', 'drive',
+        'printer', 'scanner', 'router', 'modem', 'microphone', 'earbuds', 'console',
+        'tv', 'television', 'projector', 'drone', 'smartwatch', 'device', 'electronic'
+      ],
+      accessories: [
+        'watch', 'jewelry', 'accessory', 'accessories', 'bag', 'backpack', 
+        'purse', 'wallet', 'sunglasses', 'glasses', 'scarf',
+        'necklace', 'bracelet', 'ring', 'earrings', 'pendant'
+      ],
+      'home-and-furniture': [
+        'chair', 'table', 'desk', 'sofa', 'couch', 'bookshelf', 'cabinet',
+        'bed', 'mattress', 'dresser', 'nightstand', 'shelf', 'stool', 'drawer',
+        'wardrobe', 'bench', 'ottoman', 'rug', 'lamp', 'mirror', 'curtains',
+        'furniture', 'kitchen', 'pot', 'pan', 'utensil', 'plate',
+        'bowl', 'mug', 'cup', 'glass', 'bottle', 'container', 'home', 'house'
+      ]
+    };
+    
+    // First check if the item directly matches any category
+    const itemWords = item.toLowerCase().split(/\s+/);
+    
+    for (const [category, keywords] of Object.entries(categoryKeywords)) {
+      for (const keyword of keywords) {
+        if (itemWords.includes(keyword) || item.toLowerCase().includes(keyword)) {
+          tags.push(category);
+          break; // Only add each category once
+        }
+      }
+    }
+    
+    // Then check features if we still don't have a category
+    if (tags.length === 0 && features.length > 0) {
+      const featureText = features.join(' ').toLowerCase();
+      
+      for (const [category, keywords] of Object.entries(categoryKeywords)) {
+        for (const keyword of keywords) {
+          if (featureText.includes(keyword)) {
+            tags.push(category);
+            break; // Only add each category once
+          }
+        }
+      }
+    }
+    
+    // If no tags found, default to home-and-furniture as a fallback
+    if (tags.length === 0) {
+      tags.push('home-and-furniture');
+    }
+    
     return {
       item: item || "unknown item",
       features: features,
       urgency: urgency,
-      tags: [],
+      tags: tags,
       success: false
     };
   }

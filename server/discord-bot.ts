@@ -51,15 +51,11 @@ async function addDefaultChannels() {
     { channelId: "items-exchange", channelName: "items-exchange", guildId: "default", enabled: true },
     { channelId: "trading-post", channelName: "trading-post", guildId: "default", enabled: true },
     { channelId: "general", channelName: "general", guildId: "default", enabled: true },
-    // Add sub-category channels for tags
-    { channelId: "electronics", channelName: "electronics", guildId: "default", enabled: true },
+    // Primary category channels as specified by the user
     { channelId: "clothing", channelName: "clothing", guildId: "default", enabled: true },
-    { channelId: "furniture", channelName: "furniture", guildId: "default", enabled: true },
-    { channelId: "collectibles", channelName: "collectibles", guildId: "default", enabled: true },
-    { channelId: "books", channelName: "books", guildId: "default", enabled: true },
-    { channelId: "toys", channelName: "toys", guildId: "default", enabled: true },
-    { channelId: "games", channelName: "games", guildId: "default", enabled: true },
-    { channelId: "accessories", channelName: "accessories", guildId: "default", enabled: true }
+    { channelId: "electronics", channelName: "electronics", guildId: "default", enabled: true },
+    { channelId: "accessories", channelName: "accessories", guildId: "default", enabled: true },
+    { channelId: "home-and-furniture", channelName: "home and furniture", guildId: "default", enabled: true }
   ];
   
   for (const channel of defaultChannels) {
@@ -83,16 +79,30 @@ function createFulfilledButton(): ActionRowBuilder<ButtonBuilder>[] {
 
 // Helper function to create tag buttons
 function createTagButtons(item: string, features: string[], tags: string[]): ActionRowBuilder<ButtonBuilder>[] {
-  // Define category keywords to match against the item and features
+  // Define category keywords to match against the item and features - updated to match the user's 4 primary categories
   const categoryMap: Record<string, string[]> = {
-    'electronics': ['computer', 'laptop', 'phone', 'mobile', 'tablet', 'camera', 'headphones', 'speaker', 'tv', 'monitor', 'keyboard', 'mouse', 'gaming', 'console', 'electronic'],
-    'clothing': ['shirt', 'pants', 'dress', 'jacket', 'coat', 'sweater', 'hoodie', 'jeans', 'shorts', 't-shirt', 'shoes', 'boots', 'hat', 'cap', 'clothing', 'wear', 'outfit'],
-    'furniture': ['chair', 'table', 'desk', 'sofa', 'couch', 'bed', 'mattress', 'shelf', 'cabinet', 'dresser', 'furniture'],
-    'collectibles': ['figure', 'statue', 'collectible', 'rare', 'limited', 'edition', 'memorabilia', 'vintage', 'antique', 'collection'],
-    'books': ['book', 'novel', 'textbook', 'manual', 'guide', 'fiction', 'nonfiction', 'reading'],
-    'toys': ['toy', 'game', 'puzzle', 'doll', 'action figure', 'lego', 'playset', 'plush', 'stuffed'],
-    'games': ['video game', 'board game', 'card game', 'game', 'gaming', 'playstation', 'xbox', 'nintendo', 'switch'],
-    'accessories': ['jewelry', 'watch', 'necklace', 'bracelet', 'ring', 'accessory', 'accessories', 'bag', 'backpack', 'purse', 'wallet']
+    'electronics': [
+      'computer', 'laptop', 'phone', 'mobile', 'tablet', 'camera', 'headphones', 'speaker', 'tv', 'monitor', 
+      'keyboard', 'mouse', 'gaming', 'console', 'electronic', 'charger', 'battery', 'cable', 'adapter', 
+      'device', 'screen', 'printer', 'router', 'modem', 'smart', 'tech', 'technology', 'digital'
+    ],
+    'clothing': [
+      'shirt', 'pants', 'dress', 'jacket', 'coat', 'sweater', 'hoodie', 'jeans', 'shorts', 't-shirt', 
+      'shoes', 'boots', 'hat', 'cap', 'clothing', 'wear', 'outfit', 'sneakers', 'sock', 'socks', 
+      'underwear', 'uniform', 'gloves', 'scarf', 'belt', 'apparel', 'sweatshirt', 'sweatpants'
+    ],
+    'home-and-furniture': [
+      'chair', 'table', 'desk', 'sofa', 'couch', 'bed', 'mattress', 'shelf', 'cabinet', 'dresser', 
+      'furniture', 'lamp', 'light', 'carpet', 'rug', 'curtain', 'pillow', 'blanket', 'mirror', 
+      'clock', 'decoration', 'decor', 'kitchen', 'appliance', 'refrigerator', 'fridge', 'microwave',
+      'toaster', 'blender', 'plate', 'cup', 'mug', 'bowl', 'utensil', 'pot', 'pan', 'cookware',
+      'home', 'house', 'apartment', 'living', 'bathroom', 'bedroom', 'dining'
+    ],
+    'accessories': [
+      'jewelry', 'watch', 'necklace', 'bracelet', 'ring', 'accessory', 'accessories', 'bag', 'backpack', 
+      'purse', 'wallet', 'sunglasses', 'glasses', 'earrings', 'hat', 'scarf', 'belt', 'keychain', 
+      'handbag', 'clutch', 'tote', 'satchel', 'wearable', 'pin', 'brooch', 'hairpin', 'clip', 'tie'
+    ]
   };
   
   // Helper function to check if text matches any keywords from a category
@@ -137,17 +147,37 @@ function createTagButtons(item: string, features: string[], tags: string[]): Act
   // Limit to 5 categories (Discord's limit for buttons in one row)
   const categoriesToShow = uniqueCategories.slice(0, 5);
   
-  // If no categories matched, add some default/general ones
+  // If no categories matched, add all four primary categories
   if (categoriesToShow.length === 0) {
-    categoriesToShow.push('items-exchange', 'trading-post');
+    categoriesToShow.push('clothing', 'electronics', 'accessories', 'home-and-furniture');
   }
   
-  // Create buttons for each category
+  // Create buttons for each category with different styles based on category
   const buttons = categoriesToShow.map(category => {
+    // Choose button style based on category
+    let style = ButtonStyle.Primary; // Default blue
+    
+    // Assign specific colors to each category
+    if (category === 'clothing') {
+      style = ButtonStyle.Success; // Green for clothing
+    } else if (category === 'electronics') {
+      style = ButtonStyle.Primary; // Blue for electronics
+    } else if (category === 'accessories') {
+      style = ButtonStyle.Secondary; // Gray for accessories
+    } else if (category === 'home-and-furniture') {
+      style = ButtonStyle.Danger; // Red for home & furniture
+    }
+    
+    // Format the display label to be more user-friendly
+    let displayLabel = category.charAt(0).toUpperCase() + category.slice(1);
+    if (category === 'home-and-furniture') {
+      displayLabel = 'Home & Furniture';
+    }
+    
     return new ButtonBuilder()
       .setCustomId(`channel:${category}`)
-      .setLabel(category.charAt(0).toUpperCase() + category.slice(1))
-      .setStyle(ButtonStyle.Primary);
+      .setLabel(displayLabel)
+      .setStyle(style);
   });
   
   // Create action row with buttons
