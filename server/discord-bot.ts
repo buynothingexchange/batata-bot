@@ -1868,7 +1868,14 @@ async function updateCrossPostedMessages(
               // Try the reply approach as fallback
               await crossPost.reply({
                 content: `**This request has been marked as fulfilled by ${fulfilledBy}**`,
-                embeds: [fulfilledEmbed]
+                embeds: [
+                  new EmbedBuilder()
+                    .setColor(0x57F287)
+                    .setTitle("ISO Request Fulfilled")
+                    .setDescription(`This request has been marked as fulfilled by ${fulfilledBy}`)
+                    .setTimestamp()
+                    .setThumbnail(fulfilledBy.displayAvatarURL({ extension: 'png', size: 128 }))
+                ]
               });
               log(`Added fulfilled reply to cross-post in #${textChannel.name} as fallback`, "discord-bot");
             }
