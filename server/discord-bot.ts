@@ -1704,16 +1704,15 @@ async function processISORequest(message: Message): Promise<void> {
     
     // Only proceed if we have a formatted response
     if (isoRequestProcessed && formattedResponse && tagButtons) {
-      // Create a formatted reply to the original message
+      // Send the formatted message to the original channel
       let sentMainMessage = null;
       if (message.channel.type === ChannelType.GuildText) {
-        // Reply to the original message with formatting (instead of editing)
-        sentMainMessage = await message.reply({
+        sentMainMessage = await message.channel.send({
           content: formattedResponse,
           components: tagButtons
         });
         
-        log(`Created formatted reply to ISO request from ${message.author.username} in #${channelName}`, "discord-bot");
+        log(`Sent formatted ISO request in main channel #${channelName}`, "discord-bot");
         
         // Now cross-post to appropriate category channels if we have tags and this is in a guild
         if (message.guild && analysis && analysis.tags && analysis.tags.length > 0) {
@@ -1859,8 +1858,23 @@ async function processISORequest(message: Message): Promise<void> {
           messageId: sentMainMessage.id,
         }).catch(err => log(`Error logging ISO request formatting: ${err}`, "discord-bot"));
         
-        // We're keeping the original message and replying to it instead
-        // No need to delete anything, so we preserve the original context
+        // Try to delete the original message
+        try {
+          // Check if the bot has permission to manage messages
+          if (message.guild && bot && bot.user) {
+            const botMember = message.guild.members.cache.get(bot.user.id);
+            const channel = message.channel as TextChannel;
+            
+            if (botMember && botMember.permissionsIn(channel).has(PermissionFlagsBits.ManageMessages)) {
+              await message.delete();
+              log(`Deleted original ISO request from ${message.author.username}`, "discord-bot");
+            } else {
+              log(`Bot does not have permission to delete messages in #${channel.name}`, "discord-bot");
+            }
+          }
+        } catch (deleteError) {
+          log(`Failed to delete original ISO message: ${deleteError}`, "discord-bot");
+        }
       }
     }
   } catch (error) {
