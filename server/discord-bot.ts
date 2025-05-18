@@ -770,8 +770,27 @@ async function handleInteraction(interaction: Interaction) {
                                   message.content.match(/looking for .+?(\w[\w\s-]+\w)/i);
                 const itemName = itemMatch ? itemMatch[1].trim() : "(unknown item)";
                 
+                // Try to extract the original post content
+                // First remove all the instructional text from the DM message to get just the original content
+                let originalContent = "";
+                
+                // Try to extract the formatted request section
+                const contentMatch = message.content.match(/Your ISO request for.+?\n\n(.+?)(?:\n\nPlease select|$)/s);
+                if (contentMatch && contentMatch[1]) {
+                  originalContent = contentMatch[1].trim();
+                } else {
+                  // Fallback to looking for the original post pattern
+                  const fallbackMatch = message.content.match(/@[\w\s]+ is looking for.+?$/m);
+                  if (fallbackMatch) {
+                    originalContent = fallbackMatch[0].trim();
+                  } else {
+                    // Last resort fallback
+                    originalContent = "ISO request (content could not be extracted)";
+                  }
+                }
+                
                 // Create a cross-post message
-                const crosspostContent = `*[Cross-posted from #items-exchange]*\n${message.content.split('Please select a category')[0].trim()}`;
+                const crosspostContent = `*[Cross-posted from #items-exchange]*\n${originalContent}`;
                 
                 // Send to the category channel
                 const sentCategoryMessage = await categoryChannel.send({
