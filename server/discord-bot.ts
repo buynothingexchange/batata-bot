@@ -33,7 +33,7 @@ let isProcessingIsoRequest = false;
 function getArticle(noun: string): string {
   if (!noun) return "a"; // Default if noun is empty
   
-  // Common plural endings or plural words that don't need articles
+  // Common plural endings, mass nouns, or words that don't need articles
   const pluralPatterns = [
     /s$/i,             // Regular plurals ending in 's' (books, cars)
     /i$/i,             // Latin plurals (cacti, fungi)
@@ -52,7 +52,19 @@ function getArticle(noun: string): string {
     /tights$/i,        // Items that are always plural
     /pajamas$/i,       // Items that are always plural
     /clothes$/i,       // Items that are always plural
-    /underwear$/i      // Items that are always plural
+    /underwear$/i,     // Items that are always plural
+    /food$/i,          // Mass noun "food" doesn't need an article
+    /water$/i,         // Mass noun "water" doesn't need an article
+    /money$/i,         // Mass noun "money" doesn't need an article
+    /rice$/i,          // Mass noun "rice" doesn't need an article
+    /equipment$/i,     // Mass noun "equipment" doesn't need an article
+    /furniture$/i,     // Mass noun "furniture" doesn't need an article
+    /luggage$/i,       // Mass noun "luggage" doesn't need an article
+    /information$/i,   // Mass noun "information" doesn't need an article
+    /advice$/i,        // Mass noun "advice" doesn't need an article
+    /news$/i,          // Mass noun "news" doesn't need an article
+    /stuff$/i,         // General "stuff" doesn't need an article
+    /gear$/i           // "Gear" doesn't need an article
   ];
   
   // Check if the noun matches any plural patterns
@@ -845,25 +857,16 @@ async function processISORequest(message: Message): Promise<void> {
       analysis = await analyzeISORequest(message.author.username, message.content);
       
       // Build features list if available
-      let featuresText = "-Features:";
+      let featuresText = "";
       if (analysis.features && analysis.features.length > 0) {
-        featuresText = "-Features: " + analysis.features.join(", ");
-      }
-      
-      // Add urgency if available
-      const urgencyText = `-Urgency: ${analysis.urgency || "Not specified"}`;
-      
-      // Add tags if available
-      let tagsText = "-Tags:";
-      if (analysis.tags && analysis.tags.length > 0) {
-        tagsText = "-Tags: " + analysis.tags.join(", ");
+        featuresText = "\n-Features: " + analysis.features.join(", ");
       }
       
       // Determine the appropriate article
       const article = getArticle(analysis.item);
       
-      // Create a formatted response with proper user mention
-      formattedResponse = `<@${message.author.id}> is looking for ${article ? article + ' ' : ''}${analysis.item}\n${featuresText}\n${urgencyText}\n${tagsText}`;
+      // Create a simplified formatted response without tags and urgency
+      formattedResponse = `<@${message.author.id}> is looking for ${article ? article + ' ' : ''}${analysis.item}${featuresText}`;
       
       // Set up buttons for different categories
       const tagButtons = [];

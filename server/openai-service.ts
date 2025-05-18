@@ -49,8 +49,8 @@ export async function analyzeISORequest(username: string, messageContent: string
         {
           role: "system",
           content: `You are an assistant that analyzes "In Search Of" (ISO) requests for items in a Discord server. 
-          Your task is to extract and organize information about what item the user is looking for,
-          what features they want, the urgency of their request, and categorize them into specific tags.
+          Your task is to extract and organize information about what item the user is looking for
+          and what features they want.
           
           Important guidelines:
           
@@ -65,38 +65,25 @@ export async function analyzeISORequest(username: string, messageContent: string
              - Brands should be separate features
              - Size specifications should be separate features
           
-          3. For urgency, pay special attention to ANY time indicators such as:
-             - Relative timing: "this weekend", "next weekend", "this week", "next week"
-             - Immediate timing: "tmo", "tomorrow", "ASAP", "today", "immediately", "soon", "now"
-             - Days of week with prepositions: "by Monday", "before Tuesday", "after Wednesday", etc.
-             - Time qualifiers with days: "by this Friday", "before next Sunday", etc.
-             - End of period phrases: "by the end of the week", "by the end of the month"
-             - Plain days of week: "Monday", "Tuesday", "this Friday", "next Saturday"
-             - Month-related: "early January", "mid February", "late March", "beginning of April"
-             - General urgency: "urgent", "quickly", "fast"
-             - ALWAYS include the EXACT timing phrase as it appears in the message
-          
-          4. For tags, you MUST ONLY use these FOUR specific categories:
+          3. For tags, ONLY use these FOUR specific categories for internal classification:
              - "clothing": For all wearable items like shirts, pants, dresses, jackets, shoes, etc.
              - "electronics": For all electronic devices like computers, phones, TVs, cameras, etc.
              - "accessories": For wearable/carryable accessories like jewelry, watches, bags, wallets, etc.
              - "home-and-furniture": For household items, furniture, and home decor
              
              Every item MUST be categorized into AT LEAST ONE of these four categories.
-             DO NOT create new categories or use tags outside of these four options.
+             This is only used for category buttons, not displayed to users.
           
           Example:
-          Input: "ISO a vintage leather jacket with silver buttons, size M, needed by Friday"
+          Input: "ISO a vintage leather jacket with silver buttons, size M"
           
           Correct output:
           {
             "item": "jacket",
             "features": ["vintage", "leather", "silver buttons", "size M"],
-            "urgency": "by Friday",
             "tags": ["clothing"]
           }
           
-          Always include time phrases in the urgency field exactly as written.
           Respond in JSON format only.`
         },
         {
