@@ -952,35 +952,55 @@ async function handleInteraction(interaction: Interaction) {
         // Extract details from the DM message to identify the original channel message
         const dmMessageContent = interaction.message.content;
         
-        // Try to extract username and item from the DM message with improved pattern matching
-        // Handle both cases - with or without articles like "a", "an", or no article for plurals
-        let usernameMatch = null;
-        if (dmMessageContent.match(/When you've found this item/i)) {
-          // DM is to the requestor themselves
-          usernameMatch = interaction.user.username;
-        } else {
-          // Try to extract from message
-          const nameMatch = dmMessageContent.match(/@(\w+) is looking for/i);
-          if (nameMatch && nameMatch[1]) {
-            usernameMatch = nameMatch[1];
+        // Log the exact DM message we're trying to parse
+        log(`Fulfill button clicked, parsing DM message: "${dmMessageContent}"`, "discord-bot");
+
+        // Extract username - in the case of the "Fulfilled" button, it's always the user who clicked it
+        const username = interaction.user.username;
+        
+        // Extract the item using multiple approaches to be more robust
+        let item = "";
+        
+        // For "When you've found this item" format
+        if (dmMessageContent.includes("When you've found this item")) {
+          // This is the second DM, which doesn't directly mention the item
+          // We need to find the last ISO request from this user
+          item = "item"; // Generic fallback
+          log(`Using fallback item name for fulfill button from user ${username}`, "discord-bot");
+        } 
+        // Try to extract item from "ISO request for" format
+        else if (dmMessageContent.includes("ISO request for")) {
+          const requestMatch = dmMessageContent.match(/ISO request for "?([^"]+)"?/i);
+          if (requestMatch && requestMatch[1]) {
+            item = requestMatch[1].trim();
+            log(`Extracted item from ISO request format: "${item}"`, "discord-bot");
           }
         }
-        const username = usernameMatch || null;
-        
-        // Expanded pattern to extract the item, handling cases with or without articles
-        let itemText = "";
-        const withArticleMatch = dmMessageContent.match(/looking for (?:a|an) ([^.\n]+)/i);
-        const withoutArticleMatch = dmMessageContent.match(/looking for ([^.\n]+)/i);
-        
-        if (withArticleMatch) {
-            itemText = withArticleMatch[1].trim();
-        } else if (withoutArticleMatch) {
-            // Make sure we don't capture "a" or "an" as part of the item
-            itemText = withoutArticleMatch[1].trim().replace(/^(?:a|an)\s+/i, '');
+        // Try looking for pattern in message content
+        else {
+          let itemText = "";
+          const withArticleMatch = dmMessageContent.match(/looking for (?:a|an) ([^.\n]+)/i);
+          const withoutArticleMatch = dmMessageContent.match(/looking for ([^.\n]+)/i);
+          
+          if (withArticleMatch) {
+              itemText = withArticleMatch[1].trim();
+          } else if (withoutArticleMatch && withoutArticleMatch[1]) {
+              // Make sure we don't capture "a" or "an" as part of the item
+              itemText = withoutArticleMatch[1].trim().replace(/^(?:a|an)\s+/i, '');
+          }
+          
+          if (itemText) {
+            // Clean up any trailing periods
+            item = itemText.replace(/\.$/, '');
+            log(`Extracted item from looking for pattern: "${item}"`, "discord-bot");
+          }
         }
         
-        // Clean up any trailing periods
-        const item = itemText.replace(/\.$/, '');
+        // If we still don't have an item, set a default for logging purposes
+        if (!item) {
+          item = "unknown item";
+          log(`Could not extract item name from message, using fallback`, "discord-bot");
+        }
         
         // Find the formatted message in the items-exchange channel
         if (username && item && bot) {
@@ -1001,24 +1021,39 @@ async function handleInteraction(interaction: Interaction) {
                   // Get recent messages from the channel
                   const messages = await channel.messages.fetch({ limit: 50 });
                   
-                  // Look for a message that matches our request format
-                  // We need a more flexible matching approach to handle different article formats
-                  originalMessage = messages.find(msg => {
-                    // First check if the username matches
-                    if (!msg.content.includes(`@${username}`)) {
-                      return false;
-                    }
+                  // Look for messages by the bot that mention the user
+                  const userMessages = messages.filter(msg => {
+                    // Only consider messages sent by the bot
+                    if (!msg.author.bot) return false;
                     
-                    // Then check for the item with flexible article matching:
-                    // 1. With "a" article: "is looking for a jacket"
-                    // 2. With "an" article: "is looking for an apple"
-                    // 3. Without article (plurals): "is looking for scissors"
-                    return (
+                    // Check if the message mentions the user
+                    return msg.content.includes(`@${username}`);
+                  });
+                  
+                  // Log how many potential matches we found
+                  log(`Found ${userMessages.size} potential ISO requests from @${username} to check`, "discord-bot");
+                  
+                  // First try to find a perfect match with the item name
+                  if (item !== "item" && item !== "unknown item") {
+                    originalMessage = userMessages.find(msg => 
                       msg.content.includes(`is looking for a ${item}`) || 
                       msg.content.includes(`is looking for an ${item}`) || 
                       msg.content.includes(`is looking for ${item}`)
                     );
-                  });
+                    
+                    if (originalMessage) {
+                      log(`Found exact item match for "${item}"`, "discord-bot");
+                    }
+                  }
+                  
+                  // If we couldn't find a specific match, just use the most recent message for this user
+                  if (!originalMessage && userMessages.size > 0) {
+                    // Sort by timestamp (newest first) and get the first one
+                    const messagesArray = Array.from(userMessages.values());
+                    messagesArray.sort((a, b) => b.createdTimestamp - a.createdTimestamp);
+                    originalMessage = messagesArray[0];
+                    log(`Using most recent message for user @${username} as fallback`, "discord-bot");
+                  }
                   
                   if (originalMessage) {
                     // Create a new embed with green color to indicate fulfillment
