@@ -462,10 +462,13 @@ async function handleInteraction(interaction: Interaction) {
     }
     // Check if this is a fulfill button click
     else if (customId === 'fulfill:item') {
-      // Immediately acknowledge the interaction to prevent timeout
-      await interaction.deferReply({ ephemeral: true });
-      
       try {
+        // 1. IMMEDIATELY reply to the interaction to avoid the "Bot is thinking" message
+        await interaction.reply({
+          content: "Processing your request... This will mark your item as fulfilled across all channels.",
+          ephemeral: true
+        });
+        
         const username = interaction.user.username;
         log(`User ${username} clicked the Fulfilled button`, "discord-bot");
         
@@ -477,91 +480,146 @@ async function handleInteraction(interaction: Interaction) {
             name: "",
             iconURL: interaction.user.displayAvatarURL({ extension: 'png', size: 256 })
           });
-          
-        // Find and update all related posts
-        let messagesUpdated = 0;
         
-        if (bot) {
-          // Process all guilds
-          for (const guild of bot.guilds.cache.values()) {
-            // Get all relevant channels (exchanges and categories)
-            const exchangeChannels = guild.channels.cache.filter(
-              (ch: any) => ch.type === ChannelType.GuildText && 
-              ['items-exchange', 'accessories', 'electronics', 'clothing', 'home-and-furniture'].includes(ch.name)
-            ).map(ch => ch as TextChannel);
+        // 2. Process the updates in the background, without waiting to respond
+        // This ensures the user gets immediate feedback
+        setTimeout(async () => {
+          try {
+            let messagesUpdated = 0;
             
-            // Get the archive channel if it exists
-            const archiveChannel = guild.channels.cache.find(
-              (ch: any) => ch.type === ChannelType.GuildText && ch.name === 'archive'
-            ) as TextChannel | undefined;
-            
-            // Process each exchange channel
-            for (const channel of exchangeChannels) {
-              try {
-                // Get recent messages from the channel
-                const messages = await channel.messages.fetch({ limit: 30 });
+            if (bot) {
+              // Process one guild at a time to avoid overloading
+              const guilds = Array.from(bot.guilds.cache.values());
+              
+              for (const guild of guilds) {
+                // Only check the most important channels first - items-exchange
+                const mainChannel = guild.channels.cache.find(
+                  (ch: any) => ch.type === ChannelType.GuildText && ch.name === 'items-exchange'
+                ) as TextChannel | undefined;
                 
-                // Find messages that mention the user
-                const userMessages = messages.filter(msg => 
-                  msg.author.bot && 
-                  msg.content.includes(`@${username}`) &&
-                  !msg.embeds.some(embed => embed.description?.includes("fulfilled"))
-                );
+                // Get the archive channel if it exists
+                const archiveChannel = guild.channels.cache.find(
+                  (ch: any) => ch.type === ChannelType.GuildText && ch.name === 'archive'
+                ) as TextChannel | undefined;
                 
-                // Skip if no messages found
-                if (userMessages.size === 0) continue;
-                
-                // Process each message
-                for (const [_, message] of userMessages) {
+                if (mainChannel) {
                   try {
-                    // Archive the message first if we have an archive channel
-                    if (archiveChannel) {
-                      await archiveChannel.send({
-                        content: `${message.content}\n\n**This item was fulfilled by ${interaction.user}**`
-                      });
+                    // Only fetch a small number of messages for quicker response
+                    const messages = await mainChannel.messages.fetch({ limit: 15 });
+                    
+                    // Find messages that mention the user
+                    const userMessages = messages.filter(msg => 
+                      msg.author.bot && 
+                      msg.content.includes(`@${username}`) &&
+                      !msg.embeds.some(embed => embed.description?.includes("fulfilled"))
+                    );
+                    
+                    // Process each message
+                    for (const [_, message] of userMessages) {
+                      try {
+                        // Archive the message first
+                        if (archiveChannel) {
+                          await archiveChannel.send({
+                            content: `${message.content}\n\n**This item was fulfilled by ${interaction.user}**`
+                          });
+                        }
+                        
+                        // Replace the original with just the fulfilled embed
+                        await message.edit({
+                          content: "",
+                          embeds: [fulfilledEmbed]
+                        });
+                        
+                        messagesUpdated++;
+                      } catch (messageError) {
+                        log(`Error updating message: ${messageError}`, "discord-bot");
+                      }
                     }
-                    
-                    // Replace the original with just the fulfilled embed
-                    await message.edit({
-                      content: "",
-                      embeds: [fulfilledEmbed]
-                    });
-                    
-                    messagesUpdated++;
-                  } catch (messageError) {
-                    log(`Error updating message: ${messageError}`, "discord-bot");
+                  } catch (channelError) {
+                    log(`Error processing main channel: ${channelError}`, "discord-bot");
                   }
                 }
-              } catch (channelError) {
-                log(`Error processing channel ${channel.name}: ${channelError}`, "discord-bot");
+                
+                // Process category channels in the background
+                setTimeout(async () => {
+                  try {
+                    // Now process the category channels
+                    const categoryChannels = guild.channels.cache.filter(
+                      (ch: any) => ch.type === ChannelType.GuildText && 
+                      ['accessories', 'electronics', 'clothing', 'home-and-furniture'].includes(ch.name)
+                    ).map(ch => ch as TextChannel);
+                    
+                    for (const channel of categoryChannels) {
+                      try {
+                        // Get recent messages from the channel
+                        const messages = await channel.messages.fetch({ limit: 10 });
+                        
+                        // Find messages that mention the user
+                        const userMessages = messages.filter(msg => 
+                          msg.author.bot && 
+                          msg.content.includes(`@${username}`) &&
+                          !msg.embeds.some(embed => embed.description?.includes("fulfilled"))
+                        );
+                        
+                        // Process each message
+                        for (const [_, message] of userMessages) {
+                          try {
+                            // Replace with fulfilled embed
+                            await message.edit({
+                              content: "",
+                              embeds: [fulfilledEmbed]
+                            });
+                          } catch (messageError) {
+                            log(`Error updating category message: ${messageError}`, "discord-bot");
+                          }
+                        }
+                      } catch (channelError) {
+                        log(`Error processing category channel ${channel.name}: ${channelError}`, "discord-bot");
+                      }
+                    }
+                  } catch (error) {
+                    log(`Error in background category processing: ${error}`, "discord-bot");
+                  }
+                }, 500); // Delay category processing to prioritize main channel
               }
             }
+            
+            // Log the successful action
+            if (messagesUpdated > 0) {
+              try {
+                // Try to update the interaction but don't block on it
+                await interaction.editReply({
+                  content: `Success! Your item has been marked as fulfilled in ${messagesUpdated} places.`
+                });
+                
+                // Log the action
+                await storage.createLog({
+                  userId: interaction.user.id,
+                  username: interaction.user.username,
+                  command: "fulfill-button",
+                  channel: "multiple",
+                  status: "success",
+                  message: `User marked item as fulfilled (${messagesUpdated} messages updated)`
+                });
+              } catch (error) {
+                log(`Error updating reply after processing: ${error}`, "discord-bot");
+              }
+            }
+          } catch (backgroundError) {
+            log(`Error in background processing: ${backgroundError}`, "discord-bot");
           }
-        }
+        }, 100); // Start background processing after 100ms
         
-        // Update the user
-        if (messagesUpdated > 0) {
-          await interaction.editReply({
-            content: `Success! Your item has been marked as fulfilled and ${messagesUpdated} messages have been updated.`
-          });
-          
-          // Log the action
-          await storage.createLog({
-            userId: interaction.user.id,
-            username: interaction.user.username,
-            command: "fulfill-button",
-            channel: "multiple",
-            status: "success",
-            message: `User marked item as fulfilled (${messagesUpdated} messages updated)`
-          });
-        } else {
-          await interaction.editReply({
-            content: "I couldn't find any of your recent ISO requests to mark as fulfilled. They may have been deleted or are too old."
-          });
-        }
       } catch (error) {
         log(`Error handling fulfill button: ${error}`, "discord-bot");
-        await interaction.editReply("There was an error processing your request. Please try again later.");
+        try {
+          await interaction.reply({
+            content: "There was an error processing your request. Please try again.",
+            ephemeral: true
+          });
+        } catch (replyError) {
+          log(`Error sending error reply: ${replyError}`, "discord-bot");
+        }
       }
     }
   } catch (error) {
