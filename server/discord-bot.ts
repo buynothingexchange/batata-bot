@@ -733,50 +733,130 @@ async function handleInteraction(interaction: Interaction) {
         // Cross-post the message to the selected category channel
         if (interaction.message && bot) {
           const message = interaction.message;
-          const guild = interaction.guild;
           
-          if (guild) {
-            // Find the category channel
-            const categoryChannel = guild.channels.cache.find(
-              ch => ch.type === ChannelType.GuildText && 
-                   (ch as TextChannel).name === selectedCategory
-            ) as TextChannel;
+          // Check if this interaction is happening in DMs
+          const isDM = interaction.channel?.type === ChannelType.DM;
+          
+          if (isDM) {
+            // In DMs, we need to search all guilds for the appropriate channel
+            const guilds = Array.from(bot.guilds.cache.values());
+            let categoryChannel: TextChannel | null = null;
+            let foundGuild = null;
             
-            if (categoryChannel) {
-              // Create a copy of the message for the category channel
-              // Add an intro line to clarify this is a cross-post
-              const crosspostContent = `*[Cross-posted from #items-exchange by ${interaction.user}]*\n${message.content}`;
+            // Search all guilds for the right channel
+            for (const guild of guilds) {
+              const foundChannel = guild.channels.cache.find(
+                ch => ch.type === ChannelType.GuildText && 
+                     (ch as TextChannel).name === selectedCategory
+              ) as TextChannel;
               
-              // Send to the category channel
-              const sentCategoryMessage = await categoryChannel.send({
-                content: crosspostContent,
-                components: message.components as any
-              });
+              if (foundChannel) {
+                categoryChannel = foundChannel;
+                foundGuild = guild;
+                break;
+              }
+            }
+            
+            if (categoryChannel && foundGuild) {
+              // Now find the items-exchange channel to get the original message
+              const itemsExchangeChannel = foundGuild.channels.cache.find(
+                ch => ch.type === ChannelType.GuildText && 
+                     (ch as TextChannel).name === 'items-exchange'
+              ) as TextChannel;
               
-              // Confirm to the user
-              await interaction.reply({
-                content: `Your item has been cross-posted to #${selectedCategory}!`,
-                ephemeral: true // Only visible to the user who clicked
-              });
-              
-              log(`User ${interaction.user.username} manually cross-posted ISO request to #${categoryChannel.name}`, "discord-bot");
-              
-              // Log the cross-post
-              await storage.createLog({
-                userId: interaction.user.id,
-                username: interaction.user.username,
-                command: "manual-crosspost",
-                channel: categoryChannel.name,
-                status: "success",
-                message: `Manually cross-posted ISO request to #${categoryChannel.name}`,
-                messageId: sentCategoryMessage.id,
-              }).catch(err => log(`Error logging manual ISO cross-post: ${err}`, "discord-bot"));
+              if (itemsExchangeChannel) {
+                // Extract item from the DM message more accurately
+                const itemMatch = message.content.match(/Your ISO request for "(.+?)"/i) || 
+                                  message.content.match(/looking for .+?(\w[\w\s-]+\w)/i);
+                const itemName = itemMatch ? itemMatch[1].trim() : "(unknown item)";
+                
+                // Create a cross-post message
+                const crosspostContent = `*[Cross-posted from #items-exchange]*\n${message.content.split('Please select a category')[0].trim()}`;
+                
+                // Send to the category channel
+                const sentCategoryMessage = await categoryChannel.send({
+                  content: crosspostContent
+                });
+                
+                // Confirm to the user
+                await interaction.reply({
+                  content: `Your item "${itemName}" has been cross-posted to #${selectedCategory}!`,
+                  ephemeral: true
+                });
+                
+                log(`User ${interaction.user.username} cross-posted ISO request to #${categoryChannel.name} from DM`, "discord-bot");
+                
+                // Log the cross-post
+                await storage.createLog({
+                  userId: interaction.user.id,
+                  username: interaction.user.username,
+                  command: "dm-crosspost",
+                  channel: categoryChannel.name,
+                  status: "success",
+                  message: `Cross-posted ISO request to #${categoryChannel.name} from DM`,
+                  messageId: sentCategoryMessage.id,
+                }).catch(err => log(`Error logging DM ISO cross-post: ${err}`, "discord-bot"));
+              } else {
+                // Items-exchange channel not found
+                await interaction.reply({
+                  content: `I found the #${selectedCategory} channel, but couldn't locate the original items-exchange channel. Please contact an admin.`,
+                  ephemeral: true
+                });
+              }
             } else {
-              // Channel not found
+              // Category channel not found in any guild
               await interaction.reply({
-                content: `I couldn't find the #${selectedCategory} channel. Please contact an admin.`,
+                content: `I couldn't find the #${selectedCategory} channel on the server. Please contact an admin.`,
                 ephemeral: true
               });
+            }
+          } else {
+            // Normal guild interaction
+            const guild = interaction.guild;
+            
+            if (guild) {
+              // Find the category channel
+              const categoryChannel = guild.channels.cache.find(
+                ch => ch.type === ChannelType.GuildText && 
+                     (ch as TextChannel).name === selectedCategory
+              ) as TextChannel;
+              
+              if (categoryChannel) {
+                // Create a copy of the message for the category channel
+                // Add an intro line to clarify this is a cross-post
+                const crosspostContent = `*[Cross-posted from #items-exchange by ${interaction.user}]*\n${message.content}`;
+                
+                // Send to the category channel
+                const sentCategoryMessage = await categoryChannel.send({
+                  content: crosspostContent,
+                  components: message.components as any
+                });
+                
+                // Confirm to the user
+                await interaction.reply({
+                  content: `Your item has been cross-posted to #${selectedCategory}!`,
+                  ephemeral: true // Only visible to the user who clicked
+                });
+                
+                log(`User ${interaction.user.username} manually cross-posted ISO request to #${categoryChannel.name}`, "discord-bot");
+                
+                // Log the cross-post
+                await storage.createLog({
+                  userId: interaction.user.id,
+                  username: interaction.user.username,
+                  command: "manual-crosspost",
+                  channel: categoryChannel.name,
+                  status: "success",
+                  message: `Manually cross-posted ISO request to #${categoryChannel.name}`,
+                  messageId: sentCategoryMessage.id,
+                }).catch(err => log(`Error logging manual ISO cross-post: ${err}`, "discord-bot"));
+              } else {
+                // Channel not found
+                await interaction.reply({
+                  content: `I couldn't find the #${selectedCategory} channel. Please contact an admin.`,
+                  ephemeral: true
+                });
+              }
             }
           }
         }
