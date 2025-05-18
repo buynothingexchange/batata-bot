@@ -1152,18 +1152,43 @@ async function handleInteraction(interaction: Interaction) {
                   }
                   
                   if (originalMessage) {
-                    // Create a new embed with green color to indicate fulfillment
+                    // Create a compact embed with green color to indicate fulfillment
                     const fulfilledEmbed = new EmbedBuilder()
                       .setColor(0x57F287) // Green color (Discord success color)
-                      .setTitle("ISO Request Fulfilled")
-                      .setDescription(`This request has been marked as fulfilled by ${interaction.user}`)
-                      .setTimestamp()
-                      .setThumbnail(interaction.user.displayAvatarURL({ extension: 'png', size: 128 }));
+                      .setDescription(`✅ Item fulfilled by ${interaction.user}`)
+                      .setAuthor({
+                        name: interaction.user.username,
+                        iconURL: interaction.user.displayAvatarURL({ extension: 'png', size: 64 })
+                      });
                     
-                    // Edit the original message to include the embed
+                    // Save the original content for archiving
+                    const originalContent = originalMessage.content;
+                    
+                    // First, archive the original message
+                    try {
+                      // Find the archive channel
+                      const archiveChannel = guild.channels.cache.find(
+                        (ch: any) => ch.type === ChannelType.GuildText && ch.name === 'archive'
+                      ) as TextChannel;
+                      
+                      if (archiveChannel) {
+                        // Send to archive with original content + fulfilled notice
+                        await archiveChannel.send({
+                          content: `${originalContent}\n\n**This item was fulfilled by ${interaction.user}**`,
+                          embeds: [fulfilledEmbed]
+                        });
+                        log(`Archived fulfilled ISO request in #archive channel`, "discord-bot");
+                      } else {
+                        log(`Could not find #archive channel for archiving fulfilled request`, "discord-bot");
+                      }
+                    } catch (archiveError) {
+                      log(`Error archiving fulfilled request: ${archiveError}`, "discord-bot");
+                    }
+                    
+                    // Edit the original message to ONLY include the embed (no original content)
                     try {
                       await originalMessage.edit({
-                        content: originalMessage.content,
+                        content: "",
                         embeds: [fulfilledEmbed]
                       });
                       log(`Successfully marked message as fulfilled in items-exchange`, "discord-bot");
@@ -1175,14 +1200,15 @@ async function handleInteraction(interaction: Interaction) {
                         username,
                         item,
                         fulfilledEmbed,
-                        interaction.user
+                        interaction.user,
+                        true // New parameter indicating to remove original content
                       );
                     } catch (editError) {
                       log(`Error updating original message to show fulfilled: ${editError}`, "discord-bot");
                       
                       // Try an alternative approach - reply to the original message
                       await originalMessage.reply({
-                        content: '**This request has been marked as fulfilled**',
+                        content: '',
                         embeds: [fulfilledEmbed]
                       });
                       log(`Added fulfilled reply to original message as fallback`, "discord-bot");
@@ -1195,7 +1221,8 @@ async function handleInteraction(interaction: Interaction) {
                           username,
                           item,
                           fulfilledEmbed,
-                          interaction.user
+                          interaction.user,
+                          true // Remove content parameter
                         );
                       } catch (crossPostError) {
                         log(`Error updating cross-posted messages: ${crossPostError}`, "discord-bot");
@@ -1204,7 +1231,7 @@ async function handleInteraction(interaction: Interaction) {
                     
                     // Send a confirmation message to the user
                     await interaction.reply({
-                      content: "You've marked this item as fulfilled! The request in the items-exchange channel has been updated with a green notification.",
+                      content: "You've marked this item as fulfilled! The original request has been archived and replaced with a compact fulfillment notice in all channels.",
                       ephemeral: true // Only visible to the user who clicked the button
                     });
                     
@@ -1807,7 +1834,8 @@ async function updateCrossPostedMessages(
   username: string, 
   item: string,
   fulfilledEmbed: EmbedBuilder,
-  fulfilledBy: User
+  fulfilledBy: User,
+  removeContent: boolean = false
 ): Promise<void> {
   try {
     // Skip the items-exchange channel as we've already updated that
@@ -1857,8 +1885,11 @@ async function updateCrossPostedMessages(
           const crossPostsArray = Array.from(crossPostedMessages.values());
           for (const crossPost of crossPostsArray) {
             try {
+              // If removeContent is true, remove the original message content
+              const newContent = removeContent ? "" : crossPost.content;
+              
               await crossPost.edit({
-                content: crossPost.content,
+                content: newContent,
                 embeds: [fulfilledEmbed]
               });
               log(`Updated fulfilled status on cross-post in #${textChannel.name}`, "discord-bot");
@@ -1867,14 +1898,15 @@ async function updateCrossPostedMessages(
               
               // Try the reply approach as fallback
               await crossPost.reply({
-                content: `**This request has been marked as fulfilled by ${fulfilledBy}**`,
+                content: ``,
                 embeds: [
                   new EmbedBuilder()
                     .setColor(0x57F287)
-                    .setTitle("ISO Request Fulfilled")
-                    .setDescription(`This request has been marked as fulfilled by ${fulfilledBy}`)
-                    .setTimestamp()
-                    .setThumbnail(fulfilledBy.displayAvatarURL({ extension: 'png', size: 128 }))
+                    .setDescription(`✅ Item fulfilled by ${fulfilledBy}`)
+                    .setAuthor({
+                      name: fulfilledBy.username,
+                      iconURL: fulfilledBy.displayAvatarURL({ extension: 'png', size: 64 })
+                    })
                 ]
               });
               log(`Added fulfilled reply to cross-post in #${textChannel.name} as fallback`, "discord-bot");
