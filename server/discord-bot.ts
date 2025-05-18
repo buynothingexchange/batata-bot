@@ -765,37 +765,90 @@ async function handleInteraction(interaction: Interaction) {
               ) as TextChannel;
               
               if (itemsExchangeChannel) {
-                // Extract item from the DM message more accurately
-                const itemMatch = message.content.match(/Your ISO request for "(.+?)"/i) || 
-                                  message.content.match(/looking for .+?(\w[\w\s-]+\w)/i);
-                const itemName = itemMatch ? itemMatch[1].trim() : "(unknown item)";
-                
-                // Try to extract the original post content
-                // First remove all the instructional text from the DM message to get just the original content
-                let originalContent = "";
-                
-                // Try to extract the formatted request section - avoid using 's' flag for compatibility
-                const contentMatch = message.content.match(/Your ISO request for[\s\S]+?\n\n([\s\S]+?)(?:\n\nPlease select|$)/);
-                if (contentMatch && contentMatch[1]) {
-                  originalContent = contentMatch[1].trim();
-                } else {
-                  // Fallback to looking for the original post pattern
-                  const fallbackMatch = message.content.match(/@[\w\s]+ is looking for.+?$/m);
-                  if (fallbackMatch) {
-                    originalContent = fallbackMatch[0].trim();
+                try {
+                  // Get the username from the interaction
+                  const username = interaction.user.username;
+                  
+                  // Extract item from the DM message more accurately
+                  const itemMatch = message.content.match(/Your ISO request for "(.+?)"/i) || 
+                                    message.content.match(/looking for .+?(\w[\w\s-]+\w)/i);
+                  const itemName = itemMatch ? itemMatch[1].trim() : "(unknown item)";
+                  
+                  // Search for the original message in the items-exchange channel
+                  const messages = await itemsExchangeChannel.messages.fetch({ limit: 50 });
+                  
+                  // Find the original message
+                  const originalMessage = messages.find(msg => {
+                    // Must be from the bot
+                    if (!msg.author.bot) return false;
+                    
+                    // Must mention the user
+                    if (!msg.content.includes(`@${username}`)) return false;
+                    
+                    // Check for the item with flexible article matching
+                    return (
+                      msg.content.includes(`is looking for a ${itemName}`) || 
+                      msg.content.includes(`is looking for an ${itemName}`) || 
+                      msg.content.includes(`is looking for ${itemName}`)
+                    );
+                  });
+                  
+                  if (originalMessage) {
+                    // We found the original message, copy it to the category channel
+                    log(`Found original message for cross-posting to #${selectedCategory}`, "discord-bot");
+                    
+                    // Create a cross-post message
+                    const crosspostContent = `*[Cross-posted from #items-exchange]*\n${originalMessage.content}`;
+                    
+                    // Send to the category channel with the same content as the original
+                    const sentCategoryMessage = await categoryChannel.send({
+                      content: crosspostContent
+                    });
+                    
+                    log(`Successfully cross-posted original message to #${selectedCategory}`, "discord-bot");
                   } else {
-                    // Last resort fallback
-                    originalContent = "ISO request (content could not be extracted)";
+                    // If we can't find the original message, use what we can extract from the DM
+                    log(`Could not find original message, using content from DM`, "discord-bot");
+                    
+                    // Try to extract the formatted request section - avoid using 's' flag for compatibility
+                    let originalContent = "";
+                    const contentMatch = message.content.match(/Your ISO request for[\s\S]+?\n\n([\s\S]+?)(?:\n\nPlease select|$)/);
+                    if (contentMatch && contentMatch[1]) {
+                      originalContent = contentMatch[1].trim();
+                    } else {
+                      // Fallback to looking for the original post pattern
+                      const fallbackMatch = message.content.match(/@[\w\s]+ is looking for.+?$/m);
+                      if (fallbackMatch) {
+                        originalContent = fallbackMatch[0].trim();
+                      } else {
+                        // Last resort fallback
+                        originalContent = `@${username} is looking for ${itemName}`;
+                      }
+                    }
+                    
+                    // Create a cross-post message
+                    const crosspostContent = `*[Cross-posted from #items-exchange]*\n${originalContent}`;
+                    
+                    // Send to the category channel
+                    const sentCategoryMessage = await categoryChannel.send({
+                      content: crosspostContent
+                    });
+                    
+                    log(`Cross-posted using extracted content to #${selectedCategory}`, "discord-bot");
                   }
+                } catch (searchError) {
+                  log(`Error searching for original message: ${searchError}`, "discord-bot");
+                  
+                  // Fall back to a basic cross-post
+                  const basicContent = `*[Cross-posted from #items-exchange]*\n@${interaction.user.username} is looking for an item. (Original content could not be retrieved)`;
+                  
+                  // Send to the category channel
+                  const sentCategoryMessage = await categoryChannel.send({
+                    content: basicContent
+                  });
+                  
+                  log(`Sent basic cross-post due to error: ${searchError}`, "discord-bot");
                 }
-                
-                // Create a cross-post message
-                const crosspostContent = `*[Cross-posted from #items-exchange]*\n${originalContent}`;
-                
-                // Send to the category channel
-                const sentCategoryMessage = await categoryChannel.send({
-                  content: crosspostContent
-                });
                 
                 // Confirm to the user
                 await interaction.reply({
