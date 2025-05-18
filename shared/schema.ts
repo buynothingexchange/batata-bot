@@ -20,16 +20,12 @@ export type User = typeof users.$inferSelect;
 // Bot Configuration schema
 export const botConfig = pgTable("bot_config", {
   id: serial("id").primaryKey(),
-  commandTrigger: text("command_trigger").notNull().default("!claimed"),
-  reactionEmoji: text("reaction_emoji").notNull().default("✅"),
   webhookUrl: text("webhook_url"),
   token: text("token"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const insertBotConfigSchema = createInsertSchema(botConfig).pick({
-  commandTrigger: true,
-  reactionEmoji: true,
   webhookUrl: true,
   token: true,
 });

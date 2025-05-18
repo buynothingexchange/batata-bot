@@ -316,91 +316,11 @@ async function handleMessage(message: Message) {
       if (message.mentions.has(bot?.user as User) && 
           /\b(hi|hello|hey|howdy|hola|greetings|yo|sup)\b/i.test(message.content)) {
         log(`Bot was greeted by ${message.author.username}`, "discord-bot");
-        await message.reply("Hello! I'm here to help with ISO requests, claimed items, and resolutions.");
+        await message.reply("Hello! I'm here to help with ISO requests.");
         return;
       }
       
-      // Check for claimed command that references another message
-      if (message.reference && message.content.toLowerCase().includes(config.commandTrigger)) {
-        try {
-          // Fetch the message being replied to
-          const referencedMessage = await message.channel.messages.fetch(message.reference.messageId as string);
-          
-          // Check if the referenced message contains an image/attachment
-          if (referencedMessage.attachments.size > 0 || 
-              referencedMessage.embeds.some(embed => embed.image || embed.thumbnail)) {
-            log(`${config.commandTrigger} command used by ${message.author.username} on a message with image/attachment`, "discord-bot");
-            
-            // Add the claimed emoji reaction
-            try {
-              await referencedMessage.react("<:claimed:1358472533304676473>");
-            } catch (emojiError) {
-              log(`Error adding claimed emoji: ${emojiError}`, "discord-bot");
-              await referencedMessage.react("✅");
-            }
-            
-            let attributionUser = message.author;
-            
-            // Check if someone is mentioned in the claim message
-            if (message.mentions.users.size > 0) {
-              // Get the first mentioned user
-              attributionUser = message.mentions.users.first() as User;
-            }
-            
-            // Create a simple embed to attribute the claim
-            const claimEmbed = new EmbedBuilder()
-              .setColor(0x0099FF)
-              .setDescription(`Claimed by ${attributionUser}`);
-            
-            // Reply to the original message with the embed
-            await referencedMessage.reply({ embeds: [claimEmbed] });
-            
-            // Record this action
-            commandsProcessed++;
-          }
-        } catch (replyError) {
-          log(`Error processing ${config.commandTrigger} command: ${replyError}`, "discord-bot");
-        }
-      }
-      
-      // Check for resol command that references another message
-      if (message.reference && message.content.toLowerCase().includes("!resol")) {
-        try {
-          // Fetch the message being replied to
-          const referencedMessage = await message.channel.messages.fetch(message.reference.messageId as string);
-          
-          log(`!resol command used by ${message.author.username} on a message`, "discord-bot");
-          
-          // Add the resol emoji reaction
-          try {
-            await referencedMessage.react("<:resol:1358566610973102130>");
-          } catch (emojiError) {
-            log(`Error adding resol emoji: ${emojiError}`, "discord-bot");
-            await referencedMessage.react("🔄");
-          }
-          
-          let attributionUser = message.author;
-          
-          // Check if someone is mentioned in the resol message
-          if (message.mentions.users.size > 0) {
-            // Get the first mentioned user
-            attributionUser = message.mentions.users.first() as User;
-          }
-          
-          // Create a simple embed to attribute the resolution
-          const resolEmbed = new EmbedBuilder()
-            .setColor(0x00FF99)
-            .setDescription(`Resolved by ${attributionUser}`);
-          
-          // Reply to the original message with the embed
-          await referencedMessage.reply({ embeds: [resolEmbed] });
-          
-          // Record this action
-          commandsProcessed++;
-        } catch (replyError) {
-          log(`Error processing !resol command: ${replyError}`, "discord-bot");
-        }
-      }
+      // Note: !claimed and !resol commands have been removed for streamlining
     }
   } catch (error) {
     log(`Error handling message: ${error}`, "discord-bot");
