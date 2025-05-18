@@ -1166,6 +1166,16 @@ async function handleInteraction(interaction: Interaction) {
                         embeds: [fulfilledEmbed]
                       });
                       log(`Successfully marked message as fulfilled in items-exchange`, "discord-bot");
+                      
+                      // Now update any cross-posted copies in category channels
+                      await updateCrossPostedMessages(
+                        guild,
+                        originalMessage,
+                        username,
+                        item,
+                        fulfilledEmbed,
+                        interaction.user
+                      );
                     } catch (editError) {
                       log(`Error updating original message to show fulfilled: ${editError}`, "discord-bot");
                       
@@ -1175,6 +1185,20 @@ async function handleInteraction(interaction: Interaction) {
                         embeds: [fulfilledEmbed]
                       });
                       log(`Added fulfilled reply to original message as fallback`, "discord-bot");
+                      
+                      // Still try to update cross-posted copies in category channels
+                      try {
+                        await updateCrossPostedMessages(
+                          guild,
+                          originalMessage,
+                          username,
+                          item,
+                          fulfilledEmbed,
+                          interaction.user
+                        );
+                      } catch (crossPostError) {
+                        log(`Error updating cross-posted messages: ${crossPostError}`, "discord-bot");
+                      }
                     }
                     
                     // Send a confirmation message to the user
@@ -1828,7 +1852,9 @@ async function updateCrossPostedMessages(
           log(`Found ${crossPostedMessages.size} cross-posts in #${textChannel.name} to mark as fulfilled`, "discord-bot");
           
           // Update each cross-posted message with the fulfilled status
-          for (const [_, crossPost] of crossPostedMessages) {
+          // Use Array.from to properly iterate through the collection
+          const crossPostsArray = Array.from(crossPostedMessages.values());
+          for (const crossPost of crossPostsArray) {
             try {
               await crossPost.edit({
                 content: crossPost.content,
