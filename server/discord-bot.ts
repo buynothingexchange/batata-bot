@@ -684,8 +684,78 @@ async function handleInteraction(interaction: Interaction) {
     // Get the button's custom ID
     const customId = interaction.customId;
     
+    // Check if this is a category selection button
+    if (customId.startsWith('channel:')) {
+      // Extract the selected category from the button ID
+      const selectedCategory = customId.replace('channel:', '');
+      
+      try {
+        // Cross-post the message to the selected category channel
+        if (interaction.message && bot) {
+          const message = interaction.message;
+          const guild = interaction.guild;
+          
+          if (guild) {
+            // Find the category channel
+            const categoryChannel = guild.channels.cache.find(
+              ch => ch.type === ChannelType.GuildText && 
+                   (ch as TextChannel).name === selectedCategory
+            ) as TextChannel;
+            
+            if (categoryChannel) {
+              // Create a copy of the message for the category channel
+              // Add an intro line to clarify this is a cross-post
+              const crosspostContent = `*[Cross-posted from #items-exchange by ${interaction.user}]*\n${message.content}`;
+              
+              // Send to the category channel
+              const sentCategoryMessage = await categoryChannel.send({
+                content: crosspostContent,
+                components: message.components as any
+              });
+              
+              // Confirm to the user
+              await interaction.reply({
+                content: `Your item has been cross-posted to #${selectedCategory}!`,
+                ephemeral: true // Only visible to the user who clicked
+              });
+              
+              log(`User ${interaction.user.username} manually cross-posted ISO request to #${categoryChannel.name}`, "discord-bot");
+              
+              // Log the cross-post
+              await storage.createLog({
+                userId: interaction.user.id,
+                username: interaction.user.username,
+                command: "manual-crosspost",
+                channel: categoryChannel.name,
+                status: "success",
+                message: `Manually cross-posted ISO request to #${categoryChannel.name}`,
+                messageId: sentCategoryMessage.id,
+              }).catch(err => log(`Error logging manual ISO cross-post: ${err}`, "discord-bot"));
+            } else {
+              // Channel not found
+              await interaction.reply({
+                content: `I couldn't find the #${selectedCategory} channel. Please contact an admin.`,
+                ephemeral: true
+              });
+            }
+          }
+        }
+      } catch (error) {
+        log(`Error handling category button click: ${error}`, "discord-bot");
+        
+        // Let the user know something went wrong
+        try {
+          await interaction.reply({
+            content: "Sorry, there was an error processing your category selection.",
+            ephemeral: true
+          });
+        } catch (replyError) {
+          log(`Error replying to interaction: ${replyError}`, "discord-bot");
+        }
+      }
+    }
     // Check if this is a fulfill button click
-    if (customId === 'fulfill:item') {
+    else if (customId === 'fulfill:item') {
       try {
         // Extract details from the DM message to identify the original channel message
         const dmMessageContent = interaction.message.content;
@@ -1663,12 +1733,14 @@ async function processISORequest(message: Message): Promise<void> {
       }
       
       // Create the standardized REQUEST format template with the extracted information
-      formattedResponse = `@${message.author.username} is looking for a ${analysis.item}.\n${featuresText}\n${urgencyText}\n${tagsText}`;
+      // Omit the Tags section as user will self-categorize
+      formattedResponse = `@${message.author.username} is looking for a ${analysis.item}.\n${featuresText}\n${urgencyText}\n-Please select a category below:`;
       
-      // Create buttons for relevant tags/categories
-      tagButtons = createTagButtons(analysis.item, analysis.features, analysis.tags);
+      // Create buttons for all four main categories (no AI determination)
+      const allCategories = ['clothing', 'electronics', 'accessories', 'home-and-furniture'];
+      tagButtons = createTagButtons("", [], allCategories);
       
-      log(`AI-formatted ISO request for ${message.author.username} in #items-exchange: ${analysis.item}`, "discord-bot");
+      log(`Formatted ISO request for ${message.author.username} in #items-exchange: ${analysis.item}`, "discord-bot");
       
       // Mark as successfully processed by AI
       isoRequestProcessed = true;
@@ -1682,11 +1754,12 @@ async function processISORequest(message: Message): Promise<void> {
       const features = [];
       
       // Basic extraction - just use the text after "ISO" as the item
-      // Format the response with minimal formatting
-      formattedResponse = `@${message.author.username} is looking for a ${item}.\n-Features: \n-Urgency: Not specified\n-Tags:`;
+      // Format the response with minimal formatting and prompt for category selection
+      formattedResponse = `@${message.author.username} is looking for a ${item}.\n-Features: \n-Urgency: Not specified\n-Please select a category below:`;
       
-      // Create buttons based on the item text
-      tagButtons = createTagButtons(item, [], []);
+      // Create buttons for all four main categories for user to choose from
+      const allCategories = ['clothing', 'electronics', 'accessories', 'home-and-furniture'];
+      tagButtons = createTagButtons("", [], allCategories);
       
       log(`Fallback formatted ISO request for ${message.author.username} in #items-exchange: ${item}`, "discord-bot");
       
@@ -1695,7 +1768,7 @@ async function processISORequest(message: Message): Promise<void> {
         item: item,
         features: [],
         urgency: "Not specified",
-        tags: ["home-and-furniture"] // Default fallback category
+        tags: [] // No default category - user will select
       };
       
       // Mark as processed with fallback method
@@ -1714,9 +1787,11 @@ async function processISORequest(message: Message): Promise<void> {
         
         log(`Sent formatted ISO request in main channel #${channelName}`, "discord-bot");
         
-        // Now cross-post to appropriate category channels if we have tags and this is in a guild
-        if (message.guild && analysis && analysis.tags && analysis.tags.length > 0) {
-          for (const categoryTag of analysis.tags) {
+        // We'll skip automatic cross-posting since users will choose categories themselves by clicking buttons
+        // Cross-posting will happen when the user clicks on category buttons
+        if (false) { // This effectively disables this code block
+          // Keep code structure for possible future use
+          for (const categoryTag of []) {
             try {
               // Clean up the tag name to match potential channel names
               // Convert "home-and-furniture" to "home-and-furniture" or "home-furniture" format
