@@ -1048,36 +1048,32 @@ async function handleInteraction(interaction: Interaction) {
         // First acknowledge the interaction to prevent timeout
         await interaction.deferReply({ ephemeral: true });
         
-        // Log action and create embed
+        // Get the username of who clicked the button
         const username = interaction.user.username;
         log(`User ${username} clicked the Fulfilled button`, "discord-bot");
         
+        // Create a simple, clean fulfilled embed
         const fulfilledEmbed = new EmbedBuilder()
           .setColor(0x57F287) // Discord success color (green)
           .setDescription(`This item has been marked as fulfilled by ${interaction.user}`)
           .setAuthor({
             name: "",
-            iconURL: interaction.user.displayAvatarURL({ extension: 'png', size: 256 }),
-            url: `https://discord.com/users/${interaction.user.id}`
+            iconURL: interaction.user.displayAvatarURL({ extension: 'png', size: 256 })
           });
         
         // Tell the user we're working on it
-        await interaction.editReply({
-          content: "Processing your request..."
+        await interaction.editReply({ 
+          content: "Processing your request..." 
         });
         
-        let updatedCount = 0;
+        let foundMessages = false;
         
-        // Only process if the bot is available
+        // Only proceed if the bot is available
         if (bot) {
-          // COMPLETELY NEW IMPLEMENTATION
           // Get all guilds the bot is in
           const guilds = Array.from(bot.guilds.cache.values());
-          let messagesFound = false;
           
-          try {
-            
-            for (const guild of guilds) {
+          for (const guild of guilds) {
               // Look for the items-exchange channel
               const channel = guild.channels.cache.find(
                 (ch: any) => ch.type === ChannelType.GuildText && 
@@ -2207,26 +2203,27 @@ async function processISORequest(message: Message): Promise<void> {
     return;
   }
   
-  // Check for duplicate by looking at the last 10 processed messages
-  // If we've already processed this exact message, skip it
+  // Check for duplicates to prevent processing the same message twice
   try {
-    const messages = await message.channel.messages.fetch({ limit: 10 });
-    const botMessages = messages.filter(msg => 
+    const recentMessages = await message.channel.messages.fetch({ limit: 20 });
+    
+    // Look for any bot messages mentioning this user in the last 2 minutes
+    const authorId = message.author.id;
+    const authorMentions = recentMessages.filter(msg => 
       msg.author.bot && 
-      msg.mentions.users.has(message.author.id) &&
-      // Check if the mention is from within the last 5 minutes
-      (Date.now() - msg.createdTimestamp < 5 * 60 * 1000)
+      msg.mentions.users.has(authorId) &&
+      (Date.now() - msg.createdTimestamp < 2 * 60 * 1000)
     );
     
-    if (botMessages.size > 0) {
-      log(`Possible duplicate ISO request detected for ${message.author.username}, ignoring...`, "discord-bot");
+    if (authorMentions.size > 0) {
+      log(`Duplicate ISO request detected for ${message.author.username}, ignoring...`, "discord-bot");
       return;
     }
   } catch (err) {
     log(`Error checking for duplicate ISO requests: ${err}`, "discord-bot");
   }
   
-  // Add extra debugging for this particular message
+  // Add debugging information
   log(`Processing NEW ISO request: ${message.id} from ${message.author.username} (messageContent: "${message.content.substring(0, 50)}...")`, "discord-bot");
   
   let isoRequestProcessed = false;
