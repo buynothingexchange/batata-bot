@@ -1157,7 +1157,8 @@ async function handleInteraction(interaction: Interaction) {
                       .setColor(0x57F287) // Green color (Discord success color)
                       .setTitle("ISO Request Fulfilled")
                       .setDescription(`This request has been marked as fulfilled by ${interaction.user}`)
-                      .setTimestamp();
+                      .setTimestamp()
+                      .setThumbnail(interaction.user.displayAvatarURL({ extension: 'png', size: 128 }));
                     
                     // Edit the original message to include the embed
                     try {
@@ -2191,6 +2192,11 @@ async function processISORequest(message: Message): Promise<void> {
   try {
     // Attempt to process with OpenAI first
     try {
+      // Check if OpenAI API key is available
+      if (!process.env.OPENAI_API_KEY) {
+        throw new Error("OpenAI API key is not configured");
+      }
+      
       // Analyze the ISO request using OpenAI
       analysis = await analyzeISORequest(message.author.username, message.content);
       
@@ -2226,12 +2232,11 @@ async function processISORequest(message: Message): Promise<void> {
       isoRequestProcessed = true;
     } catch (openaiError) {
       // OpenAI attempt failed, log it
-      log(`Error formatting ISO request with OpenAI: ${openaiError}`, "discord-bot");
+      log(`Error analyzing ISO request with OpenAI: ${openaiError}`, "discord-bot");
       
       // Fall back to our simple extraction method
       const requestText = message.content.trim().substring(3).trim();
       let item = requestText;
-      const features = [];
       
       // Basic extraction - just use the text after "ISO" as the item
       
@@ -2241,6 +2246,9 @@ async function processISORequest(message: Message): Promise<void> {
       
       // Format the response with minimal formatting, without category prompt
       formattedResponse = `@${message.author.username} is looking for ${articlePrefix}${item}.\n-Features: \n-Urgency: Not specified`;
+      
+      // Set isoRequestProcessed to true to continue with the rest of the flow
+      isoRequestProcessed = true;
       
       // No buttons in the public message
       tagButtons = [];
