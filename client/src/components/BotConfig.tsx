@@ -1,11 +1,8 @@
-import { useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface BotConfigProps {
   config: {
-    commandTrigger: string;
-    reactionEmoji: string;
     permissions: {
       manageMessages: boolean;
       addReactions: boolean;
@@ -32,46 +29,16 @@ interface BotConfigProps {
     };
   } | undefined;
   isStatusLoading: boolean;
-  onUpdateConfig: (config: { commandTrigger: string; reactionEmoji: string }) => void;
   onRestartBot: () => void;
 }
-
-const COMMON_EMOJIS = ["✅", "⭐", "🎨", "🖌️", "👏", "❤️", "👍", "🔥", "😀", "😂"];
 
 const BotConfig = ({ 
   config, 
   isLoading, 
   botStatus, 
   isStatusLoading,
-  onUpdateConfig, 
   onRestartBot 
 }: BotConfigProps) => {
-  const [commandTrigger, setCommandTrigger] = useState(config?.commandTrigger || "!claimed");
-  const [reactionEmoji, setReactionEmoji] = useState(config?.reactionEmoji || "<:claimed:1358472533304676473>");
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  
-  // Validate and sanitize the emoji input
-  const validateCustomEmoji = (emoji: string): boolean => {
-    // Standard emoji format
-    if (emoji.length === 1 || emoji.length === 2) return true;
-    
-    // Custom emoji format <:name:id>
-    const customEmojiRegex = /^<:[a-zA-Z0-9_]+:[0-9]+>$/;
-    return customEmojiRegex.test(emoji);
-  };
-
-  const handleSaveChanges = () => {
-    // Make sure emoji is valid format
-    if (!validateCustomEmoji(reactionEmoji)) {
-      alert("Invalid emoji format. Please use a standard emoji or Discord custom emoji format (<:name:id>)");
-      return;
-    }
-    
-    onUpdateConfig({
-      commandTrigger,
-      reactionEmoji
-    });
-  };
   
   if (isLoading || isStatusLoading) {
     return (
@@ -108,15 +75,15 @@ const BotConfig = ({
           </div>
         </div>
         
-        {/* Reaction Configuration Skeleton */}
+        {/* Features Skeleton */}
         <div className="mb-6">
-          <h4 className="text-sm uppercase text-[#B9BBBE] font-bold mb-2">Reaction Settings</h4>
+          <h4 className="text-sm uppercase text-[#B9BBBE] font-bold mb-2">Bot Features</h4>
           <div className="bg-[#36393f] rounded-md p-3">
-            <Skeleton className="h-4 w-32 mb-1" />
-            <Skeleton className="h-10 w-full mb-3" />
-            <Skeleton className="h-4 w-32 mb-1" />
-            <Skeleton className="h-10 w-full mb-3" />
-            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-4 w-full mb-1" />
+            <Skeleton className="h-4 w-full mb-1" />
+            <Skeleton className="h-4 w-full mb-1" />
+            <Skeleton className="h-4 w-full mb-1" />
+            <Skeleton className="h-4 w-full mb-1" />
           </div>
         </div>
       </div>
@@ -227,114 +194,20 @@ const BotConfig = ({
       
       {/* Command Information */}
       <div className="mb-6">
-        <h4 className="text-sm uppercase text-[#B9BBBE] font-bold mb-2">Bot Commands</h4>
+        <h4 className="text-sm uppercase text-[#B9BBBE] font-bold mb-2">Bot Features</h4>
         <div className="bg-[#36393f] rounded-md p-3">
           <div className="mb-3">
             <div className="text-sm text-[#B9BBBE] mb-3">
-              <p className="mb-2">Batata supports two commands:</p>
-              <p className="flex items-center mb-1">
-                <span className="text-[#5865F2] font-bold mr-2">{commandTrigger}</span>
-                <span>- Marks an <span className="underline">image</span> as claimed with {reactionEmoji}</span>
-              </p>
-              <p className="flex items-center">
-                <span className="text-[#57F287] font-bold mr-2">!resol</span>
-                <span>- Marks <span className="underline">any message</span> as resolved with <span className="text-white">{"<:resol:1358566610973102130>"}</span></span>
-              </p>
-              <p className="mt-3 text-xs text-[#B9BBBE]">The !claimed command only works with images, while !resol works with all message types.</p>
-              <p className="mt-2">Add @username mentions to attribute claims and resolutions in embeds.</p>
+              <p className="mb-2">Batata now focuses exclusively on:</p>
+              <ul className="list-disc pl-5 space-y-2">
+                <li>Processing "ISO" (In Search Of) requests</li>
+                <li>Formatting requests in standardized templates</li>
+                <li>Forwarding formatted messages to category channels</li>
+                <li>Providing an interactive "Fulfilled" button</li>
+                <li>Archiving fulfilled item requests</li>
+              </ul>
+              <p className="mt-3 text-xs text-[#B9BBBE]">The !claimed and !resol commands have been removed to streamline functionality.</p>
             </div>
-          </div>
-          
-          <div className="h-px bg-[#4F545C40] mb-3"></div>
-        </div>
-      </div>
-      
-      {/* Reaction Configuration */}
-      <div className="mb-6">
-        <h4 className="text-sm uppercase text-[#B9BBBE] font-bold mb-2">Reaction Settings</h4>
-        <div className="bg-[#36393f] rounded-md p-3">
-          <div className="mb-3">
-            <label className="block text-sm mb-1">Claim Command Trigger</label>
-            <div className="relative">
-              <input 
-                type="text" 
-                value={commandTrigger} 
-                onChange={(e) => setCommandTrigger(e.target.value)}
-                className="w-full bg-[#2C2F33] text-white px-3 py-2 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5865F2]" 
-              />
-            </div>
-          </div>
-          
-          <div className="mb-1">
-            <label className="block text-sm mb-1">Claim Reaction Emoji</label>
-            <div className="flex items-center">
-              <div className="relative flex-grow">
-                <input 
-                  type="text" 
-                  value={reactionEmoji} 
-                  onChange={(e) => setReactionEmoji(e.target.value)}
-                  className="w-full bg-[#2C2F33] text-white px-3 py-2 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5865F2]" 
-                />
-                <button 
-                  className="absolute right-2 top-2 text-[#B9BBBE]"
-                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                >
-                  <svg 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    className="h-5 w-5" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="2" 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round"
-                  >
-                    <circle cx="12" cy="12" r="10"/>
-                    <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
-                    <line x1="9" y1="9" x2="9.01" y2="9"/>
-                    <line x1="15" y1="9" x2="15.01" y2="9"/>
-                  </svg>
-                </button>
-                {showEmojiPicker && (
-                  <div className="absolute right-0 top-10 bg-[#2C2F33] p-2 rounded-md shadow-lg z-10 w-48">
-                    <div className="grid grid-cols-5 gap-1">
-                      {COMMON_EMOJIS.map((emoji) => (
-                        <button 
-                          key={emoji}
-                          className="hover:bg-[#4F545C] p-1 rounded"
-                          onClick={() => {
-                            setReactionEmoji(emoji);
-                            setShowEmojiPicker(false);
-                          }}
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-          
-          <div className="mt-3 mb-2">
-            <button 
-              className="w-full bg-[#5865F2] hover:bg-opacity-80 text-white py-2 rounded-md transition"
-              onClick={handleSaveChanges}
-            >
-              Save Changes
-            </button>
-          </div>
-          
-          <div className="text-xs text-[#B9BBBE] flex items-start">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-[#FEE75C] flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-            <span>
-              Note: The !resol command is fixed and cannot be changed. It will always use the <span className="text-white">{"<:resol:1358566610973102130>"}</span> emoji.
-            </span>
           </div>
         </div>
       </div>

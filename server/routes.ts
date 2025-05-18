@@ -140,8 +140,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/bot/config", async (req, res) => {
     try {
       const updateSchema = z.object({
-        commandTrigger: z.string().min(1),
-        reactionEmoji: z.string().min(1)
+        webhookUrl: z.string().optional(),
+        token: z.string().optional()
       });
       
       const validatedData = updateSchema.parse(req.body);
