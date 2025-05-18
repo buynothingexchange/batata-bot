@@ -1044,6 +1044,10 @@ async function handleInteraction(interaction: Interaction) {
     }
     // Check if this is a fulfill button click
     else if (customId === 'fulfill:item') {
+      // Immediately acknowledge the interaction to prevent timeout
+      await interaction.deferReply({ ephemeral: true }).catch(e => 
+        log(`Error deferring reply: ${e}`, "discord-bot")
+      );
       try {
         // Extract details from the DM message to identify the original channel message
         const dmMessageContent = interaction.message.content;
@@ -1246,10 +1250,9 @@ async function handleInteraction(interaction: Interaction) {
                       }
                     }
                     
-                    // Send a confirmation message to the user
-                    await interaction.reply({
-                      content: "You've marked this item as fulfilled! The original request has been archived and replaced with a compact fulfillment notice in all channels.",
-                      ephemeral: true // Only visible to the user who clicked the button
+                    // Update the deferred reply with success message
+                    await interaction.editReply({
+                      content: "You've marked this item as fulfilled! The original request has been archived and replaced with a compact fulfillment notice in all channels."
                     });
                     
                     // Log the fulfillment action
