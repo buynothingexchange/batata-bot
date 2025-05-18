@@ -774,8 +774,8 @@ async function handleInteraction(interaction: Interaction) {
                 // First remove all the instructional text from the DM message to get just the original content
                 let originalContent = "";
                 
-                // Try to extract the formatted request section
-                const contentMatch = message.content.match(/Your ISO request for.+?\n\n(.+?)(?:\n\nPlease select|$)/s);
+                // Try to extract the formatted request section - avoid using 's' flag for compatibility
+                const contentMatch = message.content.match(/Your ISO request for[\s\S]+?\n\n([\s\S]+?)(?:\n\nPlease select|$)/);
                 if (contentMatch && contentMatch[1]) {
                   originalContent = contentMatch[1].trim();
                 } else {
@@ -899,12 +899,35 @@ async function handleInteraction(interaction: Interaction) {
         // Extract details from the DM message to identify the original channel message
         const dmMessageContent = interaction.message.content;
         
-        // Try to extract username and item from the DM message
-        const usernameMatch = dmMessageContent.match(/@(\w+) is looking for a/);
-        const username = usernameMatch ? usernameMatch[1] : null;
+        // Try to extract username and item from the DM message with improved pattern matching
+        // Handle both cases - with or without articles like "a", "an", or no article for plurals
+        let usernameMatch = null;
+        if (dmMessageContent.match(/When you've found this item/i)) {
+          // DM is to the requestor themselves
+          usernameMatch = interaction.user.username;
+        } else {
+          // Try to extract from message
+          const nameMatch = dmMessageContent.match(/@(\w+) is looking for/i);
+          if (nameMatch && nameMatch[1]) {
+            usernameMatch = nameMatch[1];
+          }
+        }
+        const username = usernameMatch || null;
         
-        const itemMatch = dmMessageContent.match(/looking for a ([^.\n]+)/);
-        const item = itemMatch ? itemMatch[1].trim() : null;
+        // Expanded pattern to extract the item, handling cases with or without articles
+        let itemText = "";
+        const withArticleMatch = dmMessageContent.match(/looking for (?:a|an) ([^.\n]+)/i);
+        const withoutArticleMatch = dmMessageContent.match(/looking for ([^.\n]+)/i);
+        
+        if (withArticleMatch) {
+            itemText = withArticleMatch[1].trim();
+        } else if (withoutArticleMatch) {
+            // Make sure we don't capture "a" or "an" as part of the item
+            itemText = withoutArticleMatch[1].trim().replace(/^(?:a|an)\s+/i, '');
+        }
+        
+        // Clean up any trailing periods
+        const item = itemText.replace(/\.$/, '');
         
         // Find the formatted message in the items-exchange channel
         if (username && item && bot) {
@@ -926,10 +949,23 @@ async function handleInteraction(interaction: Interaction) {
                   const messages = await channel.messages.fetch({ limit: 50 });
                   
                   // Look for a message that matches our request format
-                  originalMessage = messages.find(msg => 
-                    msg.content.includes(`@${username}`) &&
-                    msg.content.includes(`is looking for a ${item}`)
-                  );
+                  // We need a more flexible matching approach to handle different article formats
+                  originalMessage = messages.find(msg => {
+                    // First check if the username matches
+                    if (!msg.content.includes(`@${username}`)) {
+                      return false;
+                    }
+                    
+                    // Then check for the item with flexible article matching:
+                    // 1. With "a" article: "is looking for a jacket"
+                    // 2. With "an" article: "is looking for an apple"
+                    // 3. Without article (plurals): "is looking for scissors"
+                    return (
+                      msg.content.includes(`is looking for a ${item}`) || 
+                      msg.content.includes(`is looking for an ${item}`) || 
+                      msg.content.includes(`is looking for ${item}`)
+                    );
+                  });
                   
                   if (originalMessage) {
                     // Create a new embed with green color to indicate fulfillment
