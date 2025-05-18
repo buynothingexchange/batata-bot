@@ -1048,53 +1048,25 @@ async function handleInteraction(interaction: Interaction) {
       await interaction.deferReply({ ephemeral: true }).catch(e => 
         log(`Error deferring reply: ${e}`, "discord-bot")
       );
+      
       try {
-        // Extract details from the DM message to identify the original channel message
-        const dmMessageContent = interaction.message.content;
+        // Create the fulfilled embed immediately
+        const fulfilledEmbed = new EmbedBuilder()
+          .setColor(0x57F287) // Green color (Discord success color)
+          .setDescription(`This item has been marked as fulfilled by ${interaction.user}`)
+          .setAuthor({
+            name: "",
+            iconURL: interaction.user.displayAvatarURL({ extension: 'png', size: 256 }),
+            url: `https://discord.com/users/${interaction.user.id}`
+          });
         
-        // Log the exact DM message we're trying to parse
-        log(`Fulfill button clicked, parsing DM message: "${dmMessageContent}"`, "discord-bot");
-
-        // Extract username - in the case of the "Fulfilled" button, it's always the user who clicked it
+        // Get the username of the person who clicked the button
         const username = interaction.user.username;
+        log(`User ${username} clicked Fulfilled button`, "discord-bot");
         
-        // Extract the item using multiple approaches to be more robust
-        let item = "";
-        
-        // For "When you've found this item" format
-        if (dmMessageContent.includes("When you've found this item")) {
-          // This is the second DM, which doesn't directly mention the item
-          // We need to find the last ISO request from this user
-          item = "item"; // Generic fallback
-          log(`Using fallback item name for fulfill button from user ${username}`, "discord-bot");
-        } 
-        // Try to extract item from "ISO request for" format
-        else if (dmMessageContent.includes("ISO request for")) {
-          const requestMatch = dmMessageContent.match(/ISO request for "?([^"]+)"?/i);
-          if (requestMatch && requestMatch[1]) {
-            item = requestMatch[1].trim();
-            log(`Extracted item from ISO request format: "${item}"`, "discord-bot");
-          }
-        }
-        // Try looking for pattern in message content
-        else {
-          let itemText = "";
-          const withArticleMatch = dmMessageContent.match(/looking for (?:a|an) ([^.\n]+)/i);
-          const withoutArticleMatch = dmMessageContent.match(/looking for ([^.\n]+)/i);
-          
-          if (withArticleMatch) {
-              itemText = withArticleMatch[1].trim();
-          } else if (withoutArticleMatch && withoutArticleMatch[1]) {
-              // Make sure we don't capture "a" or "an" as part of the item
-              itemText = withoutArticleMatch[1].trim().replace(/^(?:a|an)\s+/i, '');
-          }
-          
-          if (itemText) {
-            // Clean up any trailing periods
-            item = itemText.replace(/\.$/, '');
-            log(`Extracted item from looking for pattern: "${item}"`, "discord-bot");
-          }
-        }
+        // Simple fallback approach - no need to extract the item name
+        const fallbackItemName = "item";
+        log(`Using fallback name "${fallbackItemName}" for fulfilled button`, "discord-bot");
         
         // If we still don't have an item, set a default for logging purposes
         if (!item) {
@@ -2239,8 +2211,24 @@ async function processISORequest(message: Message): Promise<void> {
     return;
   }
   
-  // COMPLETE REWRITE: No need for cache checking anymore since we're using a global lock
-  // The isProcessingIsoRequest flag already prevents duplicates
+  // Check for duplicate by looking at the last 10 processed messages
+  // If we've already processed this exact message, skip it
+  try {
+    const messages = await message.channel.messages.fetch({ limit: 10 });
+    const botMessages = messages.filter(msg => 
+      msg.author.bot && 
+      msg.mentions.users.has(message.author.id) &&
+      // Check if the mention is from within the last 5 minutes
+      (Date.now() - msg.createdTimestamp < 5 * 60 * 1000)
+    );
+    
+    if (botMessages.size > 0) {
+      log(`Possible duplicate ISO request detected for ${message.author.username}, ignoring...`, "discord-bot");
+      return;
+    }
+  } catch (err) {
+    log(`Error checking for duplicate ISO requests: ${err}`, "discord-bot");
+  }
   
   // Add extra debugging for this particular message
   log(`Processing NEW ISO request: ${message.id} from ${message.author.username} (messageContent: "${message.content.substring(0, 50)}...")`, "discord-bot");
