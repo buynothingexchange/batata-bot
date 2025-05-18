@@ -945,13 +945,13 @@ export async function processCommand(command: string) {
     // messages would still get cached. Let's leave this in place but add diagnostics to identify
     // what's happening in production:
     
-    log(`DEBUG CACHE STATE before clearing: Message cache has ${processedMessages.size} entries, ISO cache has ${processedISORequests.size} entries`, "discord-bot");
+    log(`Using global lock approach for ISO processing: current state = ${isProcessingIsoRequest ? 'LOCKED' : 'UNLOCKED'}`, "discord-bot");
     
-    // Clear the message processing cache - this ensures processing test commands works when repeatedly testing
-    processedMessages.clear();
-    processedISORequests.clear();
-    
-    log(`DEBUG CACHE STATE after clearing: Message cache has ${processedMessages.size} entries, ISO cache has ${processedISORequests.size} entries`, "discord-bot");
+    // Reset the ISO processing lock when testing
+    if (isProcessingIsoRequest) {
+      setIsoProcessingLock(false);
+      log(`Reset ISO processing lock for test command`, "discord-bot");
+    }
     
     const config = await storage.getBotConfig();
     if (!config) {
@@ -1729,15 +1729,16 @@ async function processISORequest(message: Message): Promise<void> {
     
     // Only proceed if we have a formatted response
     if (isoRequestProcessed && formattedResponse && tagButtons) {
-      // Send the formatted message to the original channel
+      // Edit the original message instead of creating a new one
       let sentMainMessage = null;
       if (message.channel.type === ChannelType.GuildText) {
-        sentMainMessage = await message.channel.send({
+        // Edit the original message to add the formatting
+        sentMainMessage = await message.edit({
           content: formattedResponse,
           components: tagButtons
         });
         
-        log(`Sent formatted ISO request in main channel #${channelName}`, "discord-bot");
+        log(`Edited original ISO request from ${message.author.username} in #${channelName}`, "discord-bot");
         
         // Now cross-post to appropriate category channels if we have tags and this is in a guild
         if (message.guild && analysis && analysis.tags && analysis.tags.length > 0) {
@@ -1883,23 +1884,8 @@ async function processISORequest(message: Message): Promise<void> {
           messageId: sentMainMessage.id,
         }).catch(err => log(`Error logging ISO request formatting: ${err}`, "discord-bot"));
         
-        // Try to delete the original message
-        try {
-          // Check if the bot has permission to manage messages
-          if (message.guild && bot && bot.user) {
-            const botMember = message.guild.members.cache.get(bot.user.id);
-            const channel = message.channel as TextChannel;
-            
-            if (botMember && botMember.permissionsIn(channel).has(PermissionFlagsBits.ManageMessages)) {
-              await message.delete();
-              log(`Deleted original ISO request from ${message.author.username}`, "discord-bot");
-            } else {
-              log(`Bot does not have permission to delete messages in #${channel.name}`, "discord-bot");
-            }
-          }
-        } catch (deleteError) {
-          log(`Failed to delete original ISO message: ${deleteError}`, "discord-bot");
-        }
+        // We no longer need to delete the original message since we're editing it
+        // This comment is left here to mark that this was a deliberate change in behavior
       }
     }
   } catch (error) {
