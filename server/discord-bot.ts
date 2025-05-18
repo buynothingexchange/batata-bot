@@ -227,10 +227,8 @@ async function handleMessage(message: Message) {
     // Get the bot configuration
     if (!config) {
       await storage.createBotConfig({
-        commandTrigger: "!claimed",
-        reactionEmoji: "✅",
-        createdAt: new Date(),
-        updatedAt: new Date()
+        webhookUrl: null,
+        token: null
       });
     }
     
@@ -719,17 +717,15 @@ export async function getBotStatus() {
   }
 }
 
-// Update bot configuration
-export async function updateBotConfig(newConfig: { commandTrigger: string; reactionEmoji: string }) {
+// Update bot configuration 
+export async function updateBotConfig(newConfig: { webhookUrl?: string; token?: string }) {
   try {
     const config = await storage.getBotConfig();
     
     if (!config) {
       // Create new config
       return await storage.createBotConfig({
-        ...newConfig,
-        createdAt: new Date(),
-        updatedAt: new Date()
+        ...newConfig
       });
     }
     
@@ -1191,10 +1187,8 @@ export async function initializeBotConfig() {
     if (!existingConfig) {
       // Create a default configuration
       await storage.createBotConfig({
-        commandTrigger: "!claimed",
-        reactionEmoji: "✅",
-        createdAt: new Date(),
-        updatedAt: new Date()
+        webhookUrl: null,
+        token: null
       });
       
       log("Created default bot configuration", "discord-bot");

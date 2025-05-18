@@ -124,8 +124,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const channels = await storage.getAllowedChannels();
       
       res.json({
-        commandTrigger: config.commandTrigger,
-        reactionEmoji: config.reactionEmoji,
         permissions,
         allowedChannels: channels.map(channel => ({
           name: channel.channelName,
