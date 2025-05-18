@@ -430,11 +430,68 @@ async function handleInteraction(interaction: Interaction) {
           const originalContent = interaction.message.content;
           
           try {
-            // Post the message to the category channel
-            await categoryChannel.send(originalContent);
+            // Store any attachments from the original message (in DM)
+            let files: any[] = [];
+            
+            // Check if the original message has attachments or linked attachments
+            if (interaction.message.attachments && interaction.message.attachments.size > 0) {
+              files = Array.from(interaction.message.attachments.values());
+              log(`Found ${files.length} direct attachments to include in category post`, "discord-bot");
+            } 
+            // If no direct attachments, try to find referenced message with attachments
+            else {
+              // Attempt to find the original message in items-exchange channel
+              try {
+                // Extract the user ID from the mention in the original message
+                const mentionMatch = originalContent.match(/<@(\d+)>/);
+                if (mentionMatch && mentionMatch[1]) {
+                  const userId = mentionMatch[1];
+                  
+                  // Look through all guilds for the items-exchange channel
+                  const guilds = bot?.guilds.cache.values();
+                  if (guilds) {
+                    for (const guild of guilds) {
+                      const itemsChannel = guild.channels.cache.find(
+                        (ch: any) => ch.type === ChannelType.GuildText && ch.name === "items-exchange"
+                      ) as TextChannel;
+                      
+                      if (itemsChannel) {
+                        // Get recent messages from the items-exchange channel
+                        const recentMessages = await itemsChannel.messages.fetch({ limit: 10 });
+                        
+                        // Find a bot message mentioning the same user
+                        const botMessages = recentMessages.filter(msg => 
+                          msg.author.bot && 
+                          msg.mentions.users.has(userId) &&
+                          msg.content === originalContent // Same content
+                        );
+                        
+                        // If we found a matching message with attachments, use those
+                        if (botMessages.size > 0) {
+                          const sourceMessage = botMessages.first();
+                          if (sourceMessage && sourceMessage.attachments.size > 0) {
+                            files = Array.from(sourceMessage.attachments.values());
+                            log(`Found ${files.length} attachments from original message to include in category post`, "discord-bot");
+                          }
+                        }
+                        break;
+                      }
+                    }
+                  }
+                }
+              } catch (attachmentLookupError) {
+                log(`Error finding original attachments: ${attachmentLookupError}`, "discord-bot");
+              }
+            }
+            
+            // Post the message to the category channel with any attachments
+            await categoryChannel.send({
+              content: originalContent,
+              files: files
+            });
             categoryPosted = true;
             
-            log(`Posted ISO request to #${category} channel`, "discord-bot");
+            log(`Posted ISO request to #${category} channel with ${files.length} attachments`, "discord-bot");
             
             // Create an activity log
             await storage.createLog({
@@ -531,9 +588,19 @@ async function handleInteraction(interaction: Interaction) {
                       try {
                         // Archive the message first
                         if (archiveChannel) {
-                          await archiveChannel.send({
+                          // Create archive message options with original content plus fulfillment notice
+                          const archiveOptions: any = {
                             content: `${message.content}\n\n**This item was fulfilled by ${interaction.user}**`
-                          });
+                          };
+                          
+                          // Include any attachments from the original message in the archive
+                          if (message.attachments.size > 0) {
+                            archiveOptions.files = Array.from(message.attachments.values());
+                            log(`Including ${message.attachments.size} attachment(s) in archive post`, "discord-bot");
+                          }
+                          
+                          // Send to archive channel with attachments
+                          await archiveChannel.send(archiveOptions);
                         }
                         
                         // Replace the original with just the fulfilled embed
@@ -895,10 +962,20 @@ async function processISORequest(message: Message): Promise<void> {
         tagButtons.push(tagButton);
       }
       
-      // Send the formatted message to the channel
-      const sentMessage = await message.channel.send({
+      // Create message options with the formatted response
+      const messageOptions: any = {
         content: formattedResponse
-      });
+      };
+      
+      // Check if the original message had any attachments (images) and include them
+      if (message.attachments.size > 0) {
+        // Add the attachments to the formatted message
+        messageOptions.files = Array.from(message.attachments.values());
+        log(`Including ${message.attachments.size} attachment(s) from the original ISO request`, "discord-bot");
+      }
+      
+      // Send the formatted message to the channel
+      const sentMessage = await message.channel.send(messageOptions);
       
       log(`Sent formatted ISO request in main channel #${channelName}`, "discord-bot");
       
@@ -966,10 +1043,20 @@ async function processISORequest(message: Message): Promise<void> {
       // Create a simplified response with proper user mention
       formattedResponse = `<@${message.author.id}> is looking for ${article ? article + ' ' : ''}${item}`;
       
-      // Send the formatted message
-      const sentMessage = await message.channel.send({
+      // Create message options with the formatted response
+      const messageOptions: any = {
         content: formattedResponse
-      });
+      };
+      
+      // Check if the original message had any attachments (images) and include them
+      if (message.attachments.size > 0) {
+        // Add the attachments to the formatted message
+        messageOptions.files = Array.from(message.attachments.values());
+        log(`Including ${message.attachments.size} attachment(s) from the original ISO request in fallback mode`, "discord-bot");
+      }
+      
+      // Send the formatted message
+      const sentMessage = await message.channel.send(messageOptions);
       
       log(`Formatted ISO request for ${message.author.username} in #${channelName}: ${item}`, "discord-bot");
       
