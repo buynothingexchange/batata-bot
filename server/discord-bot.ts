@@ -998,17 +998,21 @@ async function processISORequest(message: Message): Promise<void> {
           
           const fulfillRow = new ActionRowBuilder<ButtonBuilder>().addComponents(fulfilledButton);
           
-          // Send the DM with buttons
+          // Send the DM with category buttons first
           await dmChannel.send({
             content: `Your ISO request for ${analysis.item} has been posted! Please select which category this belongs to:`,
             components: [categoryRow]
           });
           
           // Send a separate message with just the fulfill button
-          await dmChannel.send({
+          // Include the original attachment(s) in the message with the fulfill button
+          const fulfillMessageOptions: any = {
             content: "When you've found this item, click the button below to mark it as fulfilled.",
             components: [fulfillRow]
-          });
+          };
+          
+          // Send the fulfill button message
+          await dmChannel.send(fulfillMessageOptions);
           
           log(`Forwarded formatted ISO request to ${message.author.username} via DM with category selection and Fulfilled button`, "discord-bot");
         } catch (dmError) {
