@@ -1733,12 +1733,11 @@ async function processISORequest(message: Message): Promise<void> {
       }
       
       // Create the standardized REQUEST format template with the extracted information
-      // Omit the Tags section as user will self-categorize
-      formattedResponse = `@${message.author.username} is looking for a ${analysis.item}.\n${featuresText}\n${urgencyText}\n-Please select a category below:`;
+      // Remove category text completely from public message
+      formattedResponse = `@${message.author.username} is looking for a ${analysis.item}.\n${featuresText}\n${urgencyText}`;
       
-      // Create buttons for all four main categories (no AI determination)
-      const allCategories = ['clothing', 'electronics', 'accessories', 'home-and-furniture'];
-      tagButtons = createTagButtons("", [], allCategories);
+      // No buttons in the public channel post - will be added to DM instead
+      tagButtons = [];
       
       log(`Formatted ISO request for ${message.author.username} in #items-exchange: ${analysis.item}`, "discord-bot");
       
@@ -1754,12 +1753,11 @@ async function processISORequest(message: Message): Promise<void> {
       const features = [];
       
       // Basic extraction - just use the text after "ISO" as the item
-      // Format the response with minimal formatting and prompt for category selection
-      formattedResponse = `@${message.author.username} is looking for a ${item}.\n-Features: \n-Urgency: Not specified\n-Please select a category below:`;
+      // Format the response with minimal formatting, without category prompt
+      formattedResponse = `@${message.author.username} is looking for a ${item}.\n-Features: \n-Urgency: Not specified`;
       
-      // Create buttons for all four main categories for user to choose from
-      const allCategories = ['clothing', 'electronics', 'accessories', 'home-and-furniture'];
-      tagButtons = createTagButtons("", [], allCategories);
+      // No buttons in the public message
+      tagButtons = [];
       
       log(`Fallback formatted ISO request for ${message.author.username} in #items-exchange: ${item}`, "discord-bot");
       
@@ -1907,16 +1905,28 @@ async function processISORequest(message: Message): Promise<void> {
           }
         }
         
-        // Forward a copy to the user via DM with Fulfilled button
+        // Forward a copy to the user via DM with Category selection and Fulfilled button
         try {
-          const dmButtons = createFulfilledButton();
+          // Create buttons for all four main categories for DM
+          const allCategories = ['clothing', 'electronics', 'accessories', 'home-and-furniture'];
+          const categoryButtons = createTagButtons("", [], allCategories);
           
+          // Create fulfilled button
+          const fulfilledButton = createFulfilledButton();
+          
+          // Send first message with category selection
           await message.author.send({
-            content: `Here's a copy of your ISO request that was posted in #items-exchange:\n\n${formattedResponse}\n\nIf you've found this item, click the button below to mark it as fulfilled.`,
-            components: dmButtons
+            content: `Your ISO request for "${analysis.item}" has been posted in #items-exchange.\n\nPlease select a category to cross-post your request:`,
+            components: categoryButtons
           });
           
-          log(`Forwarded formatted ISO request to ${message.author.username} via DM with Fulfilled button`, "discord-bot");
+          // Send second message with fulfilled button
+          await message.author.send({
+            content: `When you've found this item, click the button below to mark it as fulfilled.`,
+            components: fulfilledButton
+          });
+          
+          log(`Forwarded formatted ISO request to ${message.author.username} via DM with category selection and Fulfilled button`, "discord-bot");
         } catch (dmError) {
           // DM might fail if user has DMs disabled
           log(`Error sending DM to ${message.author.username}: ${dmError}`, "discord-bot");
