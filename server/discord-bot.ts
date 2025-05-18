@@ -1044,15 +1044,16 @@ async function handleInteraction(interaction: Interaction) {
     }
     // Check if this is a fulfill button click
     else if (customId === 'fulfill:item') {
-      // Immediately acknowledge the interaction to prevent timeout
-      await interaction.deferReply({ ephemeral: true }).catch(e => 
-        log(`Error deferring reply: ${e}`, "discord-bot")
-      );
-      
       try {
-        // Create the fulfilled embed immediately
+        // First acknowledge the interaction to prevent timeout
+        await interaction.deferReply({ ephemeral: true });
+        
+        // Log action and create embed
+        const username = interaction.user.username;
+        log(`User ${username} clicked the Fulfilled button`, "discord-bot");
+        
         const fulfilledEmbed = new EmbedBuilder()
-          .setColor(0x57F287) // Green color (Discord success color)
+          .setColor(0x57F287) // Discord success color (green)
           .setDescription(`This item has been marked as fulfilled by ${interaction.user}`)
           .setAuthor({
             name: "",
@@ -1060,26 +1061,21 @@ async function handleInteraction(interaction: Interaction) {
             url: `https://discord.com/users/${interaction.user.id}`
           });
         
-        // Get the username of the person who clicked the button
-        const username = interaction.user.username;
-        log(`User ${username} clicked Fulfilled button`, "discord-bot");
+        // Tell the user we're working on it
+        await interaction.editReply({
+          content: "Processing your request..."
+        });
         
-        // Simple fallback approach - no need to extract the item name
-        const fallbackItemName = "item";
-        log(`Using fallback name "${fallbackItemName}" for fulfilled button`, "discord-bot");
+        let updatedCount = 0;
         
-        // If we still don't have an item, set a default for logging purposes
-        if (!item) {
-          item = "unknown item";
-          log(`Could not extract item name from message, using fallback`, "discord-bot");
-        }
-        
-        // Find the formatted message in the items-exchange channel
-        if (username && item && bot) {
+        // Only process if the bot is available
+        if (bot) {
+          // COMPLETELY NEW IMPLEMENTATION
+          // Get all guilds the bot is in
+          const guilds = Array.from(bot.guilds.cache.values());
+          let messagesFound = false;
+          
           try {
-            // Look for the guild with items-exchange channel
-            const guilds = Array.from(bot.guilds.cache.values());
-            let originalMessage = null;
             
             for (const guild of guilds) {
               // Look for the items-exchange channel
