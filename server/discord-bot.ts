@@ -1704,16 +1704,16 @@ async function processISORequest(message: Message): Promise<void> {
     
     // Only proceed if we have a formatted response
     if (isoRequestProcessed && formattedResponse && tagButtons) {
-      // Edit the original message instead of creating a new one
+      // Create a formatted reply to the original message
       let sentMainMessage = null;
       if (message.channel.type === ChannelType.GuildText) {
-        // Edit the original message to add the formatting
-        sentMainMessage = await message.edit({
+        // Reply to the original message with formatting (instead of editing)
+        sentMainMessage = await message.reply({
           content: formattedResponse,
           components: tagButtons
         });
         
-        log(`Edited original ISO request from ${message.author.username} in #${channelName}`, "discord-bot");
+        log(`Created formatted reply to ISO request from ${message.author.username} in #${channelName}`, "discord-bot");
         
         // Now cross-post to appropriate category channels if we have tags and this is in a guild
         if (message.guild && analysis && analysis.tags && analysis.tags.length > 0) {
@@ -1859,8 +1859,8 @@ async function processISORequest(message: Message): Promise<void> {
           messageId: sentMainMessage.id,
         }).catch(err => log(`Error logging ISO request formatting: ${err}`, "discord-bot"));
         
-        // We no longer need to delete the original message since we're editing it
-        // This comment is left here to mark that this was a deliberate change in behavior
+        // We're keeping the original message and replying to it instead
+        // No need to delete anything, so we preserve the original context
       }
     }
   } catch (error) {
