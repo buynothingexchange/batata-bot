@@ -472,9 +472,9 @@ async function handleInteraction(interaction: Interaction) {
         const username = interaction.user.username;
         log(`User ${username} clicked the Fulfilled button`, "discord-bot");
         
-        // Create a fulfilled embed
+        // Create a fulfilled embed with orange color for consistency
         const fulfilledEmbed = new EmbedBuilder()
-          .setColor(0x57F287) // Discord success color (green)
+          .setColor(0xFFA500) // Orange color for consistency
           .setDescription(`This item has been marked as fulfilled by ${interaction.user}`)
           .setAuthor({
             name: "",
@@ -862,39 +862,34 @@ async function processISORequest(message: Message): Promise<void> {
       // Determine the appropriate article
       const article = getArticle(analysis.item);
       
-      // Create a formatted response
+      // Create a formatted response with proper user mention
       formattedResponse = `<@${message.author.id}> is looking for ${article ? article + ' ' : ''}${analysis.item}\n${featuresText}\n${urgencyText}\n${tagsText}`;
       
       // Set up buttons for different categories
       const tagButtons = [];
       
-      // Only add buttons for tags that match our predefined categories
+      // Always include all predefined categories to ensure consistency
       const validCategories = ["electronics", "accessories", "clothing", "home-and-furniture"];
       
-      // Add buttons for each recognized category
-      for (const tag of analysis.tags || []) {
-        const normalizedTag = tag.toLowerCase();
+      // First, add buttons for all categories
+      for (const category of validCategories) {
+        // Format the label to look nice (capitalize first letter, replace hyphens)
+        const formattedLabel = category.charAt(0).toUpperCase() + 
+                              category.slice(1).replace('-', ' & ');
         
-        if (validCategories.includes(normalizedTag)) {
-          const tagButton = new ButtonBuilder()
-            .setCustomId(`tag:${normalizedTag}`)
-            .setLabel(tag.charAt(0).toUpperCase() + tag.slice(1))
-            .setStyle(ButtonStyle.Primary);
-          
-          tagButtons.push(tagButton);
+        // Create a button for this category
+        const tagButton = new ButtonBuilder()
+          .setCustomId(`tag:${category}`)
+          .setLabel(formattedLabel)
+          .setStyle(ButtonStyle.Secondary);
+        
+        // If this category is in the analysis tags, make it primary style
+        if (analysis.tags && analysis.tags.some(tag => tag.toLowerCase() === category)) {
+          tagButton.setStyle(ButtonStyle.Primary);
         }
-      }
-      
-      // If we don't have any category buttons, add the default ones
-      if (tagButtons.length === 0) {
-        for (const category of validCategories) {
-          const tagButton = new ButtonBuilder()
-            .setCustomId(`tag:${category}`)
-            .setLabel(category.charAt(0).toUpperCase() + category.slice(1).replace('-', ' & '))
-            .setStyle(ButtonStyle.Secondary);
-          
-          tagButtons.push(tagButton);
-        }
+        
+        // Add this button to our collection
+        tagButtons.push(tagButton);
       }
       
       // Send the formatted message to the channel
@@ -965,7 +960,7 @@ async function processISORequest(message: Message): Promise<void> {
       // Determine article
       const article = getArticle(item);
       
-      // Create a simplified response
+      // Create a simplified response with proper user mention
       formattedResponse = `<@${message.author.id}> is looking for ${article ? article + ' ' : ''}${item}`;
       
       // Send the formatted message
@@ -975,9 +970,9 @@ async function processISORequest(message: Message): Promise<void> {
       
       log(`Formatted ISO request for ${message.author.username} in #${channelName}: ${item}`, "discord-bot");
       
-      // Add default category buttons
-      const defaultCategories = ["electronics", "accessories", "clothing", "home-and-furniture"];
-      const defaultButtons = defaultCategories.map(category => {
+      // Add all category buttons to ensure all options are available
+      const allCategories = ["electronics", "accessories", "clothing", "home-and-furniture"];
+      const categoryButtons = allCategories.map(category => {
         return new ButtonBuilder()
           .setCustomId(`tag:${category}`)
           .setLabel(category.charAt(0).toUpperCase() + category.slice(1).replace('-', ' & '))
@@ -992,7 +987,7 @@ async function processISORequest(message: Message): Promise<void> {
         .setEmoji('✅');
       
       // Create button rows
-      const categoryRow = new ActionRowBuilder<ButtonBuilder>().addComponents(defaultButtons);
+      const categoryRow = new ActionRowBuilder<ButtonBuilder>().addComponents(categoryButtons);
       const fulfillRow = new ActionRowBuilder<ButtonBuilder>().addComponents(fulfilledButton);
       
       // Forward to DM with buttons
