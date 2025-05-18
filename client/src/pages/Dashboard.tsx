@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -15,7 +15,20 @@ const Dashboard = () => {
   const { toast } = useToast();
 
   // Fetch bot status
-  const { data: botStatus, isLoading: isStatusLoading } = useQuery({
+  const { data: botStatus, isLoading: isStatusLoading } = useQuery<{
+    status: string;
+    uptime: string;
+    processUptime?: string;
+    memory: {
+      used: string;
+      total: string;
+    };
+    commandsProcessed: number;
+    healthStatus?: {
+      healthCheckFailures: number;
+      reconnectAttempts: number;
+    };
+  }>({
     queryKey: ["/api/bot/status"],
   });
 
@@ -29,29 +42,21 @@ const Dashboard = () => {
   });
 
   // Fetch config
-  const { data: config, isLoading: isConfigLoading } = useQuery({
+  const { data: config, isLoading: isConfigLoading } = useQuery<{
+    permissions: {
+      manageMessages: boolean;
+      addReactions: boolean;
+      readMessageHistory: boolean;
+    };
+    allowedChannels: {
+      name: string;
+      enabled: boolean;
+    }[];
+  }>({
     queryKey: ["/api/bot/config"],
   });
 
-  // Update config mutation
-  const updateConfig = useMutation({
-    mutationFn: async (newConfig: { commandTrigger: string; reactionEmoji: string }) => {
-      return apiRequest("POST", "/api/bot/config", newConfig);
-    },
-    onSuccess: () => {
-      toast({
-        title: "Configuration updated",
-        description: "Your bot configuration has been updated successfully.",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Update failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
+  // Note: Command configuration functionality removed as part of streamlining
 
   // Test command mutation
   const testCommand = useMutation({
@@ -204,7 +209,6 @@ const Dashboard = () => {
           <BotConfig 
             config={config}
             isLoading={isConfigLoading}
-            onUpdateConfig={(newConfig) => updateConfig.mutate(newConfig)}
             onRestartBot={() => restartBot.mutate()}
             botStatus={botStatus}
             isStatusLoading={isStatusLoading}
