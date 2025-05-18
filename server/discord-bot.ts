@@ -1152,14 +1152,18 @@ async function handleInteraction(interaction: Interaction) {
                   }
                   
                   if (originalMessage) {
-                    // Create a compact embed with green color to indicate fulfillment
+                    // Create a single-line, full-width embed with green color to indicate fulfillment
                     const fulfilledEmbed = new EmbedBuilder()
                       .setColor(0x57F287) // Green color (Discord success color)
-                      .setDescription(`✅ Item fulfilled by ${interaction.user}`)
+                      .setDescription(`✅ **Item marked as fulfilled by ${interaction.user}**`)
+                      .setURL(`https://discord.com/users/${interaction.user.id}`) // Entire embed links to user profile
                       .setAuthor({
                         name: interaction.user.username,
-                        iconURL: interaction.user.displayAvatarURL({ extension: 'png', size: 64 })
-                      });
+                        iconURL: interaction.user.displayAvatarURL({ extension: 'png', size: 128 }),
+                        url: `https://discord.com/users/${interaction.user.id}` // Author name and icon link to profile
+                      })
+                      // Position the thumbnail to the right of text to create a horizontal layout
+                      .setThumbnail(interaction.user.displayAvatarURL({ extension: 'png', size: 256 }));
                     
                     // Save the original content for archiving
                     const originalContent = originalMessage.content;
@@ -1209,7 +1213,18 @@ async function handleInteraction(interaction: Interaction) {
                       // Try an alternative approach - reply to the original message
                       await originalMessage.reply({
                         content: '',
-                        embeds: [fulfilledEmbed]
+                        embeds: [
+                          new EmbedBuilder()
+                            .setColor(0x57F287)
+                            .setDescription(`✅ **Item marked as fulfilled by ${interaction.user}**`)
+                            .setURL(`https://discord.com/users/${interaction.user.id}`)
+                            .setAuthor({
+                              name: interaction.user.username,
+                              iconURL: interaction.user.displayAvatarURL({ extension: 'png', size: 128 }),
+                              url: `https://discord.com/users/${interaction.user.id}`
+                            })
+                            .setThumbnail(interaction.user.displayAvatarURL({ extension: 'png', size: 256 }))
+                        ]
                       });
                       log(`Added fulfilled reply to original message as fallback`, "discord-bot");
                       
@@ -1902,11 +1917,14 @@ async function updateCrossPostedMessages(
                 embeds: [
                   new EmbedBuilder()
                     .setColor(0x57F287)
-                    .setDescription(`✅ Item fulfilled by ${fulfilledBy}`)
+                    .setDescription(`✅ **Item marked as fulfilled by ${fulfilledBy}**`)
+                    .setURL(`https://discord.com/users/${fulfilledBy.id}`)
                     .setAuthor({
                       name: fulfilledBy.username,
-                      iconURL: fulfilledBy.displayAvatarURL({ extension: 'png', size: 64 })
+                      iconURL: fulfilledBy.displayAvatarURL({ extension: 'png', size: 128 }),
+                      url: `https://discord.com/users/${fulfilledBy.id}`
                     })
+                    .setThumbnail(fulfilledBy.displayAvatarURL({ extension: 'png', size: 256 }))
                 ]
               });
               log(`Added fulfilled reply to cross-post in #${textChannel.name} as fallback`, "discord-bot");
