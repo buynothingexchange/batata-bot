@@ -4,7 +4,7 @@ import {
   Interaction, Message, MessageReaction, 
   PartialMessageReaction, PartialUser, Partials, 
   User, EmbedBuilder, TextChannel, ButtonBuilder, 
-  ButtonStyle, ActionRowBuilder, 
+  ButtonStyle, ActionRowBuilder, Collection,
   PermissionFlagsBits
 } from 'discord.js';
 import { WebSocketServer } from 'ws';
@@ -1114,17 +1114,21 @@ async function handleInteraction(interaction: Interaction) {
               
               if (channel) {
                 try {
-                  // Get recent messages from the channel
-                  const messages = await channel.messages.fetch({ limit: 50 });
+                  // Get recent messages from the channel with better error handling
+                  const messages = await channel.messages.fetch({ limit: 50 }).catch(err => {
+                    log(`Error fetching messages: ${err}`, "discord-bot");
+                    return null;
+                  });
+                  
+                  if (!messages) {
+                    log(`Could not fetch messages from channel`, "discord-bot");
+                    continue; // Try next guild
+                  }
                   
                   // Look for messages by the bot that mention the user
-                  const userMessages = messages.filter(msg => {
-                    // Only consider messages sent by the bot
-                    if (!msg.author.bot) return false;
-                    
-                    // Check if the message mentions the user
-                    return msg.content.includes(`@${username}`);
-                  });
+                  const userMessages = messages.filter(msg => 
+                    msg.author.bot && msg.content.includes(`@${username}`)
+                  );
                   
                   // Log how many potential matches we found
                   log(`Found ${userMessages.size} potential ISO requests from @${username} to check`, "discord-bot");
