@@ -852,7 +852,7 @@ async function handleInteraction(interaction: Interaction) {
                 
                 // Confirm to the user
                 await interaction.reply({
-                  content: `Your item "${itemName}" has been cross-posted to #${selectedCategory}!`,
+                  content: `Your item has been cross-posted to #${selectedCategory}!`,
                   ephemeral: true
                 });
                 
@@ -866,7 +866,7 @@ async function handleInteraction(interaction: Interaction) {
                   channel: categoryChannel.name,
                   status: "success",
                   message: `Cross-posted ISO request to #${categoryChannel.name} from DM`,
-                  messageId: sentCategoryMessage.id,
+                  messageId: "cross-posted-" + Date.now(),
                 }).catch(err => log(`Error logging DM ISO cross-post: ${err}`, "discord-bot"));
               } else {
                 // Items-exchange channel not found
@@ -1029,11 +1029,22 @@ async function handleInteraction(interaction: Interaction) {
                       .setTimestamp();
                     
                     // Edit the original message to include the embed
-                    await originalMessage.edit({
-                      content: originalMessage.content,
-                      components: originalMessage.components,
-                      embeds: [fulfilledEmbed]
-                    });
+                    try {
+                      await originalMessage.edit({
+                        content: originalMessage.content,
+                        embeds: [fulfilledEmbed]
+                      });
+                      log(`Successfully marked message as fulfilled in items-exchange`, "discord-bot");
+                    } catch (editError) {
+                      log(`Error updating original message to show fulfilled: ${editError}`, "discord-bot");
+                      
+                      // Try an alternative approach - reply to the original message
+                      await originalMessage.reply({
+                        content: '**This request has been marked as fulfilled**',
+                        embeds: [fulfilledEmbed]
+                      });
+                      log(`Added fulfilled reply to original message as fallback`, "discord-bot");
+                    }
                     
                     // Send a confirmation message to the user
                     await interaction.reply({
