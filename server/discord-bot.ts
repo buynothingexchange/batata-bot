@@ -1775,6 +1775,87 @@ const CONSECUTIVE_SUCCESS_TO_RESET = 5;
 let consecutiveSuccessfulChecks = 0;
 
 // Perform a comprehensive health check with persistence
+// Function to update all cross-posted copies of a message when the original is marked as fulfilled
+async function updateCrossPostedMessages(
+  guild: any, 
+  originalMessage: Message, 
+  username: string, 
+  item: string,
+  fulfilledEmbed: EmbedBuilder,
+  fulfilledBy: User
+): Promise<void> {
+  try {
+    // Skip the items-exchange channel as we've already updated that
+    const categoryChannels = guild.channels.cache.filter(
+      (ch: any) => ch.type === ChannelType.GuildText && 
+           ch.name !== 'items-exchange' &&
+           ['clothing', 'electronics', 'accessories', 'home-and-furniture'].includes(ch.name)
+    );
+    
+    log(`Searching for cross-posts in ${categoryChannels.size} category channels`, "discord-bot");
+    
+    // Find all cross-posts that contain this message
+    for (const [_, channel] of categoryChannels) {
+      try {
+        const textChannel = channel as TextChannel;
+        const messages = await textChannel.messages.fetch({ limit: 50 });
+        
+        // Look for cross-posted messages
+        const crossPostedMessages = messages.filter(msg => {
+          // Only consider messages sent by the bot
+          if (!msg.author.bot) return false;
+          
+          // Must be a cross-post (has the indicator text)
+          if (!msg.content.includes('*[Cross-posted from #items-exchange]*')) return false;
+          
+          // Must mention the user
+          if (!msg.content.includes(`@${username}`)) return false;
+          
+          // Check for item match if we have a specific item
+          if (item !== "item" && item !== "unknown item") {
+            return (
+              msg.content.includes(`is looking for a ${item}`) || 
+              msg.content.includes(`is looking for an ${item}`) || 
+              msg.content.includes(`is looking for ${item}`)
+            );
+          }
+          
+          // If we don't have a specific item, match solely on username as last resort
+          return true;
+        });
+        
+        if (crossPostedMessages.size > 0) {
+          log(`Found ${crossPostedMessages.size} cross-posts in #${textChannel.name} to mark as fulfilled`, "discord-bot");
+          
+          // Update each cross-posted message with the fulfilled status
+          for (const [_, crossPost] of crossPostedMessages) {
+            try {
+              await crossPost.edit({
+                content: crossPost.content,
+                embeds: [fulfilledEmbed]
+              });
+              log(`Updated fulfilled status on cross-post in #${textChannel.name}`, "discord-bot");
+            } catch (editError) {
+              log(`Error updating cross-post in #${textChannel.name}: ${editError}`, "discord-bot");
+              
+              // Try the reply approach as fallback
+              await crossPost.reply({
+                content: `**This request has been marked as fulfilled by ${fulfilledBy}**`,
+                embeds: [fulfilledEmbed]
+              });
+              log(`Added fulfilled reply to cross-post in #${textChannel.name} as fallback`, "discord-bot");
+            }
+          }
+        }
+      } catch (channelError) {
+        log(`Error searching for cross-posts in #${(channel as TextChannel).name}: ${channelError}`, "discord-bot");
+      }
+    }
+  } catch (error) {
+    log(`Error updating cross-posted messages: ${error}`, "discord-bot");
+  }
+}
+
 async function performHealthCheck() {
   try {
     // Check if bot is initialized and connected to Discord
