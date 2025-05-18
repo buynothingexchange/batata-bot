@@ -1305,28 +1305,13 @@ export async function restartBot() {
       log("Bot instance destroyed", "discord-bot");
     }
     
-    // CRITICAL FIX: Force recreate the cache Maps completely 
-    // to guarantee no stale references exist
-    const messageCount = processedMessages.size;
-    const isoCount = processedISORequests.size;
+    // Reset the ISO processing lock when restarting
+    if (isProcessingIsoRequest) {
+      setIsoProcessingLock(false);
+      log(`Reset ISO processing lock during bot restart`, "discord-bot");
+    }
     
-    // Log all cached message IDs for debugging
-    log(`DEBUG - Cached message IDs before clear: ${Array.from(processedMessages.keys()).join(", ")}`, "discord-bot");
-    log(`DEBUG - Cached ISO request IDs before clear: ${Array.from(processedISORequests.keys()).join(", ")}`, "discord-bot");
-    
-    // Clear existing caches
-    processedMessages.clear();
-    processedISORequests.clear();
-    
-    // Critical memory clear - re-initialize the caches by using new objects
-    // We can't reassign the const variables, so we need to clear them
-    processedMessages.clear();
-    processedISORequests.clear();
-    
-    // Record the message ID that's causing the issue for debugging
-    log(`DEBUG-CRITICAL: Cache was cleared for problematic message ID(s)`, "discord-bot");
-    
-    log(`CRITICAL FIX: Completely recreated message cache Maps and cleared ${messageCount} messages and ${isoCount} ISO requests during restart`, "discord-bot");
+    log(`ISO processing status reset: now UNLOCKED`, "discord-bot");
     
     // Initialize a new bot instance
     await initializeBot();
@@ -1504,26 +1489,16 @@ async function attemptReconnect() {
       bot = null;
     }
     
-    // CRITICAL FIX: Force recreate the cache Maps completely 
-    const messageCount = processedMessages.size;
-    const isoCount = processedISORequests.size;
+    // Reset ISO processing lock state if needed
+    if (isProcessingIsoRequest) {
+      setIsoProcessingLock(false);
+      log(`Reset ISO processing lock during reconnect attempt`, "discord-bot");
+    }
     
-    // Log IDs for debugging
-    log(`DEBUG - Cached message IDs before reconnect clear: ${Array.from(processedMessages.keys()).join(", ")}`, "discord-bot");
-    log(`DEBUG - Cached ISO request IDs before reconnect clear: ${Array.from(processedISORequests.keys()).join(", ")}`, "discord-bot");
+    log(`ISO processing status during reconnect: UNLOCKED`, "discord-bot");
     
-    // Clear existing caches
-    processedMessages.clear();
-    processedISORequests.clear();
-    
-    // Critical memory clear - double clear for backup
-    processedMessages.clear();
-    processedISORequests.clear();
-    
-    // Record the message ID that's causing the issue for debugging
-    log(`DEBUG-CRITICAL: Second cache clear for reconnect to ensure no stale references remain`, "discord-bot");
-    
-    log(`CRITICAL FIX: Completely recreated message cache Maps and cleared ${messageCount} messages and ${isoCount} ISO requests during reconnect`, "discord-bot");
+    // Log the reconnect attempt
+    log(`Attempting reconnect with cleared processing state`, "discord-bot");
     
     // If we've hit a high number of reconnect attempts, do more drastic measures
     if (reconnectAttempts >= TOTAL_RESTART_THRESHOLD) {
