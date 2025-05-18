@@ -30,6 +30,46 @@ const processStartTime = new Date(); // When the entire process started
 // for processing ISO requests. This way we can completely bypass any caching issues.
 let isProcessingIsoRequest = false;
 
+// Helper function to determine the correct article (a, an, or none for plurals)
+function getArticle(noun: string): string {
+  if (!noun) return "a"; // Default if noun is empty
+  
+  // Common plural endings or plural words that don't need articles
+  const pluralPatterns = [
+    /s$/i,             // Regular plurals ending in 's' (books, cars)
+    /i$/i,             // Latin plurals (cacti, fungi)
+    /es$/i,            // Some plurals ending in 'es' (buses, glasses)
+    /(ee|oo)th$/i,     // Irregular plurals (teeth, booth)
+    /ice$/i,           // Irregular plurals (mice, lice)
+    /people$/i,        // Special case 'people'
+    /men$/i,           // Irregular plurals ending in 'men' (women, men)
+    /children$/i,      // Special case 'children'
+    /scissors$/i,      // Items that are always plural
+    /glasses$/i,       // Items that are always plural
+    /pants$/i,         // Items that are always plural
+    /shorts$/i,        // Items that are always plural
+    /jeans$/i,         // Items that are always plural
+    /trousers$/i,      // Items that are always plural
+    /tights$/i,        // Items that are always plural
+    /pajamas$/i,       // Items that are always plural
+    /clothes$/i,       // Items that are always plural
+    /underwear$/i      // Items that are always plural
+  ];
+  
+  // Check if the noun matches any plural patterns
+  if (pluralPatterns.some(pattern => pattern.test(noun.toLowerCase()))) {
+    return ""; // No article for plurals: "looking for jeans" (not "a jeans")
+  }
+  
+  // Check if the noun starts with a vowel sound for "an"
+  if (/^[aeiou]/i.test(noun)) {
+    return "an"; // Use "an" for vowel sounds: "an apple"
+  }
+  
+  // Default to "a" for singular nouns starting with consonants
+  return "a";
+}
+
 // Simple timer-based toggle - prevent rapid-fire processing
 function setIsoProcessingLock(locked: boolean) {
   isProcessingIsoRequest = locked;
@@ -1732,9 +1772,13 @@ async function processISORequest(message: Message): Promise<void> {
         tagsText = "-Tags: " + analysis.tags.join(", ");
       }
       
+      // Get the appropriate article for this item
+      const article = getArticle(analysis.item);
+      
       // Create the standardized REQUEST format template with the extracted information
       // Remove category text completely from public message
-      formattedResponse = `@${message.author.username} is looking for a ${analysis.item}.\n${featuresText}\n${urgencyText}`;
+      const articlePrefix = article ? `${article} ` : ""; // Include space only if there is an article
+      formattedResponse = `@${message.author.username} is looking for ${articlePrefix}${analysis.item}.\n${featuresText}\n${urgencyText}`;
       
       // No buttons in the public channel post - will be added to DM instead
       tagButtons = [];
@@ -1753,8 +1797,13 @@ async function processISORequest(message: Message): Promise<void> {
       const features = [];
       
       // Basic extraction - just use the text after "ISO" as the item
+      
+      // Get the appropriate article for this item
+      const article = getArticle(item);
+      const articlePrefix = article ? `${article} ` : ""; // Include space only if there is an article
+      
       // Format the response with minimal formatting, without category prompt
-      formattedResponse = `@${message.author.username} is looking for a ${item}.\n-Features: \n-Urgency: Not specified`;
+      formattedResponse = `@${message.author.username} is looking for ${articlePrefix}${item}.\n-Features: \n-Urgency: Not specified`;
       
       // No buttons in the public message
       tagButtons = [];
