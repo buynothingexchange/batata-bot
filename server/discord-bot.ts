@@ -263,19 +263,43 @@ async function handleMessage(message: Message) {
         
         // If the user confirmed, bulk delete messages
         if (collected.size > 0) {
-          const messagesToDelete = await message.channel.messages.fetch({ limit: 100 });
-          
-          // Delete messages and log the count
-          await (message.channel as TextChannel).bulkDelete(messagesToDelete);
-          log(`Deleted ${messagesToDelete.size} messages from #${(message.channel as TextChannel).name}`, "discord-bot");
-          
-          // Send confirmation
-          const successMessage = await message.channel.send(`Deleted ${messagesToDelete.size} messages.`);
-          
-          // Delete the confirmation message after 5 seconds
-          setTimeout(() => {
-            successMessage.delete().catch(() => {});
-          }, 5000);
+          try {
+            // Send a processing message first
+            await message.channel.send("Processing delete request... this may take a moment.");
+            
+            // Get messages to delete in smaller batches to avoid timeout
+            const messagesToDelete = await message.channel.messages.fetch({ limit: 100 });
+            
+            // Count the messages
+            const messageCount = messagesToDelete.size;
+            
+            // Discord can only bulk delete messages that are less than 14 days old
+            // Filter out messages older than 14 days
+            const twoWeeksAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
+            const filteredMessages = messagesToDelete.filter(msg => msg.createdTimestamp > twoWeeksAgo);
+            
+            // Delete messages in smaller batches to avoid timeouts
+            if (filteredMessages.size > 0) {
+              await (message.channel as TextChannel).bulkDelete(filteredMessages);
+              log(`Deleted ${filteredMessages.size} messages from #${(message.channel as TextChannel).name}`, "discord-bot");
+              
+              // Send confirmation
+              const successMessage = await message.channel.send(
+                `Successfully deleted ${filteredMessages.size} messages ` +
+                `${messageCount > filteredMessages.size ? `(${messageCount - filteredMessages.size} messages were older than 14 days and couldn't be bulk deleted)` : ''}`
+              );
+              
+              // Delete the confirmation message after 5 seconds
+              setTimeout(() => {
+                successMessage.delete().catch(() => {});
+              }, 5000);
+            } else {
+              await message.channel.send("No messages could be deleted. Discord can only bulk delete messages less than 14 days old.");
+            }
+          } catch (deleteError) {
+            log(`Error deleting messages: ${deleteError}`, "discord-bot");
+            await message.channel.send("Error deleting messages. The messages might be too old (Discord can only bulk delete messages less than 14 days old).");
+          }
         }
       } catch (error) {
         // Either the user didn't confirm or there was an error
