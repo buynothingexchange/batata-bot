@@ -13,10 +13,6 @@ import { storage } from './storage';
 import { analyzeISORequest } from './openai-service';
 import { Server } from 'http';
 
-// IMPORTANT NOTES:
-// 1. Fixed duplicate ISO posts issue with better duplicate detection
-// 2. Fixed the "mark as fulfilled" button functionality
-
 // Bot instance
 let bot: Client | null = null;
 
