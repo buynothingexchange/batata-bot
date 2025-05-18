@@ -986,8 +986,14 @@ async function processISORequest(message: Message): Promise<void> {
         .setStyle(ButtonStyle.Success)
         .setEmoji('✅');
       
-      // Create button rows
-      const categoryRow = new ActionRowBuilder<ButtonBuilder>().addComponents(categoryButtons);
+      // Create button rows with all category buttons
+      const categoryRow = new ActionRowBuilder<ButtonBuilder>();
+      
+      // Add each category button individually
+      for (const button of categoryButtons) {
+        categoryRow.addComponents(button);
+      }
+      
       const fulfillRow = new ActionRowBuilder<ButtonBuilder>().addComponents(fulfilledButton);
       
       // Forward to DM with buttons
