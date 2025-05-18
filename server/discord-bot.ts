@@ -514,6 +514,102 @@ async function handleMessage(message: Message) {
       return;
     }
     
+    // Check for administrator purge command (!86)
+    if (message.content.trim() === '!86') {
+      // Check if the user has admin permissions
+      if (message.member && message.member.permissions.has(PermissionFlagsBits.Administrator)) {
+        try {
+          // Get the channel where the command was used
+          const channel = message.channel as TextChannel;
+          
+          // Confirm with the user first
+          const confirmMessage = await message.reply({
+            content: "⚠️ **WARNING**: This will delete all messages in this channel that Discord allows the bot to delete (up to 2 weeks old). Are you sure you want to proceed? Reply with 'yes' to confirm within 10 seconds.",
+          });
+          
+          // Create a message collector to wait for confirmation
+          const filter = (m: Message) => m.author.id === message.author.id && m.content.toLowerCase() === 'yes';
+          const collector = channel.createMessageCollector({ filter, time: 10000, max: 1 });
+          
+          collector.on('collect', async () => {
+            // User confirmed, start deletion process
+            await message.reply("Starting message deletion process. This may take some time...");
+            
+            log(`Admin ${message.author.username} triggered message purge in #${channel.name}`, "discord-bot");
+            
+            // Delete messages in batches
+            let messagesDeleted = 0;
+            let lastId: string | undefined;
+            
+            while (true) {
+              const options: { limit: number; before?: string } = { limit: 100 };
+              if (lastId) options.before = lastId;
+              
+              const messages = await channel.messages.fetch(options);
+              
+              if (messages.size === 0) break;
+              
+              // Update the last ID for pagination
+              lastId = messages.last()?.id;
+              
+              // Filter messages by age (Discord only allows bulk deletion of messages under 14 days old)
+              const twoWeeksAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
+              const filteredMessages = messages.filter(msg => msg.createdTimestamp > twoWeeksAgo);
+              
+              if (filteredMessages.size > 0) {
+                await channel.bulkDelete(filteredMessages);
+                messagesDeleted += filteredMessages.size;
+                
+                // Log progress every 100 messages
+                if (messagesDeleted % 100 === 0) {
+                  log(`Deleted ${messagesDeleted} messages so far in #${channel.name}`, "discord-bot");
+                }
+              }
+              
+              // If we got fewer messages than requested or all messages were too old, we're done
+              if (messages.size < 100 || filteredMessages.size === 0) break;
+            }
+            
+            // Send a completion message (this might fail if all messages including the original were deleted)
+            try {
+              await channel.send(`Deletion complete. Removed ${messagesDeleted} messages.`);
+              log(`Completed message purge in #${channel.name}, deleted ${messagesDeleted} messages`, "discord-bot");
+            } catch (err) {
+              log(`Completed message purge in #${channel.name}, deleted ${messagesDeleted} messages (couldn't send completion message)`, "discord-bot");
+            }
+            
+            // Log the action
+            await storage.createLog({
+              userId: message.author.id,
+              username: message.author.username,
+              command: "purge-messages",
+              channel: channel.name,
+              status: "success",
+              message: `Admin purged ${messagesDeleted} messages from #${channel.name}`,
+              messageId: "purge-" + Date.now(),
+            }).catch(err => log(`Error logging message purge: ${err}`, "discord-bot"));
+          });
+          
+          collector.on('end', (collected) => {
+            if (collected.size === 0) {
+              // User didn't confirm in time
+              confirmMessage.edit("Message deletion cancelled - no confirmation received within 10 seconds.");
+            }
+          });
+          
+          return; // Exit early since we've handled this command
+        } catch (error) {
+          log(`Error executing purge command: ${error}`, "discord-bot");
+          await message.reply("An error occurred while trying to delete messages. Please check the bot's permissions and try again.");
+          return;
+        }
+      } else {
+        // User doesn't have admin permissions
+        await message.reply("You need administrator permissions to use this command.");
+        return;
+      }
+    }
+    
     // Check if the message is a reply
     if (message.reference && message.reference.messageId) {
       const messageContent = message.content.trim();
