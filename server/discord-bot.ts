@@ -441,7 +441,6 @@ async function handleInteraction(interaction: Interaction) {
               status: "success",
               message: `Selected category ${category} for ISO request`,
               guildId: guild.id,
-              // Use proper property names based on storage schema
               messageId: "unknown" // We don't have the message ID at this point
             });
           } catch (channelError) {
