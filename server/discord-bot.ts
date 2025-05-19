@@ -108,12 +108,11 @@ export async function initializeBot() {
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
       GatewayIntentBits.MessageContent,
-      GatewayIntentBits.GuildMessageReactions,
-      GatewayIntentBits.DirectMessages,
-      GatewayIntentBits.DirectMessageReactions
+      GatewayIntentBits.GuildMessageReactions
+      // DM intents removed as handled by BNE bot now
     ];
     
-    // Also include the necessary partials to receive reactions in DMs
+    // Include necessary partials for message reactions
     const partials = [
       Partials.Message,
       Partials.Channel,
@@ -232,10 +231,8 @@ async function handleMessage(message: Message) {
       });
     }
     
-    // Check if this is a DM from a user
+    // Ignore DMs as they're handled by BNE bot now
     if (message.channel.type === ChannelType.DM) {
-      // For now, just log that we received a DM
-      log(`Received DM from ${message.author.username}: ${message.content}`, "discord-bot");
       return;
     }
     
@@ -1001,34 +998,17 @@ async function processISORequest(message: Message): Promise<void> {
       
       const fulfillRow = new ActionRowBuilder<ButtonBuilder>().addComponents(fulfilledButton);
       
-      // Forward to DM with buttons
+      // Add buttons directly to channel message (no DMs)
       try {
-        const dmChannel = await message.author.createDM();
-        
-        // Send the DM with category buttons first
-        await dmChannel.send({
-          content: `Your ISO request for ${item} has been posted! Please select which category this belongs to:`,
-          components: [categoryRow]
-        });
-        
-        // Send a separate message with just the fulfill button
-        const fulfillMessageOptions: any = {
-          content: "When you've found this item, click the button below to mark it as fulfilled.",
-          components: [fulfillRow]
-        };
-        
-        // Send the fulfill button message
-        await dmChannel.send(fulfillMessageOptions);
-        
-        log(`Forwarded formatted ISO request to ${message.author.username} via DM with category selection and Fulfilled button`, "discord-bot");
-      } catch (dmError) {
-        log(`Error sending DM to ${message.author.username}: ${dmError}`, "discord-bot");
-        
-        // Add buttons to channel message if DM fails
+        // Add category and fulfill buttons to the channel message
         await sentMessage.edit({
           content: formattedResponse + "\n\n*Please select a category:*",
-          components: [categoryRow]
+          components: [categoryRow, fulfillRow]
         });
+        
+        log(`Added category selection and Fulfilled buttons directly to the channel message`, "discord-bot");
+      } catch (editError) {
+        log(`Error editing channel message: ${editError}`, "discord-bot");
       }
       
       // Delete original message
