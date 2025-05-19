@@ -917,10 +917,7 @@ async function processISORequest(message: Message): Promise<void> {
       
       log(`Sent formatted ISO request in main channel #${channelName}`, "discord-bot");
       
-      // Create row of buttons for categories
-      const categoryRow = new ActionRowBuilder<ButtonBuilder>().addComponents(tagButtons);
-      
-      // Create a "Fulfilled" button separately
+      // Create a "Fulfilled" button only - removing category buttons entirely
       const fulfilledButton = new ButtonBuilder()
         .setCustomId('fulfill:item')
         .setLabel('Fulfilled')
@@ -929,13 +926,13 @@ async function processISORequest(message: Message): Promise<void> {
       
       const fulfillRow = new ActionRowBuilder<ButtonBuilder>().addComponents(fulfilledButton);
       
-      // Add buttons directly to the channel message instead of sending DMs
+      // Add only the Fulfilled button to the message
       await sentMessage.edit({
-        content: formattedResponse + "\n\n*Please select a category:*",
-        components: [categoryRow, fulfillRow]
+        content: formattedResponse,
+        components: [fulfillRow]
       });
       
-      log(`Added category selection and Fulfilled buttons directly to the channel message`, "discord-bot");
+      log(`Added Fulfilled button to the channel message`, "discord-bot");
       
       // Delete the original ISO message to keep the channel clean
       await message.delete();
@@ -974,41 +971,24 @@ async function processISORequest(message: Message): Promise<void> {
       
       log(`Formatted ISO request for ${message.author.username} in #${channelName}: ${item}`, "discord-bot");
       
-      // Add all category buttons to ensure all options are available
-      const allCategories = ["electronics", "accessories", "clothing", "home-and-furniture"];
-      const categoryButtons = allCategories.map(category => {
-        return new ButtonBuilder()
-          .setCustomId(`tag:${category}`)
-          .setLabel(category.charAt(0).toUpperCase() + category.slice(1).replace('-', ' & '))
-          .setStyle(ButtonStyle.Secondary);
-      });
-      
-      // Create a "Fulfilled" button
+      // Create a "Fulfilled" button only - no category buttons
       const fulfilledButton = new ButtonBuilder()
         .setCustomId('fulfill:item')
         .setLabel('Fulfilled')
         .setStyle(ButtonStyle.Success)
         .setEmoji('✅');
       
-      // Create button rows with all category buttons
-      const categoryRow = new ActionRowBuilder<ButtonBuilder>();
-      
-      // Add each category button individually
-      for (const button of categoryButtons) {
-        categoryRow.addComponents(button);
-      }
-      
       const fulfillRow = new ActionRowBuilder<ButtonBuilder>().addComponents(fulfilledButton);
       
-      // Add buttons directly to channel message (no DMs)
+      // Add only the Fulfilled button to the channel message (no DMs)
       try {
-        // Add category and fulfill buttons to the channel message
+        // Add only the Fulfilled button to the message
         await sentMessage.edit({
-          content: formattedResponse + "\n\n*Please select a category:*",
-          components: [categoryRow, fulfillRow]
+          content: formattedResponse,
+          components: [fulfillRow]
         });
         
-        log(`Added category selection and Fulfilled buttons directly to the channel message`, "discord-bot");
+        log(`Added Fulfilled button to the channel message`, "discord-bot");
       } catch (editError) {
         log(`Error editing channel message: ${editError}`, "discord-bot");
       }
