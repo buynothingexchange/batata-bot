@@ -919,54 +919,25 @@ async function processISORequest(message: Message): Promise<void> {
       
       log(`Sent formatted ISO request in main channel #${channelName}`, "discord-bot");
       
-      // Forward the message to the user in a DM with the category buttons
-      try {
-        // Get the DM channel
-        const dmChannel = await message.author.createDM();
-        
-        // First, check if user has DMs enabled
-        try {
-          // Create row of buttons for categories
-          const categoryRow = new ActionRowBuilder<ButtonBuilder>().addComponents(tagButtons);
-          
-          // Create a "Fulfilled" button separately
-          const fulfilledButton = new ButtonBuilder()
-            .setCustomId('fulfill:item')
-            .setLabel('Fulfilled')
-            .setStyle(ButtonStyle.Success)
-            .setEmoji('✅');
-          
-          const fulfillRow = new ActionRowBuilder<ButtonBuilder>().addComponents(fulfilledButton);
-          
-          // Send the DM with category buttons first
-          await dmChannel.send({
-            content: `Your ISO request for ${analysis.item} has been posted! Please select which category this belongs to:`,
-            components: [categoryRow]
-          });
-          
-          // Send a separate message with just the fulfill button
-          // Include the original attachment(s) in the message with the fulfill button
-          const fulfillMessageOptions: any = {
-            content: "When you've found this item, click the button below to mark it as fulfilled.",
-            components: [fulfillRow]
-          };
-          
-          // Send the fulfill button message
-          await dmChannel.send(fulfillMessageOptions);
-          
-          log(`Forwarded formatted ISO request to ${message.author.username} via DM with category selection and Fulfilled button`, "discord-bot");
-        } catch (dmError) {
-          log(`Error sending DM to ${message.author.username}: ${dmError}`, "discord-bot");
-          
-          // If we can't send a DM, add the buttons to the channel message
-          await sentMessage.edit({
-            content: formattedResponse + "\n\n*Please select a category:*",
-            components: [new ActionRowBuilder<ButtonBuilder>().addComponents(tagButtons)]
-          });
-        }
-      } catch (dmError) {
-        log(`Failed to open DM with ${message.author.username}: ${dmError}`, "discord-bot");
-      }
+      // Create row of buttons for categories
+      const categoryRow = new ActionRowBuilder<ButtonBuilder>().addComponents(tagButtons);
+      
+      // Create a "Fulfilled" button separately
+      const fulfilledButton = new ButtonBuilder()
+        .setCustomId('fulfill:item')
+        .setLabel('Fulfilled')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('✅');
+      
+      const fulfillRow = new ActionRowBuilder<ButtonBuilder>().addComponents(fulfilledButton);
+      
+      // Add buttons directly to the channel message instead of sending DMs
+      await sentMessage.edit({
+        content: formattedResponse + "\n\n*Please select a category:*",
+        components: [categoryRow, fulfillRow]
+      });
+      
+      log(`Added category selection and Fulfilled buttons directly to the channel message`, "discord-bot");
       
       // Delete the original ISO message to keep the channel clean
       await message.delete();
