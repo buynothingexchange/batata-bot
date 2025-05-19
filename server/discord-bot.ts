@@ -497,6 +497,7 @@ async function handleInteraction(interaction: Interaction) {
             
             if (bot) {
               // Process one guild at a time to avoid overloading
+              // Use Array.from to fix iteration errors with MapIterator
               const guilds = Array.from(bot.guilds.cache.values());
               
               for (const guild of guilds) {
@@ -522,8 +523,8 @@ async function handleInteraction(interaction: Interaction) {
                       !msg.embeds.some(embed => embed.description?.includes("fulfilled"))
                     );
                     
-                    // Process each message
-                    for (const [_, message] of userMessages) {
+                    // Process each message (with Array.from to fix iteration error)
+                    for (const [_, message] of Array.from(userMessages.entries())) {
                       try {
                         // Archive the message first
                         if (archiveChannel) {
@@ -911,8 +912,9 @@ async function processISORequest(message: Message): Promise<void> {
         log(`Including ${message.attachments.size} attachment(s) from the original ISO request`, "discord-bot");
       }
       
-      // Send the formatted message to the channel
-      const sentMessage = await message.channel.send(messageOptions);
+      // Send the formatted message to the channel (ensure type safety)
+      const channel = message.channel as TextChannel;
+      const sentMessage = await channel.send(messageOptions);
       
       log(`Sent formatted ISO request in main channel #${channelName}`, "discord-bot");
       
@@ -967,8 +969,9 @@ async function processISORequest(message: Message): Promise<void> {
         log(`Including ${message.attachments.size} attachment(s) from the original ISO request in fallback mode`, "discord-bot");
       }
       
-      // Send the formatted message
-      const sentMessage = await message.channel.send(messageOptions);
+      // Send the formatted message (ensure type safety)
+      const channel = message.channel as TextChannel;
+      const sentMessage = await channel.send(messageOptions);
       
       log(`Formatted ISO request for ${message.author.username} in #${channelName}: ${item}`, "discord-bot");
       
