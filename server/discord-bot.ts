@@ -311,7 +311,7 @@ async function handleMessage(message: Message) {
       if (message.mentions.has(bot?.user as User) && 
           /\b(hi|hello|hey|howdy|hola|greetings|yo|sup)\b/i.test(message.content)) {
         log(`Bot was greeted by ${message.author.username}`, "discord-bot");
-        await message.reply("Hello! I'm here to help with ISO requests.");
+        await message.reply("Hello! I'm Batata, and I format ISO requests and track fulfillment. Post a message starting with ISO to see me in action!");
         return;
       }
       
