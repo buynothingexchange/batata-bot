@@ -355,8 +355,8 @@ async function handleInteraction(interaction: Interaction) {
         
         let categoryPosted = false;
         
-        // Look for a guild that has this category as a channel
-        for (const guild of guilds) {
+        // Look for a guild that has this category as a channel (using Array.from to fix iteration)
+        for (const guild of Array.from(guilds)) {
           // Find the category channel
           const categoryChannel = guild.channels.cache.find(
             (ch: any) => ch.type === ChannelType.GuildText && ch.name === category
@@ -389,7 +389,7 @@ async function handleInteraction(interaction: Interaction) {
                   // Look through all guilds for the items-exchange channel
                   const guilds = bot?.guilds.cache.values();
                   if (guilds) {
-                    for (const guild of guilds) {
+                    for (const guild of Array.from(guilds)) {
                       const itemsChannel = guild.channels.cache.find(
                         (ch: any) => ch.type === ChannelType.GuildText && ch.name === "items-exchange"
                       ) as TextChannel;
@@ -580,8 +580,8 @@ async function handleInteraction(interaction: Interaction) {
                           !msg.embeds.some(embed => embed.description?.includes("fulfilled"))
                         );
                         
-                        // Process each message
-                        for (const [_, message] of userMessages) {
+                        // Process each message (with Array.from to fix iteration error)
+                        for (const [_, message] of Array.from(userMessages.entries())) {
                           try {
                             // Replace with fulfilled embed
                             await message.edit({
@@ -653,8 +653,8 @@ export async function processCommand(command: string) {
   }
   
   try {
-    // Find the items-exchange channel in all guilds
-    for (const guild of bot.guilds.cache.values()) {
+    // Find the items-exchange channel in all guilds (using Array.from for iteration)
+    for (const guild of Array.from(bot.guilds.cache.values())) {
       const itemsChannel = guild.channels.cache.find(
         (ch: any) => ch.type === ChannelType.GuildText && ch.name === "items-exchange"
       ) as TextChannel;
