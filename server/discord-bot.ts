@@ -441,7 +441,7 @@ async function handleInteraction(interaction: Interaction) {
               status: "success",
               message: `Selected category ${category} for ISO request`,
               guildId: guild.id,
-              channelId: categoryChannel.id,
+              // Use proper property names based on storage schema
               messageId: "unknown" // We don't have the message ID at this point
             });
           } catch (channelError) {
@@ -765,8 +765,8 @@ export async function ensureCategoryChannels() {
     const categories = ["electronics", "accessories", "clothing", "home-and-furniture", "archive"];
     let channelsCreated = 0;
     
-    // Go through all guilds
-    for (const guild of bot.guilds.cache.values()) {
+    // Go through all guilds (using Array.from for iteration)
+    for (const guild of Array.from(bot.guilds.cache.values())) {
       // Check for necessary permissions
       const botMember = await guild.members.fetch(bot.user?.id || "");
       
@@ -1178,8 +1178,8 @@ async function addDefaultChannels() {
         await storage.createAllowedChannel({
           channelId: channel.channelName, // Use channel name as ID for now
           channelName: channel.channelName,
-          enabled: channel.enabled,
-          createdAt: new Date()
+          guildId: "default", // Use default guild ID since we don't have access to real guilds yet
+          enabled: channel.enabled
         });
       }
       
