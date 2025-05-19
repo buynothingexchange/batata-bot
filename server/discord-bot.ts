@@ -372,7 +372,7 @@ async function handleInteraction(interaction: Interaction) {
           const originalContent = interaction.message.content;
           
           try {
-            // Store any attachments from the original message (in DM)
+            // Store any attachments from the original message (in channel)
             let files: any[] = [];
             
             // Check if the original message has attachments or linked attachments
