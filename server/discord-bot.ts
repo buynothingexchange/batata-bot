@@ -5,7 +5,7 @@ import {
   PartialMessageReaction, PartialUser, Partials, 
   User, EmbedBuilder, TextChannel, ButtonBuilder, 
   ButtonStyle, ActionRowBuilder, Collection,
-  PermissionFlagsBits
+  PermissionFlagsBits, ButtonInteraction
 } from 'discord.js';
 import { WebSocketServer } from 'ws';
 import { log } from './vite';
@@ -488,7 +488,7 @@ async function handleIsoRequest(message: Message): Promise<void> {
 
 // Handle category selection from button interaction
 async function handleCategorySelection(
-  interaction: ButtonInteraction, 
+  interaction: any, 
   categoryId: string
 ): Promise<void> {
   try {
@@ -564,7 +564,7 @@ async function handleCategorySelection(
 }
 
 // Handle fulfill button interaction
-async function handleFulfillRequest(interaction: ButtonInteraction): Promise<void> {
+async function handleFulfillRequest(interaction: any): Promise<void> {
   try {
     // Find ISO request
     let isoRequest = null;
@@ -850,178 +850,7 @@ export async function ensureCategoryChannels() {
   }
 }
 
-// Process ISO request with proper isolation and error handling
-async function processISORequest(message: Message): Promise<void> {
-  // Double check - we should only process ISO messages
-  if (!message.content.trim().startsWith("ISO")) {
-    return;
-  }
-  
-  // Get channel name for logging
-  const channelName = message.channel.type === ChannelType.GuildText 
-    ? (message.channel as any).name 
-    : "unknown";
-  
-  // If this isn't the items-exchange channel, don't process
-  if (channelName !== "items-exchange") {
-    return;
-  }
-  
-  // IMPROVED: Check for duplicates to prevent double-posting
-  try {
-    const recentMessages = await message.channel.messages.fetch({ limit: 10 });
-    
-    // Check if there are any bot messages mentioning this user in the last minute
-    const authorId = message.author.id;
-    const recentUserMentions = recentMessages.filter(msg => 
-      msg.author.bot && 
-      msg.mentions.users.has(authorId) &&
-      (Date.now() - msg.createdTimestamp < 60000)
-    );
-    
-    if (recentUserMentions.size > 0) {
-      log(`Duplicate ISO request detected for ${message.author.username}, ignoring...`, "discord-bot");
-      return;
-    }
-  } catch (err) {
-    log(`Error checking for duplicate ISO requests: ${err}`, "discord-bot");
-  }
-  
-  // Add debugging for this message
-  log(`Processing ISO request: ${message.id} from ${message.author.username}`, "discord-bot");
-  
-  let isoRequestProcessed = false;
-  let formattedResponse = "";
-  let analysis = null;
-  
-  try {
-    // Attempt to process with OpenAI first
-    try {
-      // Check if OpenAI API key is available
-      if (!process.env.OPENAI_API_KEY) {
-        throw new Error("OpenAI API key is not configured");
-      }
-      
-      // Analyze the ISO request using OpenAI
-      analysis = await analyzeISORequest(message.author.username, message.content);
-      
-      // Build features list if available
-      let featuresText = "";
-      if (analysis.features && analysis.features.length > 0) {
-        featuresText = "\n-Features: " + analysis.features.join(", ");
-      }
-      
-      // Determine the appropriate article
-      const article = getArticle(analysis.item);
-      
-      // Create a simplified formatted response without tags and urgency
-      formattedResponse = `<@${message.author.id}> is looking for ${article ? article + ' ' : ''}${analysis.item}${featuresText}`;
-      
-      // Set up buttons for different categories
-      const tagButtons = [];
-      
-      // Always include all predefined categories to ensure consistency
-      const validCategories = ["electronics", "accessories", "clothing", "home-and-furniture"];
-      
-      // First, add buttons for all categories
-      for (const category of validCategories) {
-        // Format the label to look nice (capitalize first letter, replace hyphens)
-        const formattedLabel = category.charAt(0).toUpperCase() + 
-                              category.slice(1).replace('-', ' & ');
-        
-        // Create a button for this category
-        const tagButton = new ButtonBuilder()
-          .setCustomId(`tag:${category}`)
-          .setLabel(formattedLabel)
-          .setStyle(ButtonStyle.Secondary);
-        
-        // If this category is in the analysis tags, make it primary style
-        if (analysis.tags && analysis.tags.some(tag => tag.toLowerCase() === category)) {
-          tagButton.setStyle(ButtonStyle.Primary);
-        }
-        
-        // Add this button to our collection
-        tagButtons.push(tagButton);
-      }
-      
-      // Create message options with the formatted response
-      const messageOptions: any = {
-        content: formattedResponse
-      };
-      
-      // Check if the original message had any attachments (images) and include them
-      if (message.attachments.size > 0) {
-        // Add the attachments to the formatted message
-        messageOptions.files = Array.from(message.attachments.values());
-        log(`Including ${message.attachments.size} attachment(s) from the original ISO request`, "discord-bot");
-      }
-      
-      // Send the formatted message to the channel (ensure type safety)
-      const channel = message.channel as TextChannel;
-      const sentMessage = await channel.send(messageOptions);
-      
-      log(`Sent formatted ISO request in main channel #${channelName}`, "discord-bot");
-      
-      // No buttons are added - functionality moved to BNE bot
-      // This keeps the formatted message clean with no buttons
-      
-      log(`Formatted ISO request without buttons - fulfillment handled by BNE bot`, "discord-bot");
-      
-      // Delete the original ISO message to keep the channel clean
-      await message.delete();
-      log(`Deleted original ISO request from ${message.author.username}`, "discord-bot");
-      
-      isoRequestProcessed = true;
-    } catch (aiError) {
-      log(`Error analyzing ISO request with OpenAI: ${aiError}`, "openai-service");
-      
-      // Simple extraction fallback when AI fails
-      const content = message.content.trim();
-      const itemMatch = content.match(/ISO\s+(.*?)(?:\.|$)/i);
-      const item = itemMatch ? itemMatch[1].trim() : "item";
-      
-      // Determine article
-      const article = getArticle(item);
-      
-      // Create a simplified response with proper user mention
-      formattedResponse = `<@${message.author.id}> is looking for ${article ? article + ' ' : ''}${item}`;
-      
-      // Create message options with the formatted response
-      const messageOptions: any = {
-        content: formattedResponse
-      };
-      
-      // Check if the original message had any attachments (images) and include them
-      if (message.attachments.size > 0) {
-        // Add the attachments to the formatted message
-        messageOptions.files = Array.from(message.attachments.values());
-        log(`Including ${message.attachments.size} attachment(s) from the original ISO request in fallback mode`, "discord-bot");
-      }
-      
-      // Send the formatted message (ensure type safety)
-      const channel = message.channel as TextChannel;
-      const sentMessage = await channel.send(messageOptions);
-      
-      log(`Formatted ISO request for ${message.author.username} in #${channelName}: ${item}`, "discord-bot");
-      
-      // No buttons added - fulfillment handled by BNE bot now
-      try {
-        // No buttons necessary - BNE bot handles all button interactions now
-        log(`Formatted ISO request without buttons - fulfillment handled by BNE bot`, "discord-bot");
-      } catch (editError) {
-        log(`Error editing channel message: ${editError}`, "discord-bot");
-      }
-      
-      // Delete original message
-      await message.delete();
-      log(`Deleted original ISO request from ${message.author.username}`, "discord-bot");
-      
-      isoRequestProcessed = true;
-    }
-  } catch (error) {
-    log(`Error processing ISO request: ${error}`, "discord-bot");
-  }
-}
+
 
 // Health check to monitor bot status
 async function performHealthCheck() {

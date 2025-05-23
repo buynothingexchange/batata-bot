@@ -176,6 +176,64 @@ export class MemStorage implements IStorage {
     this.channels.set(channelId, updatedChannel);
     return updatedChannel;
   }
+
+  // ISO request operations
+  async createIsoRequest(request: any): Promise<any> {
+    const id = this.currentIsoRequestId++;
+    const isoRequest: any = {
+      ...request,
+      id,
+      fulfilled: false,
+      timestamp: new Date()
+    };
+    
+    this.isoRequestsMap.set(id, isoRequest);
+    return isoRequest;
+  }
+
+  async getIsoRequestsByUser(userId: string, limit: number = 10): Promise<any[]> {
+    const userRequests = Array.from(this.isoRequestsMap.values())
+      .filter(request => request.userId === userId)
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+      .slice(0, limit);
+    
+    return userRequests;
+  }
+
+  async getActiveIsoRequests(limit: number = 20): Promise<any[]> {
+    const activeRequests = Array.from(this.isoRequestsMap.values())
+      .filter(request => !request.fulfilled)
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+      .slice(0, limit);
+    
+    return activeRequests;
+  }
+
+  async updateIsoRequestCategory(id: number, category: string): Promise<any | undefined> {
+    const request = this.isoRequestsMap.get(id);
+    if (!request) return undefined;
+    
+    const updatedRequest = {
+      ...request,
+      category
+    };
+    
+    this.isoRequestsMap.set(id, updatedRequest);
+    return updatedRequest;
+  }
+
+  async markIsoRequestFulfilled(id: number): Promise<any | undefined> {
+    const request = this.isoRequestsMap.get(id);
+    if (!request) return undefined;
+    
+    const updatedRequest = {
+      ...request,
+      fulfilled: true
+    };
+    
+    this.isoRequestsMap.set(id, updatedRequest);
+    return updatedRequest;
+  }
 }
 
 export const storage = new MemStorage();
