@@ -72,3 +72,23 @@ export const insertAllowedChannelSchema = createInsertSchema(allowedChannels).om
 
 export type InsertAllowedChannel = z.infer<typeof insertAllowedChannelSchema>;
 export type AllowedChannel = typeof allowedChannels.$inferSelect;
+
+// ISO requests table
+export const isoRequests = pgTable("iso_requests", {
+  id: serial("id").primaryKey(),
+  discordMessageId: text("discord_message_id").notNull(),
+  userId: text("user_id").notNull(),
+  username: text("username").notNull(),
+  content: text("content").notNull(),
+  category: text("category"),
+  fulfilled: boolean("fulfilled").default(false).notNull(),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+});
+
+export const insertIsoRequestSchema = createInsertSchema(isoRequests).omit({
+  id: true,
+  timestamp: true,
+});
+
+export type InsertIsoRequest = z.infer<typeof insertIsoRequestSchema>;
+export type IsoRequest = typeof isoRequests.$inferSelect;

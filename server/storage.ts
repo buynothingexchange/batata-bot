@@ -26,6 +26,13 @@ export interface IStorage {
   getChannelById(channelId: string): Promise<AllowedChannel | undefined>;
   createAllowedChannel(channel: InsertAllowedChannel): Promise<AllowedChannel>;
   updateAllowedChannel(channelId: string, enabled: boolean): Promise<AllowedChannel | undefined>;
+  
+  // ISO request operations
+  createIsoRequest(request: InsertIsoRequest): Promise<IsoRequest>;
+  getIsoRequestsByUser(userId: string, limit?: number): Promise<IsoRequest[]>;
+  getActiveIsoRequests(limit?: number): Promise<IsoRequest[]>;
+  updateIsoRequestCategory(id: number, category: string): Promise<IsoRequest | undefined>;
+  markIsoRequestFulfilled(id: number): Promise<IsoRequest | undefined>;
 }
 
 // In-memory storage implementation
@@ -34,22 +41,26 @@ export class MemStorage implements IStorage {
   private configs: Map<number, BotConfig>;
   private logEntries: Map<number, Log>;
   private channels: Map<string, AllowedChannel>;
+  private isoRequestsMap: Map<number, IsoRequest>;
   
   private currentUserId: number;
   private currentConfigId: number;
   private currentLogId: number;
   private currentChannelId: number;
+  private currentIsoRequestId: number;
 
   constructor() {
     this.users = new Map();
     this.configs = new Map();
     this.logEntries = new Map();
     this.channels = new Map();
+    this.isoRequestsMap = new Map();
     
     this.currentUserId = 1;
     this.currentConfigId = 1;
     this.currentLogId = 1;
     this.currentChannelId = 1;
+    this.currentIsoRequestId = 1;
   }
 
   // User operations

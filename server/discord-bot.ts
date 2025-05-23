@@ -317,13 +317,15 @@ async function handleMessage(message: Message) {
       
       // Check if this is a message from Batata Bot (formatted ISO request)
       if (message.author.username === 'Batata') {
-        if (isFormattedIsoRequest(message)) {
+        const content = message.content.toLowerCase();
+        if (content.includes('is looking for') && content.includes('<@')) {
           log('Processing formatted ISO request from Batata Bot', "discord-bot");
           await handleBatataIsoRequest(message);
         }
       } else {
         // Handle direct ISO posts in server
-        if (message.guild && isDirectIsoRequest(message)) {
+        const content = message.content.trim().toUpperCase();
+        if (message.guild && content.startsWith('ISO ') && content.length > 4) {
           log(`Detected direct ISO post in server by ${message.author.username}`, "discord-bot");
           await handleIsoRequest(message);
         }
@@ -331,6 +333,332 @@ async function handleMessage(message: Message) {
     }
   } catch (error) {
     log(`Error handling message: ${error}`, "discord-bot");
+  }
+}
+
+// Categories for ISO request selection
+const CATEGORIES = [
+  { id: "electronics", label: "Electronics", style: ButtonStyle.Primary },
+  { id: "accessories", label: "Accessories", style: ButtonStyle.Primary },
+  { id: "clothing", label: "Clothing", style: ButtonStyle.Primary },
+  { id: "home_furniture", label: "Home & Furniture", style: ButtonStyle.Primary }
+];
+
+// Create category selection buttons
+function createCategoryButtons(): ActionRowBuilder<ButtonBuilder> {
+  const row = new ActionRowBuilder<ButtonBuilder>();
+  
+  CATEGORIES.forEach(category => {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`category:${category.id}`)
+        .setLabel(category.label)
+        .setStyle(ButtonStyle.Secondary) // Dark grey buttons
+    );
+  });
+  
+  return row;
+}
+
+// Create fulfill button for ISO requests
+function createFulfillButton(): ActionRowBuilder<ButtonBuilder> {
+  return new ActionRowBuilder<ButtonBuilder>()
+    .addComponents(
+      new ButtonBuilder()
+        .setCustomId('fulfill:item')
+        .setLabel('Mark as Fulfilled')
+        .setStyle(ButtonStyle.Secondary) // Dark grey button
+    );
+}
+
+// Detect if message is formatted ISO request from Batata
+function isFormattedIsoRequest(message: Message): boolean {
+  if (message.author.username !== 'Batata') return false;
+  
+  const content = message.content.toLowerCase();
+  return content.includes('is looking for') && content.includes('<@');
+}
+
+// Detect if message is direct ISO request
+function isDirectIsoRequest(message: Message): boolean {
+  const content = message.content.trim().toUpperCase();
+  return content.startsWith('ISO ') && content.length > 4;
+}
+
+// Handle ISO request from Batata Bot message
+async function handleBatataIsoRequest(message: Message): Promise<void> {
+  try {
+    // Extract user mention from message
+    const mentionMatch = message.content.match(/<@(\d+)>/);
+    if (!mentionMatch) return;
+    
+    const userId = mentionMatch[1];
+    const mentionedUser = await message.client.users.fetch(userId);
+    
+    if (!mentionedUser) return;
+    
+    // Create ISO request record
+    const isoRequest = {
+      discordMessageId: message.id,
+      userId: userId,
+      username: mentionedUser.tag,
+      content: message.content,
+      timestamp: new Date()
+    };
+    
+    const savedRequest = await storage.createIsoRequest(isoRequest);
+    
+    // Send DM to user with category buttons
+    try {
+      const dmChannel = await mentionedUser.createDM();
+      const fulfillRow = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId('fulfill:item')
+            .setLabel('Mark as Fulfilled')
+            .setStyle(ButtonStyle.Success)
+        );
+      
+      // Send category selection buttons first
+      await dmChannel.send({
+        content: "Thanks for your ISO request! Please select a category for your item:",
+        components: [createCategoryButtons()]
+      });
+      
+      // Send fulfill button as a separate message
+      await dmChannel.send({
+        content: "When your item is found, click the button below to mark it as fulfilled:",
+        components: [fulfillRow]
+      });
+      
+      log(`Sent category selection to user ${mentionedUser.tag}`, "discord-bot");
+    } catch (dmError) {
+      log(`Failed to DM user ${mentionedUser.tag}: ${dmError}`, "discord-bot");
+    }
+  } catch (error) {
+    log(`Error handling Batata ISO request: ${error}`, "discord-bot");
+  }
+}
+
+// Handle direct ISO request
+async function handleIsoRequest(message: Message): Promise<void> {
+  try {
+    // Create ISO request record
+    const isoRequest = {
+      discordMessageId: message.id,
+      userId: message.author.id,
+      username: message.author.tag,
+      content: message.content,
+      timestamp: new Date()
+    };
+    
+    const savedRequest = await storage.createIsoRequest(isoRequest);
+    
+    // Send DM to user with category buttons
+    try {
+      const dmChannel = await message.author.createDM();
+      const fulfillRow = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId('fulfill:item')
+            .setLabel('Mark as Fulfilled')
+            .setStyle(ButtonStyle.Success)
+        );
+      
+      // Send category selection buttons first
+      await dmChannel.send({
+        content: "Thanks for your ISO request! Please select a category for your item:",
+        components: [createCategoryButtons()]
+      });
+      
+      // Send fulfill button as a separate message
+      await dmChannel.send({
+        content: "When your item is found, click the button below to mark it as fulfilled:",
+        components: [fulfillRow]
+      });
+      
+      log(`Sent category selection to user ${message.author.tag}`, "discord-bot");
+    } catch (dmError) {
+      log(`Failed to DM user ${message.author.tag}: ${dmError}`, "discord-bot");
+    }
+  } catch (error) {
+    log(`Error handling ISO request: ${error}`, "discord-bot");
+  }
+}
+
+// Handle category selection from button interaction
+async function handleCategorySelection(
+  interaction: ButtonInteraction, 
+  categoryId: string
+): Promise<void> {
+  try {
+    const userId = interaction.user.id;
+    const userRequests = await storage.getIsoRequestsByUser(userId, 5);
+    
+    if (userRequests.length === 0) {
+      await interaction.reply({
+        content: "I couldn't find your ISO request in our system. Please send a new request.",
+        ephemeral: true
+      });
+      return;
+    }
+    
+    const isoRequest = userRequests[0];
+    const updatedRequest = await storage.updateIsoRequestCategory(isoRequest.id, categoryId);
+    
+    if (!updatedRequest) {
+      await interaction.reply({
+        content: "I had trouble updating your request. Please try again.",
+        ephemeral: true
+      });
+      return;
+    }
+    
+    const category = CATEGORIES.find(cat => cat.id === categoryId);
+    
+    await interaction.update({
+      content: `Your ISO request has been categorized as **${category?.label || categoryId}**. I'll cross-post it to the appropriate channel!`,
+      components: []
+    });
+    
+    // Cross-post to appropriate channel
+    const categoryChannelMap: {[key: string]: string} = {
+      'electronics': 'electronics',
+      'accessories': 'accessories', 
+      'clothing': 'clothing',
+      'home_furniture': 'home-and-furniture'
+    };
+    
+    const channelName = categoryChannelMap[categoryId];
+    const targetChannel = interaction.client.channels.cache.find(
+      channel => 
+        channel.isTextBased() && 
+        !channel.isDMBased() && 
+        (channel as any).name?.toLowerCase() === channelName.toLowerCase()
+    );
+    
+    if (targetChannel && targetChannel.isTextBased()) {
+      const embed = new EmbedBuilder()
+        .setColor('#5865F2')
+        .setTitle('ISO Request')
+        .setDescription(isoRequest.content)
+        .addFields(
+          { name: 'Category', value: category?.label || categoryId, inline: true },
+          { name: 'Requested by', value: isoRequest.username, inline: true }
+        )
+        .setTimestamp();
+        
+      await (targetChannel as TextChannel).send({
+        embeds: [embed],
+        components: [] // No buttons in public channels
+      });
+      
+      await interaction.followUp({
+        content: `Your request has been posted to the #${channelName} channel!`,
+        ephemeral: true
+      });
+    }
+  } catch (error) {
+    log(`Error handling category selection: ${error}`, "discord-bot");
+  }
+}
+
+// Handle fulfill button interaction
+async function handleFulfillRequest(interaction: ButtonInteraction): Promise<void> {
+  try {
+    // Find ISO request
+    let isoRequest = null;
+    if (interaction.message.embeds.length > 0) {
+      const embedDescription = interaction.message.embeds[0].description || "";
+      const activeRequests = await storage.getActiveIsoRequests(20);
+      
+      isoRequest = activeRequests.find(req => 
+        req.content.includes(embedDescription) || embedDescription.includes(req.content)
+      );
+    }
+    
+    // Find archive channel
+    let archiveChannel = interaction.client.channels.cache.find(
+      channel => 
+        channel instanceof TextChannel && 
+        (channel as any).name?.toLowerCase() === 'archive'
+    ) as TextChannel;
+    
+    // Get original request content and clean it up
+    let originalRequestContent = "";
+    if (interaction.message.embeds.length > 0) {
+      const embed = interaction.message.embeds[0];
+      originalRequestContent = embed.description || embed.title || interaction.message.content;
+    } else {
+      originalRequestContent = interaction.message.content;
+    }
+    
+    originalRequestContent = originalRequestContent
+      .replace("When your item is found, click the button below to mark it as fulfilled:", "")
+      .replace("Thanks for your ISO request! Please select a category for your item:", "")
+      .trim();
+    
+    // Create fulfilled embed
+    const embed = new EmbedBuilder()
+      .setColor('#FFA500')
+      .setTitle('Item Fulfilled')
+      .setDescription(originalRequestContent)
+      .addFields(
+        { name: 'Marked as fulfilled by', value: interaction.user.tag, inline: true },
+        { name: 'Fulfilled on', value: new Date().toLocaleString(), inline: true }
+      )
+      .setTimestamp();
+      
+    if (interaction.user.avatar) {
+      embed.setThumbnail(`https://cdn.discordapp.com/avatars/${interaction.user.id}/${interaction.user.avatar}.png`);
+    }
+    
+    // Archive the fulfilled request
+    if (archiveChannel) {
+      await archiveChannel.send({
+        embeds: [embed]
+      });
+    }
+    
+    // Delete from category channel or update in DM
+    if (interaction.channel?.type !== 1) { // Not a DM
+      try {
+        await interaction.message.delete();
+        log(`Deleted cross-posted message from category channel`, "discord-bot");
+      } catch (deleteError) {
+        await interaction.update({
+          embeds: [embed],
+          components: []
+        });
+      }
+    } else {
+      await interaction.update({
+        embeds: [embed],
+        components: []
+      });
+    }
+    
+    // Notify requester if found
+    if (isoRequest) {
+      await storage.markIsoRequestFulfilled(isoRequest.id);
+      
+      try {
+        const requester = await interaction.client.users.fetch(isoRequest.userId);
+        if (requester) {
+          const dmChannel = await requester.createDM();
+          await dmChannel.send({
+            content: `Great news! Your ISO request has been fulfilled by ${interaction.user.tag}.`,
+            embeds: [embed]
+          });
+        }
+      } catch (notifyError) {
+        log(`Failed to notify requester: ${notifyError}`, "discord-bot");
+      }
+    }
+    
+    log(`Item fulfilled by ${interaction.user.tag}`, "discord-bot");
+  } catch (error) {
+    log(`Error handling fulfill request: ${error}`, "discord-bot");
   }
 }
 
