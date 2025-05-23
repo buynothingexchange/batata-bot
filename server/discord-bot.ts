@@ -315,7 +315,19 @@ async function handleMessage(message: Message) {
         return;
       }
       
-      // Note: !claimed and !resol commands have been removed for streamlining
+      // Check if this is a message from Batata Bot (formatted ISO request)
+      if (message.author.username === 'Batata') {
+        if (isFormattedIsoRequest(message)) {
+          log('Processing formatted ISO request from Batata Bot', "discord-bot");
+          await handleBatataIsoRequest(message);
+        }
+      } else {
+        // Handle direct ISO posts in server
+        if (message.guild && isDirectIsoRequest(message)) {
+          log(`Detected direct ISO post in server by ${message.author.username}`, "discord-bot");
+          await handleIsoRequest(message);
+        }
+      }
     }
   } catch (error) {
     log(`Error handling message: ${error}`, "discord-bot");
@@ -334,18 +346,16 @@ async function handleInteraction(interaction: Interaction) {
     
     // Get the custom ID from the button
     const customId = interaction.customId;
-    // Fulfill button functionality has been moved to BNE bot
+    
+    // Handle category selection
+    if (customId.startsWith('category:')) {
+      const categoryId = customId.split(':')[1];
+      await handleCategorySelection(interaction, categoryId);
+    }
+    
+    // Handle fulfill item button
     if (customId === 'fulfill:item') {
-      try {
-        await interaction.reply({
-          content: "The 'Fulfilled' feature has been moved to BNE bot. Please use BNE bot to mark items as fulfilled.",
-          ephemeral: true
-        });
-        
-        log(`User ${interaction.user.username} clicked the Fulfilled button (feature now in BNE bot)`, "discord-bot");
-      } catch (error) {
-        log(`Error handling fulfill button redirect: ${error}`, "discord-bot");
-      }
+      await handleFulfillRequest(interaction);
     }
   } catch (error) {
     log(`Error handling interaction: ${error}`, "discord-bot");
