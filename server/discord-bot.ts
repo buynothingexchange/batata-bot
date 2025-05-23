@@ -308,7 +308,9 @@ const CATEGORIES = [
   { id: "electronics", label: "Electronics", style: ButtonStyle.Primary },
   { id: "accessories", label: "Accessories", style: ButtonStyle.Primary },
   { id: "clothing", label: "Clothing", style: ButtonStyle.Primary },
-  { id: "home_furniture", label: "Home & Furniture", style: ButtonStyle.Primary }
+  { id: "home_furniture", label: "Home & Furniture", style: ButtonStyle.Primary },
+  { id: "footwear", label: "Footwear", style: ButtonStyle.Primary },
+  { id: "misc", label: "Misc", style: ButtonStyle.Primary }
 ];
 
 // Create category selection buttons
@@ -440,7 +442,9 @@ async function handleCategorySelection(
       'electronics': 'electronics',
       'accessories': 'accessories', 
       'clothing': 'clothing',
-      'home_furniture': 'home-and-furniture'
+      'home_furniture': 'home-and-furniture',
+      'footwear': 'footwear',
+      'misc': 'misc'
     };
     
     const channelName = categoryChannelMap[categoryId];
