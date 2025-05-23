@@ -197,31 +197,7 @@ async function handleMessage(message: Message) {
       return;
     }
     
-    // Handle ISO requests in the items-exchange channel
-    if (message.content.trim().startsWith("ISO") && 
-        message.channel.type === ChannelType.GuildText &&
-        (message.channel as TextChannel).name === "items-exchange") {
-      
-      // Check if we're already processing an ISO request to prevent duplicates
-      if (isProcessingIsoRequest) {
-        log(`Already processing an ISO request, ignoring message from ${message.author.username}`, "discord-bot");
-        return;
-      }
-      
-      // Set the processing lock
-      setIsoProcessingLock(true);
-      
-      log(`Processing ISO request from ${message.author.username} in #items-exchange`, "discord-bot");
-      
-      try {
-        await processISORequest(message);
-      } catch (isoError) {
-        log(`Error in ISO request processing: ${isoError}`, "discord-bot");
-      } finally {
-        // Make sure we always release the lock, even if there's an error
-        setIsoProcessingLock(false);
-      }
-    }
+
     
     // Get the bot configuration
     if (!config) {
@@ -315,20 +291,11 @@ async function handleMessage(message: Message) {
         return;
       }
       
-      // Check if this is a message from Batata Bot (formatted ISO request)
-      if (message.author.username === 'Batata') {
-        const content = message.content.toLowerCase();
-        if (content.includes('is looking for') && content.includes('<@')) {
-          log('Processing formatted ISO request from Batata Bot', "discord-bot");
-          await handleBatataIsoRequest(message);
-        }
-      } else {
-        // Handle direct ISO posts in server
-        const content = message.content.trim().toUpperCase();
-        if (message.guild && content.startsWith('ISO ') && content.length > 4) {
-          log(`Detected direct ISO post in server by ${message.author.username}`, "discord-bot");
-          await handleIsoRequest(message);
-        }
+      // Handle direct ISO posts in server - no formatting, just send category buttons
+      const content = message.content.trim().toUpperCase();
+      if (message.guild && content.startsWith('ISO ') && content.length > 4) {
+        log(`Detected ISO request from ${message.author.username}`, "discord-bot");
+        await handleIsoRequest(message);
       }
     }
   } catch (error) {
@@ -385,60 +352,7 @@ function isDirectIsoRequest(message: Message): boolean {
   return content.startsWith('ISO ') && content.length > 4;
 }
 
-// Handle ISO request from Batata Bot message
-async function handleBatataIsoRequest(message: Message): Promise<void> {
-  try {
-    // Extract user mention from message
-    const mentionMatch = message.content.match(/<@(\d+)>/);
-    if (!mentionMatch) return;
-    
-    const userId = mentionMatch[1];
-    const mentionedUser = await message.client.users.fetch(userId);
-    
-    if (!mentionedUser) return;
-    
-    // Create ISO request record
-    const isoRequest = {
-      discordMessageId: message.id,
-      userId: userId,
-      username: mentionedUser.tag,
-      content: message.content,
-      timestamp: new Date()
-    };
-    
-    const savedRequest = await storage.createIsoRequest(isoRequest);
-    
-    // Send DM to user with category buttons
-    try {
-      const dmChannel = await mentionedUser.createDM();
-      const fulfillRow = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(
-          new ButtonBuilder()
-            .setCustomId('fulfill:item')
-            .setLabel('Mark as Fulfilled')
-            .setStyle(ButtonStyle.Success)
-        );
-      
-      // Send category selection buttons first
-      await dmChannel.send({
-        content: "Thanks for your ISO request! Please select a category for your item:",
-        components: [createCategoryButtons()]
-      });
-      
-      // Send fulfill button as a separate message
-      await dmChannel.send({
-        content: "When your item is found, click the button below to mark it as fulfilled:",
-        components: [fulfillRow]
-      });
-      
-      log(`Sent category selection to user ${mentionedUser.tag}`, "discord-bot");
-    } catch (dmError) {
-      log(`Failed to DM user ${mentionedUser.tag}: ${dmError}`, "discord-bot");
-    }
-  } catch (error) {
-    log(`Error handling Batata ISO request: ${error}`, "discord-bot");
-  }
-}
+
 
 // Handle direct ISO request
 async function handleIsoRequest(message: Message): Promise<void> {
@@ -538,19 +452,16 @@ async function handleCategorySelection(
     );
     
     if (targetChannel && targetChannel.isTextBased()) {
-      const embed = new EmbedBuilder()
-        .setColor('#5865F2')
-        .setTitle('ISO Request')
-        .setDescription(isoRequest.content)
-        .addFields(
-          { name: 'Category', value: category?.label || categoryId, inline: true },
-          { name: 'Requested by', value: isoRequest.username, inline: true }
-        )
-        .setTimestamp();
-        
+      // Extract the item from the original ISO request
+      const originalContent = isoRequest.content.trim();
+      const itemMatch = originalContent.match(/ISO\s+(.*?)(?:\.|$)/i);
+      const item = itemMatch ? itemMatch[1].trim() : "item";
+      
+      // Create formatted message with user mention
+      const formattedContent = `<@${isoRequest.userId}> is in search of ${item}.`;
+      
       await (targetChannel as TextChannel).send({
-        embeds: [embed],
-        components: [] // No buttons in public channels
+        content: formattedContent
       });
       
       await interaction.followUp({
