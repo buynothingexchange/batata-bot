@@ -407,18 +407,32 @@ async function handleIsoRequest(message: Message): Promise<void> {
       
       // Send category selection buttons first  
       const categoryRows = createCategoryButtons();
-      await dmChannel.send({
-        content: "Thanks for your ISO request! Please select a category for your item:",
-        components: categoryRows
-      });
+      log(`Creating ${categoryRows.length} button rows for user ${message.author.tag}`, "discord-bot");
+      
+      try {
+        await dmChannel.send({
+          content: "Thanks for your ISO request! Please select a category for your item:",
+          components: categoryRows
+        });
+        log(`Successfully sent category buttons to user ${message.author.tag}`, "discord-bot");
+      } catch (buttonError) {
+        log(`Error sending category buttons: ${buttonError}`, "discord-bot");
+        // Fallback: send without buttons
+        await dmChannel.send({
+          content: "Thanks for your ISO request! Please let me know which category this belongs to: Electronics, Accessories, Clothing, Home & Furniture, Footwear, or Misc"
+        });
+      }
       
       // Send fulfill button as a separate message
-      await dmChannel.send({
-        content: "When your item is found, click the button below to mark it as fulfilled:",
-        components: [fulfillRow]
-      });
-      
-      log(`Sent category selection to user ${message.author.tag}`, "discord-bot");
+      try {
+        await dmChannel.send({
+          content: "When your item is found, click the button below to mark it as fulfilled:",
+          components: [fulfillRow]
+        });
+        log(`Successfully sent fulfill button to user ${message.author.tag}`, "discord-bot");
+      } catch (fulfillError) {
+        log(`Error sending fulfill button: ${fulfillError}`, "discord-bot");
+      }
     } catch (dmError) {
       log(`Failed to DM user ${message.author.tag}: ${dmError}`, "discord-bot");
     }
