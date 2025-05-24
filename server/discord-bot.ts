@@ -108,7 +108,8 @@ export async function initializeBot() {
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
       GatewayIntentBits.MessageContent,
-      GatewayIntentBits.GuildMessageReactions
+      GatewayIntentBits.GuildMessageReactions,
+      GatewayIntentBits.DirectMessages // Needed for DM interactions
       // DM intents removed as handled by BNE bot now
     ];
     
