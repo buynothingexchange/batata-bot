@@ -396,7 +396,9 @@ async function handleIsoRequest(message: Message): Promise<void> {
     
     // Send DM to user with category buttons
     try {
+      log(`Attempting to create DM channel for user ${message.author.tag}`, "discord-bot");
       const dmChannel = await message.author.createDM();
+      log(`Successfully created DM channel for user ${message.author.tag}`, "discord-bot");
       const fulfillRow = new ActionRowBuilder<ButtonBuilder>()
         .addComponents(
           new ButtonBuilder()
