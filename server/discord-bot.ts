@@ -313,28 +313,44 @@ const CATEGORIES = [
   { id: "misc", label: "Misc", style: ButtonStyle.Primary }
 ];
 
-// Create category selection buttons
+// Create category selection buttons - split into two rows since Discord limits 5 buttons per row
 function createCategoryButtons(): ActionRowBuilder<ButtonBuilder>[] {
-  const rows: ActionRowBuilder<ButtonBuilder>[] = [];
-  const buttonsPerRow = 3; // 3 buttons per row for better layout
+  const row1 = new ActionRowBuilder<ButtonBuilder>();
+  const row2 = new ActionRowBuilder<ButtonBuilder>();
   
-  for (let i = 0; i < CATEGORIES.length; i += buttonsPerRow) {
-    const row = new ActionRowBuilder<ButtonBuilder>();
-    const rowCategories = CATEGORIES.slice(i, i + buttonsPerRow);
-    
-    rowCategories.forEach(category => {
-      row.addComponents(
-        new ButtonBuilder()
-          .setCustomId(`category:${category.id}`)
-          .setLabel(category.label)
-          .setStyle(ButtonStyle.Secondary) // Dark grey buttons
-      );
-    });
-    
-    rows.push(row);
-  }
+  // First row: Electronics, Accessories, Clothing
+  row1.addComponents(
+    new ButtonBuilder()
+      .setCustomId('category:electronics')
+      .setLabel('Electronics')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('category:accessories')
+      .setLabel('Accessories')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('category:clothing')
+      .setLabel('Clothing')
+      .setStyle(ButtonStyle.Secondary)
+  );
   
-  return rows;
+  // Second row: Home & Furniture, Footwear, Misc
+  row2.addComponents(
+    new ButtonBuilder()
+      .setCustomId('category:home_furniture')
+      .setLabel('Home & Furniture')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('category:footwear')
+      .setLabel('Footwear')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('category:misc')
+      .setLabel('Misc')
+      .setStyle(ButtonStyle.Secondary)
+  );
+  
+  return [row1, row2];
 }
 
 // Create fulfill button for ISO requests
