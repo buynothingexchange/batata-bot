@@ -633,20 +633,28 @@ async function handleInteraction(interaction: Interaction) {
   lastSuccessfulActivity = Date.now();
   
   try {
+    log(`Received interaction: type=${interaction.type}, user=${interaction.user?.tag}`, "discord-bot");
+    
     // Only handle button interactions
-    if (!interaction.isButton()) return;
+    if (!interaction.isButton()) {
+      log(`Ignoring non-button interaction`, "discord-bot");
+      return;
+    }
     
     // Get the custom ID from the button
     const customId = interaction.customId;
+    log(`Button clicked: ${customId} by user ${interaction.user.tag}`, "discord-bot");
     
     // Handle category selection
     if (customId.startsWith('category:')) {
       const categoryId = customId.split(':')[1];
+      log(`Processing category selection: ${categoryId}`, "discord-bot");
       await handleCategorySelection(interaction, categoryId);
     }
     
     // Handle fulfill item button
     if (customId === 'fulfill:item') {
+      log(`Processing fulfill request`, "discord-bot");
       await handleFulfillRequest(interaction);
     }
   } catch (error) {
