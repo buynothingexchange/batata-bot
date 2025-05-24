@@ -502,11 +502,19 @@ async function handleCategorySelection(
       const itemMatch = originalContent.match(/ISO\s+(.*?)(?:\.|$)/i);
       const item = itemMatch ? itemMatch[1].trim() : "item";
       
-      // Create formatted message with user mention
-      const formattedContent = `<@${isoRequest.userId}> is in search of ${item}.`;
+      // Create beautiful embed like in the image
+      const embed = new EmbedBuilder()
+        .setTitle('ISO Request')
+        .setDescription(`<@${isoRequest.userId}> is looking for ${item}`)
+        .addFields(
+          { name: 'Category', value: category?.label || categoryId, inline: true },
+          { name: 'Requested by', value: isoRequest.username, inline: true }
+        )
+        .setTimestamp(isoRequest.timestamp)
+        .setColor(0x2b2d31); // Dark theme color to match Discord
       
       await (targetChannel as TextChannel).send({
-        content: formattedContent
+        embeds: [embed]
       });
       
       await interaction.followUp({
