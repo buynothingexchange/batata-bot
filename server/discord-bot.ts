@@ -314,19 +314,27 @@ const CATEGORIES = [
 ];
 
 // Create category selection buttons
-function createCategoryButtons(): ActionRowBuilder<ButtonBuilder> {
-  const row = new ActionRowBuilder<ButtonBuilder>();
+function createCategoryButtons(): ActionRowBuilder<ButtonBuilder>[] {
+  const rows: ActionRowBuilder<ButtonBuilder>[] = [];
+  const buttonsPerRow = 3; // 3 buttons per row for better layout
   
-  CATEGORIES.forEach(category => {
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId(`category:${category.id}`)
-        .setLabel(category.label)
-        .setStyle(ButtonStyle.Secondary) // Dark grey buttons
-    );
-  });
+  for (let i = 0; i < CATEGORIES.length; i += buttonsPerRow) {
+    const row = new ActionRowBuilder<ButtonBuilder>();
+    const rowCategories = CATEGORIES.slice(i, i + buttonsPerRow);
+    
+    rowCategories.forEach(category => {
+      row.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`category:${category.id}`)
+          .setLabel(category.label)
+          .setStyle(ButtonStyle.Secondary) // Dark grey buttons
+      );
+    });
+    
+    rows.push(row);
+  }
   
-  return row;
+  return rows;
 }
 
 // Create fulfill button for ISO requests
@@ -381,10 +389,11 @@ async function handleIsoRequest(message: Message): Promise<void> {
             .setStyle(ButtonStyle.Success)
         );
       
-      // Send category selection buttons first
+      // Send category selection buttons first  
+      const categoryRows = createCategoryButtons();
       await dmChannel.send({
         content: "Thanks for your ISO request! Please select a category for your item:",
-        components: [createCategoryButtons()]
+        components: categoryRows
       });
       
       // Send fulfill button as a separate message
