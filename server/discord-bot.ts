@@ -573,12 +573,9 @@ async function handleCategorySelection(
     );
     
     if (targetChannel && targetChannel.isTextBased()) {
-      // Extract the item from the original request
-      const originalContent = request.content.trim();
-      const itemMatch = isPif 
-        ? originalContent.match(/PIF\s+(.*?)(?:\.|$)/i)
-        : originalContent.match(/ISO\s+(.*?)(?:\.|$)/i);
-      const item = itemMatch ? itemMatch[1].trim() : "item";
+      // Extract the item from the original request using AI
+      const { extractItemName } = await import('./openai-service');
+      const item = await extractItemName(request.content.trim());
       
       // Create beautiful embed with different wording for PIF vs ISO
       const embed = new EmbedBuilder()

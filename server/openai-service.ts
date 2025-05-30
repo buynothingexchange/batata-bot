@@ -12,6 +12,45 @@ if (!process.env.OPENAI_API_KEY) {
 }
 
 /**
+ * Extracts the item name from an ISO or PIF request
+ * @param messageContent The raw message content (starting with "ISO" or "PIF")
+ * @returns The extracted item name
+ */
+export async function extractItemName(messageContent: string): Promise<string> {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      // Fallback to simple parsing if no API key
+      const match = messageContent.match(/(?:ISO|PIF)\s+(.*?)(?:\.|$)/i);
+      return match ? match[1].trim() : "item";
+    }
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      messages: [
+        {
+          role: "system",
+          content: "Extract only the item name from this ISO/PIF request. Return just the item name, nothing else. Examples: 'ISO headphones' -> 'headphones', 'PIF hey guys i have this pair of shoes if anyone wants it' -> 'pair of shoes'"
+        },
+        {
+          role: "user",
+          content: messageContent
+        }
+      ],
+      max_tokens: 50,
+      temperature: 0
+    });
+
+    const extractedItem = response.choices[0].message.content?.trim();
+    return extractedItem || "item";
+  } catch (error) {
+    log(`Error extracting item name: ${error}`, "openai-service");
+    // Fallback to simple parsing
+    const match = messageContent.match(/(?:ISO|PIF)\s+(.*?)(?:\.|$)/i);
+    return match ? match[1].trim() : "item";
+  }
+}
+
+/**
  * Analyzes an ISO request to extract structured information
  * @param username The Discord username of the requester
  * @param messageContent The raw message content (starting with "ISO")
