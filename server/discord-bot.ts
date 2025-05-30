@@ -288,15 +288,18 @@ async function handleMessage(message: Message) {
       if (message.mentions.has(bot?.user as User) && 
           /\b(hi|hello|hey|howdy|hola|greetings|yo|sup)\b/i.test(message.content)) {
         log(`Bot was greeted by ${message.author.username}`, "discord-bot");
-        await message.reply("Hello! I'm Batata, and I format ISO requests in a standardized way. Post a message starting with ISO to see me in action!");
+        await message.reply("Hello! I'm Batata, and I format ISO requests and PIF offers in a standardized way. Post a message starting with ISO or PIF to see me in action!");
         return;
       }
       
-      // Handle direct ISO posts in server - no formatting, just send category buttons
+      // Handle direct ISO and PIF posts in server - no formatting, just send category buttons
       const content = message.content.trim().toUpperCase();
       if (message.guild && content.startsWith('ISO ') && content.length > 4) {
         log(`Detected ISO request from ${message.author.username}`, "discord-bot");
         await handleIsoRequest(message);
+      } else if (message.guild && content.startsWith('PIF ') && content.length > 4) {
+        log(`Detected PIF request from ${message.author.username}`, "discord-bot");
+        await handlePifRequest(message);
       }
     }
   } catch (error) {
@@ -379,7 +382,77 @@ function isDirectIsoRequest(message: Message): boolean {
   return content.startsWith('ISO ') && content.length > 4;
 }
 
+// Detect if message is direct PIF request
+function isDirectPifRequest(message: Message): boolean {
+  const content = message.content.trim().toUpperCase();
+  return content.startsWith('PIF ') && content.length > 4;
+}
 
+
+
+// Handle direct PIF request
+async function handlePifRequest(message: Message): Promise<void> {
+  try {
+    // Create PIF request record
+    const pifRequest = {
+      discordMessageId: message.id,
+      userId: message.author.id,
+      username: message.author.tag,
+      content: message.content,
+      timestamp: new Date(),
+      type: 'PIF' // Add type to distinguish from ISO
+    };
+    
+    const savedRequest = await storage.createIsoRequest(pifRequest); // Reuse same storage
+    
+    // Send DM to user with category buttons
+    try {
+      log(`Attempting to create DM channel for user ${message.author.tag}`, "discord-bot");
+      const dmChannel = await message.author.createDM();
+      log(`Successfully created DM channel for user ${message.author.tag}`, "discord-bot");
+      const fulfillRow = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId('fulfill:item')
+            .setLabel('Mark as Given')
+            .setStyle(ButtonStyle.Success)
+        );
+      
+      // Send category selection buttons first  
+      const categoryRows = createCategoryButtons();
+      log(`Creating ${categoryRows.length} button rows for user ${message.author.tag}`, "discord-bot");
+      
+      try {
+        await dmChannel.send({
+          content: "Thanks for your PIF offer! Please select a category for your item:",
+          components: categoryRows
+        });
+        log(`Successfully sent category buttons to user ${message.author.tag}`, "discord-bot");
+      } catch (buttonError) {
+        log(`Error sending category buttons: ${buttonError}`, "discord-bot");
+        // Fallback: send without buttons
+        await dmChannel.send({
+          content: "Thanks for your PIF offer! Please let me know which category this belongs to: Electronics, Accessories, Clothing, Home & Furniture, Footwear, or Misc"
+        });
+      }
+      
+      // Send fulfill button as a separate message
+      try {
+        await dmChannel.send({
+          content: "When your item is given away, click the button below to mark it as completed:",
+          components: [fulfillRow]
+        });
+        log(`Successfully sent fulfill button to user ${message.author.tag}`, "discord-bot");
+      } catch (fulfillError) {
+        log(`Error sending fulfill button: ${fulfillError}`, "discord-bot");
+      }
+    } catch (dmError) {
+      log(`Failed to DM user ${message.author.tag}: ${dmError}`, "discord-bot");
+    }
+  } catch (error) {
+    log(`Error handling PIF request: ${error}`, "discord-bot");
+  }
+}
 
 // Handle direct ISO request
 async function handleIsoRequest(message: Message): Promise<void> {
@@ -455,14 +528,14 @@ async function handleCategorySelection(
     
     if (userRequests.length === 0) {
       await interaction.reply({
-        content: "I couldn't find your ISO request in our system. Please send a new request.",
+        content: "I couldn't find your request in our system. Please send a new ISO or PIF request.",
         ephemeral: true
       });
       return;
     }
     
-    const isoRequest = userRequests[0];
-    const updatedRequest = await storage.updateIsoRequestCategory(isoRequest.id, categoryId);
+    const request = userRequests[0];
+    const updatedRequest = await storage.updateIsoRequestCategory(request.id, categoryId);
     
     if (!updatedRequest) {
       await interaction.reply({
@@ -473,9 +546,11 @@ async function handleCategorySelection(
     }
     
     const category = CATEGORIES.find(cat => cat.id === categoryId);
+    const isPif = request.content.trim().toUpperCase().startsWith('PIF ');
+    const requestType = isPif ? 'PIF offer' : 'ISO request';
     
     await interaction.update({
-      content: `Your ISO request has been categorized as **${category?.label || categoryId}**. I'll cross-post it to the appropriate channel!`,
+      content: `Your ${requestType} has been categorized as **${category?.label || categoryId}**. I'll cross-post it to the appropriate channel!`,
       components: []
     });
     
@@ -498,21 +573,25 @@ async function handleCategorySelection(
     );
     
     if (targetChannel && targetChannel.isTextBased()) {
-      // Extract the item from the original ISO request
-      const originalContent = isoRequest.content.trim();
-      const itemMatch = originalContent.match(/ISO\s+(.*?)(?:\.|$)/i);
+      // Extract the item from the original request
+      const originalContent = request.content.trim();
+      const itemMatch = isPif 
+        ? originalContent.match(/PIF\s+(.*?)(?:\.|$)/i)
+        : originalContent.match(/ISO\s+(.*?)(?:\.|$)/i);
       const item = itemMatch ? itemMatch[1].trim() : "item";
       
-      // Create beautiful embed like in the image
+      // Create beautiful embed with different wording for PIF vs ISO
       const embed = new EmbedBuilder()
-        .setTitle('ISO Request')
-        .setDescription(`<@${isoRequest.userId}> is looking for ${item}`)
+        .setTitle(isPif ? 'PIF Offer' : 'ISO Request')
+        .setDescription(isPif 
+          ? `<@${request.userId}> is offering ${item}`
+          : `<@${request.userId}> is looking for ${item}`)
         .addFields(
           { name: 'Category', value: category?.label || categoryId, inline: true },
-          { name: 'Requested by', value: isoRequest.username, inline: true }
+          { name: isPif ? 'Offered by' : 'Requested by', value: request.username, inline: true }
         )
-        .setTimestamp(isoRequest.timestamp)
-        .setColor(0x2b2d31); // Dark theme color to match Discord
+        .setTimestamp(request.timestamp)
+        .setColor(isPif ? 0x57F287 : 0x2b2d31); // Green for PIF, dark for ISO
       
       await (targetChannel as TextChannel).send({
         embeds: [embed]
