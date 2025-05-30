@@ -633,25 +633,33 @@ async function handleFulfillRequest(interaction: any): Promise<void> {
       return;
     }
     
-    // Find the original embed in category channels
+    // Find the original embed in the specific category channel
     let originalMessage = null;
     let originalChannel = null;
     
-    // Search through all category channels
-    const categoryChannels = ['electronics', 'accessories', 'clothing', 'home-and-furniture', 'footwear', 'misc'];
+    // Convert category to channel name format
+    const categoryToChannel: { [key: string]: string } = {
+      'Electronics': 'electronics',
+      'Accessories': 'accessories', 
+      'Clothing': 'clothing',
+      'Home & Furniture': 'home-and-furniture',
+      'Footwear': 'footwear',
+      'Misc': 'misc'
+    };
     
-    log(`Searching for original message from user <@${userId}>`, "discord-bot");
+    const targetChannelName = categoryToChannel[recentRequest.category];
+    log(`Searching for original message from user <@${userId}> in specific channel: #${targetChannelName}`, "discord-bot");
     
-    for (const channelName of categoryChannels) {
+    if (targetChannelName) {
       const channel = interaction.client.channels.cache.find(
-        ch => ch instanceof TextChannel && (ch as any).name?.toLowerCase() === channelName
+        ch => ch instanceof TextChannel && (ch as any).name?.toLowerCase() === targetChannelName
       ) as TextChannel;
       
       if (channel) {
-        log(`Searching in #${channelName}`, "discord-bot");
+        log(`Searching in #${targetChannelName}`, "discord-bot");
         try {
           const messages = await channel.messages.fetch({ limit: 50 });
-          log(`Fetched ${messages.size} messages from #${channelName}`, "discord-bot");
+          log(`Fetched ${messages.size} messages from #${targetChannelName}`, "discord-bot");
           
           const foundMessage = messages.find(msg => {
             const hasEmbed = msg.author.bot && msg.embeds.length > 0;
@@ -668,16 +676,15 @@ async function handleFulfillRequest(interaction: any): Promise<void> {
           });
           
           if (foundMessage) {
-            log(`Found original message in #${channelName}: ${foundMessage.id}`, "discord-bot");
+            log(`Found original message in #${targetChannelName}: ${foundMessage.id}`, "discord-bot");
             originalMessage = foundMessage;
             originalChannel = channel;
-            break;
           }
         } catch (error) {
-          log(`Error searching channel ${channelName}: ${error}`, "discord-bot");
+          log(`Error searching channel ${targetChannelName}: ${error}`, "discord-bot");
         }
       } else {
-        log(`Channel #${channelName} not found`, "discord-bot");
+        log(`Channel #${targetChannelName} not found`, "discord-bot");
       }
     }
     
