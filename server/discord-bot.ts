@@ -640,21 +640,30 @@ async function handleFulfillRequest(interaction: any): Promise<void> {
     // Search through all category channels
     const categoryChannels = ['electronics', 'accessories', 'clothing', 'home-and-furniture', 'footwear', 'misc'];
     
+    log(`Searching for original message from user <@${userId}>`, "discord-bot");
+    
     for (const channelName of categoryChannels) {
       const channel = interaction.client.channels.cache.find(
         ch => ch instanceof TextChannel && (ch as any).name?.toLowerCase() === channelName
       ) as TextChannel;
       
       if (channel) {
+        log(`Searching in #${channelName}`, "discord-bot");
         try {
           const messages = await channel.messages.fetch({ limit: 50 });
-          const foundMessage = messages.find(msg => 
-            msg.author.bot && 
-            msg.embeds.length > 0 && 
-            msg.embeds[0].description?.includes(`<@${userId}>`)
-          );
+          log(`Fetched ${messages.size} messages from #${channelName}`, "discord-bot");
+          
+          const foundMessage = messages.find(msg => {
+            const hasEmbed = msg.author.bot && msg.embeds.length > 0;
+            const hasUserMention = msg.embeds[0]?.description?.includes(`<@${userId}>`);
+            if (hasEmbed) {
+              log(`Message ${msg.id}: bot=${msg.author.bot}, embeds=${msg.embeds.length}, hasUserMention=${hasUserMention}, description="${msg.embeds[0]?.description}"`, "discord-bot");
+            }
+            return hasEmbed && hasUserMention;
+          });
           
           if (foundMessage) {
+            log(`Found original message in #${channelName}: ${foundMessage.id}`, "discord-bot");
             originalMessage = foundMessage;
             originalChannel = channel;
             break;
@@ -662,6 +671,8 @@ async function handleFulfillRequest(interaction: any): Promise<void> {
         } catch (error) {
           log(`Error searching channel ${channelName}: ${error}`, "discord-bot");
         }
+      } else {
+        log(`Channel #${channelName} not found`, "discord-bot");
       }
     }
     
@@ -672,6 +683,9 @@ async function handleFulfillRequest(interaction: any): Promise<void> {
     
     // Copy the original embed to archive with fulfilled status
     const originalEmbed = originalMessage.embeds[0];
+    log(`Found original embed - Title: ${originalEmbed.title}, Description: ${originalEmbed.description}`, "discord-bot");
+    log(`Original embed fields: ${JSON.stringify(originalEmbed.fields)}`, "discord-bot");
+    
     const archivedEmbed = new EmbedBuilder()
       .setTitle(originalEmbed.title + ' - ' + (isPif ? 'Given' : 'Fulfilled'))
       .setDescription(originalEmbed.description)
@@ -683,11 +697,19 @@ async function handleFulfillRequest(interaction: any): Promise<void> {
       .setTimestamp(new Date())
       .setColor('#57F287'); // Green for completed
     
+    log(`Created archived embed - Title: ${archivedEmbed.data.title}, Description: ${archivedEmbed.data.description}`, "discord-bot");
+    
     // Send to archive channel
     await archiveChannel.send({ embeds: [archivedEmbed] });
+    log(`Sent embed to archive channel`, "discord-bot");
     
     // Delete the original message from the category channel
-    await originalMessage.delete();
+    try {
+      await originalMessage.delete();
+      log(`Successfully deleted original message from #${originalChannel.name}`, "discord-bot");
+    } catch (deleteError) {
+      log(`Error deleting original message: ${deleteError}`, "discord-bot");
+    }
     
     // Update the request in storage
     await storage.markIsoRequestFulfilled(recentRequest.id);
