@@ -607,99 +607,103 @@ async function handleCategorySelection(
 // Handle fulfill button interaction
 async function handleFulfillRequest(interaction: any): Promise<void> {
   try {
-    // Find ISO request
-    let isoRequest = null;
-    if (interaction.message.embeds.length > 0) {
-      const embedDescription = interaction.message.embeds[0].description || "";
-      const activeRequests = await storage.getActiveIsoRequests(20);
-      
-      isoRequest = activeRequests.find(req => 
-        req.content.includes(embedDescription) || embedDescription.includes(req.content)
-      );
+    await interaction.deferReply({ ephemeral: true });
+    
+    const userId = interaction.user.id;
+    const userRequests = await storage.getIsoRequestsByUser(userId, 10);
+    
+    if (userRequests.length === 0) {
+      await interaction.editReply("I couldn't find any recent requests from you to mark as fulfilled.");
+      return;
     }
     
+    // Find the most recent request
+    const recentRequest = userRequests[0];
+    const isPif = recentRequest.content.trim().toUpperCase().startsWith('PIF ');
+    
     // Find archive channel
-    let archiveChannel = interaction.client.channels.cache.find(
+    const archiveChannel = interaction.client.channels.cache.find(
       channel => 
         channel instanceof TextChannel && 
         (channel as any).name?.toLowerCase() === 'archive'
     ) as TextChannel;
     
-    // Get original request content and clean it up
-    let originalRequestContent = "";
-    if (interaction.message.embeds.length > 0) {
-      const embed = interaction.message.embeds[0];
-      originalRequestContent = embed.description || embed.title || interaction.message.content;
-    } else {
-      originalRequestContent = interaction.message.content;
+    if (!archiveChannel) {
+      await interaction.editReply("I couldn't find an archive channel. Please contact an admin.");
+      return;
     }
     
-    originalRequestContent = originalRequestContent
-      .replace("When your item is found, click the button below to mark it as fulfilled:", "")
-      .replace("Thanks for your ISO request! Please select a category for your item:", "")
-      .trim();
+    // Find the original embed in category channels
+    let originalMessage = null;
+    let originalChannel = null;
     
-    // Create fulfilled embed
-    const embed = new EmbedBuilder()
-      .setColor('#FFA500')
-      .setTitle('Item Fulfilled')
-      .setDescription(originalRequestContent)
-      .addFields(
-        { name: 'Marked as fulfilled by', value: interaction.user.tag, inline: true },
-        { name: 'Fulfilled on', value: new Date().toLocaleString(), inline: true }
-      )
-      .setTimestamp();
+    // Search through all category channels
+    const categoryChannels = ['electronics', 'accessories', 'clothing', 'home-and-furniture', 'footwear', 'misc'];
+    
+    for (const channelName of categoryChannels) {
+      const channel = interaction.client.channels.cache.find(
+        ch => ch instanceof TextChannel && (ch as any).name?.toLowerCase() === channelName
+      ) as TextChannel;
       
-    if (interaction.user.avatar) {
-      embed.setThumbnail(`https://cdn.discordapp.com/avatars/${interaction.user.id}/${interaction.user.avatar}.png`);
-    }
-    
-    // Archive the fulfilled request
-    if (archiveChannel) {
-      await archiveChannel.send({
-        embeds: [embed]
-      });
-    }
-    
-    // Delete from category channel or update in DM
-    if (interaction.channel?.type !== 1) { // Not a DM
-      try {
-        await interaction.message.delete();
-        log(`Deleted cross-posted message from category channel`, "discord-bot");
-      } catch (deleteError) {
-        await interaction.update({
-          embeds: [embed],
-          components: []
-        });
-      }
-    } else {
-      await interaction.update({
-        embeds: [embed],
-        components: []
-      });
-    }
-    
-    // Notify requester if found
-    if (isoRequest) {
-      await storage.markIsoRequestFulfilled(isoRequest.id);
-      
-      try {
-        const requester = await interaction.client.users.fetch(isoRequest.userId);
-        if (requester) {
-          const dmChannel = await requester.createDM();
-          await dmChannel.send({
-            content: `Great news! Your ISO request has been fulfilled by ${interaction.user.tag}.`,
-            embeds: [embed]
-          });
+      if (channel) {
+        try {
+          const messages = await channel.messages.fetch({ limit: 50 });
+          const foundMessage = messages.find(msg => 
+            msg.author.bot && 
+            msg.embeds.length > 0 && 
+            msg.embeds[0].description?.includes(`<@${userId}>`)
+          );
+          
+          if (foundMessage) {
+            originalMessage = foundMessage;
+            originalChannel = channel;
+            break;
+          }
+        } catch (error) {
+          log(`Error searching channel ${channelName}: ${error}`, "discord-bot");
         }
-      } catch (notifyError) {
-        log(`Failed to notify requester: ${notifyError}`, "discord-bot");
       }
     }
     
-    log(`Item fulfilled by ${interaction.user.tag}`, "discord-bot");
+    if (!originalMessage || !originalChannel) {
+      await interaction.editReply("I couldn't find your original request to mark as fulfilled. It may have already been processed.");
+      return;
+    }
+    
+    // Copy the original embed to archive with fulfilled status
+    const originalEmbed = originalMessage.embeds[0];
+    const archivedEmbed = new EmbedBuilder()
+      .setTitle(originalEmbed.title + ' - ' + (isPif ? 'Given' : 'Fulfilled'))
+      .setDescription(originalEmbed.description)
+      .addFields(originalEmbed.fields)
+      .addFields(
+        { name: isPif ? 'Marked as given by' : 'Marked as fulfilled by', value: interaction.user.tag, inline: true },
+        { name: isPif ? 'Given on' : 'Fulfilled on', value: new Date().toLocaleDateString(), inline: true }
+      )
+      .setTimestamp(new Date())
+      .setColor('#57F287'); // Green for completed
+    
+    // Send to archive channel
+    await archiveChannel.send({ embeds: [archivedEmbed] });
+    
+    // Delete the original message from the category channel
+    await originalMessage.delete();
+    
+    // Update the request in storage
+    await storage.markIsoRequestFulfilled(recentRequest.id);
+    
+    await interaction.editReply({
+      content: `Your ${isPif ? 'PIF offer' : 'ISO request'} has been marked as ${isPif ? 'given' : 'fulfilled'} and moved to the archive!`
+    });
+    
+    log(`${isPif ? 'PIF offer' : 'ISO request'} ${isPif ? 'given' : 'fulfilled'} by ${interaction.user.tag}`, "discord-bot");
   } catch (error) {
     log(`Error handling fulfill request: ${error}`, "discord-bot");
+    try {
+      await interaction.editReply("There was an error processing your request. Please try again.");
+    } catch (replyError) {
+      log(`Error replying to fulfill interaction: ${replyError}`, "discord-bot");
+    }
   }
 }
 
