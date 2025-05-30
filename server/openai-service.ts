@@ -12,6 +12,32 @@ if (!process.env.OPENAI_API_KEY) {
 }
 
 /**
+ * Improved fallback parsing that handles common sentence patterns
+ */
+function parseItemNameFallback(messageContent: string): string {
+  // Remove ISO/PIF prefix
+  let content = messageContent.replace(/^(ISO|PIF)\s+/i, "").trim();
+  
+  // Handle common patterns like "on this", "for this", "about this"
+  content = content.replace(/^(on\s+this\s+|for\s+this\s+|about\s+this\s+|of\s+this\s+)/i, "");
+  
+  // Handle patterns like "hey guys i have this" or "anyone want this"
+  content = content.replace(/^(hey\s+guys?\s+i\s+have\s+(this\s+)?|anyone\s+wants?\s+(this\s+)?|i\s+have\s+(this\s+)?)/i, "");
+  
+  // Handle "if anyone wants it" at the end
+  content = content.replace(/(\s+if\s+anyone\s+wants?\s+it.*$)/i, "");
+  
+  // Handle other trailing phrases
+  content = content.replace(/(\s+for\s+free.*$|\s+to\s+give\s+away.*$|\s+available.*$)/i, "");
+  
+  // Clean up extra whitespace
+  content = content.trim();
+  
+  // If we got something reasonable, return it, otherwise fallback
+  return content.length > 0 && content.length < 100 ? content : "item";
+}
+
+/**
  * Extracts the item name from an ISO or PIF request
  * @param messageContent The raw message content (starting with "ISO" or "PIF")
  * @returns The extracted item name
@@ -19,9 +45,8 @@ if (!process.env.OPENAI_API_KEY) {
 export async function extractItemName(messageContent: string): Promise<string> {
   try {
     if (!process.env.OPENAI_API_KEY) {
-      // Fallback to simple parsing if no API key
-      const match = messageContent.match(/(?:ISO|PIF)\s+(.*?)(?:\.|$)/i);
-      return match ? match[1].trim() : "item";
+      // Fallback to improved parsing if no API key
+      return parseItemNameFallback(messageContent);
     }
 
     const response = await openai.chat.completions.create({
@@ -44,9 +69,8 @@ export async function extractItemName(messageContent: string): Promise<string> {
     return extractedItem || "item";
   } catch (error) {
     log(`Error extracting item name: ${error}`, "openai-service");
-    // Fallback to simple parsing
-    const match = messageContent.match(/(?:ISO|PIF)\s+(.*?)(?:\.|$)/i);
-    return match ? match[1].trim() : "item";
+    // Fallback to improved parsing
+    return parseItemNameFallback(messageContent);
   }
 }
 
