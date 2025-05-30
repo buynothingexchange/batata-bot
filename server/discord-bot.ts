@@ -655,11 +655,16 @@ async function handleFulfillRequest(interaction: any): Promise<void> {
           
           const foundMessage = messages.find(msg => {
             const hasEmbed = msg.author.bot && msg.embeds.length > 0;
-            const hasUserMention = msg.embeds[0]?.description?.includes(`<@${userId}>`);
+            const embed = msg.embeds[0];
+            const hasUserMention = embed?.description?.includes(`<@${userId}>`);
+            const isOriginalRequest = embed?.title && !embed.title.includes('Fulfilled') && !embed.title.includes('Given');
+            const hasCategory = embed?.fields?.some(field => field.name === 'Category');
+            
             if (hasEmbed) {
-              log(`Message ${msg.id}: bot=${msg.author.bot}, embeds=${msg.embeds.length}, hasUserMention=${hasUserMention}, description="${msg.embeds[0]?.description}"`, "discord-bot");
+              log(`Message ${msg.id}: bot=${msg.author.bot}, embeds=${msg.embeds.length}, hasUserMention=${hasUserMention}, isOriginalRequest=${isOriginalRequest}, hasCategory=${hasCategory}, title="${embed?.title}", description="${embed?.description}"`, "discord-bot");
             }
-            return hasEmbed && hasUserMention;
+            
+            return hasEmbed && hasUserMention && isOriginalRequest && hasCategory;
           });
           
           if (foundMessage) {
