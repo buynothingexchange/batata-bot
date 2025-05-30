@@ -18,6 +18,9 @@ function parseItemNameFallback(messageContent: string): string {
   // Remove ISO/PIF prefix
   let content = messageContent.replace(/^(ISO|PIF)\s+/i, "").trim();
   
+  // Handle possessive patterns like "my laptop", "this hat", "these shoes"
+  content = content.replace(/^(my\s+|this\s+|these\s+|the\s+|a\s+|an\s+)/i, "");
+  
   // Handle common patterns like "on this", "for this", "about this"
   content = content.replace(/^(on\s+this\s+|for\s+this\s+|about\s+this\s+|of\s+this\s+)/i, "");
   
@@ -30,11 +33,26 @@ function parseItemNameFallback(messageContent: string): string {
   // Handle other trailing phrases
   content = content.replace(/(\s+for\s+free.*$|\s+to\s+give\s+away.*$|\s+available.*$)/i, "");
   
-  // Clean up extra whitespace
-  content = content.trim();
+  // Take only the first few words (the actual item name)
+  const words = content.trim().split(/\s+/);
+  const itemWords = words.slice(0, 3); // Take first 3 words max
   
-  // If we got something reasonable, return it, otherwise fallback
-  return content.length > 0 && content.length < 100 ? content : "item";
+  // Join the words back
+  const cleanedItem = itemWords.join(' ').trim();
+  
+  // If we got something reasonable, return it with proper article
+  if (cleanedItem.length > 0 && cleanedItem.length < 50) {
+    // Add article if needed
+    const startsWithVowel = /^[aeiou]/i.test(cleanedItem);
+    const needsArticle = !cleanedItem.match(/^(a|an|the|some|my|this|these)\s/i);
+    
+    if (needsArticle) {
+      return startsWithVowel ? `an ${cleanedItem}` : `a ${cleanedItem}`;
+    }
+    return cleanedItem;
+  }
+  
+  return "item";
 }
 
 /**
