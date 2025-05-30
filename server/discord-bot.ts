@@ -637,18 +637,21 @@ async function handleFulfillRequest(interaction: any): Promise<void> {
     let originalMessage = null;
     let originalChannel = null;
     
-    // Convert category to channel name format
+    // Log the actual stored category to debug
+    log(`Stored category in database: "${recentRequest.category}"`, "discord-bot");
+    
+    // Convert category ID to channel name format (categoryId is stored in database)
     const categoryToChannel: { [key: string]: string } = {
-      'Electronics': 'electronics',
-      'Accessories': 'accessories', 
-      'Clothing': 'clothing',
-      'Home & Furniture': 'home-and-furniture',
-      'Footwear': 'footwear',
-      'Misc': 'misc'
+      'electronics': 'electronics',
+      'accessories': 'accessories', 
+      'clothing': 'clothing',
+      'home_furniture': 'home-and-furniture',
+      'footwear': 'footwear',
+      'misc': 'misc'
     };
     
     const targetChannelName = categoryToChannel[recentRequest.category];
-    log(`Searching for original message from user <@${userId}> in specific channel: #${targetChannelName}`, "discord-bot");
+    log(`Searching for original message from user <@${userId}> in specific channel: #${targetChannelName} (mapped from "${recentRequest.category}")`, "discord-bot");
     
     if (targetChannelName) {
       const channel = interaction.client.channels.cache.find(
