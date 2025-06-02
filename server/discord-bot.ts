@@ -595,7 +595,52 @@ async function handleModalSubmission(interaction: any): Promise<void> {
          .setDescription(embedDescription)
          .addFields({ name: 'Description', value: description, inline: false });
 
-    // Find the appropriate category channel
+    // First, find the items-exchange channel
+    const itemsExchangeChannel = interaction.client.channels.cache.find(
+      (channel: any) => 
+        channel.isTextBased() && 
+        !channel.isDMBased() && 
+        channel.name?.toLowerCase() === 'items-exchange'
+    ) as TextChannel;
+
+    if (!itemsExchangeChannel) {
+      await interaction.editReply({
+        content: "Could not find the #items-exchange channel. Please contact an admin."
+      });
+      return;
+    }
+
+    // Post to items-exchange channel first
+    const originalMessage = await itemsExchangeChannel.send({ embeds: [embed] });
+    
+    // Create a thread for the item in items-exchange
+    let thread;
+    try {
+      thread = await originalMessage.startThread({
+        name: `${title.slice(0, 80)}`, // Discord thread names have 100 char limit, keep some buffer
+        autoArchiveDuration: 4320, // 3 days
+        reason: `Discussion thread for ${action} item: ${title}`
+      });
+      
+      // Send a starter message in the thread
+      let starterMessage = '';
+      if (action === 'request') {
+        starterMessage = `💬 Discussion thread for this ISO request. Reply here to ask questions or offer help!`;
+      } else if (action === 'give') {
+        starterMessage = `💬 Discussion thread for this PIF offer. Reply here to claim or ask questions!`;
+      } else if (action === 'trade') {
+        starterMessage = `💬 Discussion thread for this trade offer. Reply here to propose trades or ask questions!`;
+      }
+      
+      await thread.send(starterMessage);
+      
+      log(`Created thread "${title}" for ${action} in #items-exchange`, "discord-bot");
+    } catch (threadError) {
+      log(`Error creating thread: ${threadError}`, "discord-bot");
+      // Continue without thread if creation fails
+    }
+
+    // Now cross-post to the appropriate category channel with link back to original
     const categoryChannelMap: {[key: string]: string} = {
       'electronics': 'electronics',
       'accessories': 'accessories', 
@@ -606,62 +651,52 @@ async function handleModalSubmission(interaction: any): Promise<void> {
     };
 
     const channelName = categoryChannelMap[category];
-    const targetChannel = interaction.client.channels.cache.find(
+    const categoryChannel = interaction.client.channels.cache.find(
       (channel: any) => 
         channel.isTextBased() && 
         !channel.isDMBased() && 
         channel.name?.toLowerCase() === channelName.toLowerCase()
-    );
+    ) as TextChannel;
 
-    if (targetChannel && targetChannel.isTextBased()) {
-      // Post to category channel
-      const sentMessage = await (targetChannel as TextChannel).send({ embeds: [embed] });
+    if (categoryChannel) {
+      // Create cross-post embed with linked title
+      const crossPostEmbed = new EmbedBuilder()
+        .setTitle(embedTitle)
+        .setURL(originalMessage.url) // This makes the title clickable and links to original
+        .setDescription(embedDescription)
+        .addFields(embed.data.fields || [])
+        .setColor(embed.data.color)
+        .setTimestamp(new Date())
+        .setFooter({ text: `Originally posted in #items-exchange` });
+
+      await categoryChannel.send({ embeds: [crossPostEmbed] });
       
-      // Create a thread for the item
-      try {
-        const thread = await sentMessage.startThread({
-          name: `${title.slice(0, 80)}`, // Discord thread names have 100 char limit, keep some buffer
-          autoArchiveDuration: 4320, // 3 days
-          reason: `Discussion thread for ${action} item: ${title}`
-        });
-        
-        // Send a starter message in the thread
-        let starterMessage = '';
-        if (action === 'request') {
-          starterMessage = `💬 Discussion thread for this ISO request. Reply here to ask questions or offer help!`;
-        } else if (action === 'give') {
-          starterMessage = `💬 Discussion thread for this PIF offer. Reply here to claim or ask questions!`;
-        } else if (action === 'trade') {
-          starterMessage = `💬 Discussion thread for this trade offer. Reply here to propose trades or ask questions!`;
-        }
-        
-        await thread.send(starterMessage);
-        
-        log(`Created thread "${title}" for ${action} in #${channelName}`, "discord-bot");
-      } catch (threadError) {
-        log(`Error creating thread: ${threadError}`, "discord-bot");
-        // Don't fail the whole operation if thread creation fails
-      }
-      
-      // Store the request in database
-      await storage.createIsoRequest({
-        content: `${action.toUpperCase()} ${title}`,
-        username: interaction.user.tag,
-        userId: interaction.user.id,
-        category: category,
-        timestamp: new Date()
-      });
-
-      await interaction.editReply({
-        content: `Your ${action} has been posted to #${channelName} with a discussion thread!`
-      });
-
-      log(`Posted ${action} to #${channelName}: ${title}`, "discord-bot");
-    } else {
-      await interaction.editReply({
-        content: `Could not find the #${channelName} channel. Please contact an admin.`
-      });
+      log(`Cross-posted ${action} to #${channelName} with link to original`, "discord-bot");
     }
+    
+    // Store the request in database
+    await storage.createIsoRequest({
+      content: `${action.toUpperCase()} ${title}`,
+      username: interaction.user.tag,
+      userId: interaction.user.id,
+      category: category,
+      timestamp: new Date()
+    });
+
+    let responseMessage = `Your ${action} has been posted to #items-exchange`;
+    if (thread) {
+      responseMessage += ` with a discussion thread`;
+    }
+    if (categoryChannel) {
+      responseMessage += ` and cross-posted to #${channelName}`;
+    }
+    responseMessage += `!`;
+
+    await interaction.editReply({
+      content: responseMessage
+    });
+
+    log(`Posted ${action} to #items-exchange: ${title}`, "discord-bot");
 
     // Clean up temporary data
     global.tempUserData?.delete(interaction.user.id);
