@@ -615,7 +615,33 @@ async function handleModalSubmission(interaction: any): Promise<void> {
 
     if (targetChannel && targetChannel.isTextBased()) {
       // Post to category channel
-      await (targetChannel as TextChannel).send({ embeds: [embed] });
+      const sentMessage = await (targetChannel as TextChannel).send({ embeds: [embed] });
+      
+      // Create a thread for the item
+      try {
+        const thread = await sentMessage.startThread({
+          name: `${title.slice(0, 80)}`, // Discord thread names have 100 char limit, keep some buffer
+          autoArchiveDuration: 4320, // 3 days
+          reason: `Discussion thread for ${action} item: ${title}`
+        });
+        
+        // Send a starter message in the thread
+        let starterMessage = '';
+        if (action === 'request') {
+          starterMessage = `💬 Discussion thread for this ISO request. Reply here to ask questions or offer help!`;
+        } else if (action === 'give') {
+          starterMessage = `💬 Discussion thread for this PIF offer. Reply here to claim or ask questions!`;
+        } else if (action === 'trade') {
+          starterMessage = `💬 Discussion thread for this trade offer. Reply here to propose trades or ask questions!`;
+        }
+        
+        await thread.send(starterMessage);
+        
+        log(`Created thread "${title}" for ${action} in #${channelName}`, "discord-bot");
+      } catch (threadError) {
+        log(`Error creating thread: ${threadError}`, "discord-bot");
+        // Don't fail the whole operation if thread creation fails
+      }
       
       // Store the request in database
       await storage.createIsoRequest({
@@ -627,7 +653,7 @@ async function handleModalSubmission(interaction: any): Promise<void> {
       });
 
       await interaction.editReply({
-        content: `Your ${action} has been posted to #${channelName}!`
+        content: `Your ${action} has been posted to #${channelName} with a discussion thread!`
       });
 
       log(`Posted ${action} to #${channelName}: ${title}`, "discord-bot");
