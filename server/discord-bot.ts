@@ -403,6 +403,15 @@ async function handleIsoRequest(message: Message): Promise<void> {
   try {
     log(`Processing request from ${message.author.tag}`, "discord-bot");
     
+    // Delete the user's original message to keep the channel clean
+    try {
+      await message.delete();
+      log(`Deleted original message from ${message.author.tag}`, "discord-bot");
+    } catch (deleteError) {
+      log(`Could not delete original message: ${deleteError}`, "discord-bot");
+      // Continue with the flow even if we can't delete the message
+    }
+    
     // Create action selection dropdown
     const actionRow = new ActionRowBuilder<StringSelectMenuBuilder>()
       .addComponents(
@@ -428,10 +437,17 @@ async function handleIsoRequest(message: Message): Promise<void> {
           ])
       );
     
-    // Reply with dropdown (regular message, will be updated when user selects)
-    await message.reply({
+    // Send ephemeral message to user
+    await message.author.send({
       content: "What would you like to do?",
       components: [actionRow]
+    }).catch(async (dmError) => {
+      // If DM fails, send ephemeral reply in channel
+      log(`Could not DM ${message.author.tag}, sending ephemeral reply`, "discord-bot");
+      await message.channel.send({
+        content: `<@${message.author.id}> What would you like to do?`,
+        components: [actionRow]
+      });
     });
     
     log(`Successfully sent action dropdown to user ${message.author.tag}`, "discord-bot");
