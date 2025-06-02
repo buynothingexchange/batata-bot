@@ -5,7 +5,9 @@ import {
   PartialMessageReaction, PartialUser, Partials, 
   User, EmbedBuilder, TextChannel, ButtonBuilder, 
   ButtonStyle, ActionRowBuilder, Collection,
-  PermissionFlagsBits, ButtonInteraction
+  PermissionFlagsBits, ButtonInteraction,
+  StringSelectMenuBuilder, ModalBuilder,
+  TextInputBuilder, TextInputStyle
 } from 'discord.js';
 import { WebSocketServer } from 'ws';
 import { log } from './vite';
@@ -392,128 +394,49 @@ function isDirectPifRequest(message: Message): boolean {
 
 // Handle direct PIF request
 async function handlePifRequest(message: Message): Promise<void> {
-  try {
-    // Create PIF request record
-    const pifRequest = {
-      discordMessageId: message.id,
-      userId: message.author.id,
-      username: message.author.tag,
-      content: message.content,
-      timestamp: new Date(),
-      type: 'PIF' // Add type to distinguish from ISO
-    };
-    
-    const savedRequest = await storage.createIsoRequest(pifRequest); // Reuse same storage
-    
-    // Send DM to user with category buttons
-    try {
-      log(`Attempting to create DM channel for user ${message.author.tag}`, "discord-bot");
-      const dmChannel = await message.author.createDM();
-      log(`Successfully created DM channel for user ${message.author.tag}`, "discord-bot");
-      const fulfillRow = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(
-          new ButtonBuilder()
-            .setCustomId('fulfill:item')
-            .setLabel('Mark as Given')
-            .setStyle(ButtonStyle.Success)
-        );
-      
-      // Send category selection buttons first  
-      const categoryRows = createCategoryButtons();
-      log(`Creating ${categoryRows.length} button rows for user ${message.author.tag}`, "discord-bot");
-      
-      try {
-        await dmChannel.send({
-          content: "Thanks for your PIF offer! Please select a category for your item:",
-          components: categoryRows
-        });
-        log(`Successfully sent category buttons to user ${message.author.tag}`, "discord-bot");
-      } catch (buttonError) {
-        log(`Error sending category buttons: ${buttonError}`, "discord-bot");
-        // Fallback: send without buttons
-        await dmChannel.send({
-          content: "Thanks for your PIF offer! Please let me know which category this belongs to: Electronics, Accessories, Clothing, Home & Furniture, Footwear, or Misc"
-        });
-      }
-      
-      // Send fulfill button as a separate message
-      try {
-        await dmChannel.send({
-          content: "When your item is given away, click the button below to mark it as completed:",
-          components: [fulfillRow]
-        });
-        log(`Successfully sent fulfill button to user ${message.author.tag}`, "discord-bot");
-      } catch (fulfillError) {
-        log(`Error sending fulfill button: ${fulfillError}`, "discord-bot");
-      }
-    } catch (dmError) {
-      log(`Failed to DM user ${message.author.tag}: ${dmError}`, "discord-bot");
-    }
-  } catch (error) {
-    log(`Error handling PIF request: ${error}`, "discord-bot");
-  }
+  // PIF requests now use the same workflow as ISO - redirect to handleIsoRequest
+  await handleIsoRequest(message);
 }
 
 // Handle direct ISO request
 async function handleIsoRequest(message: Message): Promise<void> {
   try {
-    // Create ISO request record
-    const isoRequest = {
-      discordMessageId: message.id,
-      userId: message.author.id,
-      username: message.author.tag,
-      content: message.content,
-      timestamp: new Date()
-    };
+    log(`Processing request from ${message.author.tag}`, "discord-bot");
     
-    const savedRequest = await storage.createIsoRequest(isoRequest);
+    // Create action selection dropdown
+    const actionRow = new ActionRowBuilder<StringSelectMenuBuilder>()
+      .addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId('action_select')
+          .setPlaceholder('What would you like to do?')
+          .addOptions([
+            {
+              label: 'Trade',
+              description: 'Exchange items with other members',
+              value: 'trade'
+            },
+            {
+              label: 'Give',
+              description: 'Offer items for free to the community',
+              value: 'give'
+            },
+            {
+              label: 'Request',
+              description: 'Request items from the community',
+              value: 'request'
+            }
+          ])
+      );
     
-    // Send DM to user with category buttons
-    try {
-      log(`Attempting to create DM channel for user ${message.author.tag}`, "discord-bot");
-      const dmChannel = await message.author.createDM();
-      log(`Successfully created DM channel for user ${message.author.tag}`, "discord-bot");
-      const fulfillRow = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(
-          new ButtonBuilder()
-            .setCustomId('fulfill:item')
-            .setLabel('Mark as Fulfilled')
-            .setStyle(ButtonStyle.Success)
-        );
-      
-      // Send category selection buttons first  
-      const categoryRows = createCategoryButtons();
-      log(`Creating ${categoryRows.length} button rows for user ${message.author.tag}`, "discord-bot");
-      
-      try {
-        await dmChannel.send({
-          content: "Thanks for your ISO request! Please select a category for your item:",
-          components: categoryRows
-        });
-        log(`Successfully sent category buttons to user ${message.author.tag}`, "discord-bot");
-      } catch (buttonError) {
-        log(`Error sending category buttons: ${buttonError}`, "discord-bot");
-        // Fallback: send without buttons
-        await dmChannel.send({
-          content: "Thanks for your ISO request! Please let me know which category this belongs to: Electronics, Accessories, Clothing, Home & Furniture, Footwear, or Misc"
-        });
-      }
-      
-      // Send fulfill button as a separate message
-      try {
-        await dmChannel.send({
-          content: "When your item is found, click the button below to mark it as fulfilled:",
-          components: [fulfillRow]
-        });
-        log(`Successfully sent fulfill button to user ${message.author.tag}`, "discord-bot");
-      } catch (fulfillError) {
-        log(`Error sending fulfill button: ${fulfillError}`, "discord-bot");
-      }
-    } catch (dmError) {
-      log(`Failed to DM user ${message.author.tag}: ${dmError}`, "discord-bot");
-    }
+    // Reply with dropdown (regular message, will be updated when user selects)
+    await message.reply({
+      content: "What would you like to do?",
+      components: [actionRow]
+    });
+    
+    log(`Successfully sent action dropdown to user ${message.author.tag}`, "discord-bot");
   } catch (error) {
-    log(`Error handling ISO request: ${error}`, "discord-bot");
+    log(`Error handling request: ${error}`, "discord-bot");
   }
 }
 
@@ -753,28 +676,54 @@ async function handleInteraction(interaction: Interaction) {
   try {
     log(`Received interaction: type=${interaction.type}, user=${interaction.user?.tag}`, "discord-bot");
     
-    // Only handle button interactions
-    if (!interaction.isButton()) {
-      log(`Ignoring non-button interaction`, "discord-bot");
+    // Handle select menu interactions (action and category selection)
+    if (interaction.isStringSelectMenu()) {
+      const customId = interaction.customId;
+      
+      if (customId === 'action_select') {
+        const selectedAction = interaction.values[0];
+        log(`User ${interaction.user.tag} selected action: ${selectedAction}`, "discord-bot");
+        await handleActionSelection(interaction, selectedAction);
+      } else if (customId === 'category_select') {
+        const selectedCategory = interaction.values[0];
+        log(`User ${interaction.user.tag} selected category: ${selectedCategory}`, "discord-bot");
+        await handleCategoryModalSelection(interaction, selectedCategory);
+      }
       return;
     }
     
-    // Get the custom ID from the button
-    const customId = interaction.customId;
-    log(`Button clicked: ${customId} by user ${interaction.user.tag}`, "discord-bot");
-    
-    // Handle category selection
-    if (customId.startsWith('category:')) {
-      const categoryId = customId.split(':')[1];
-      log(`Processing category selection: ${categoryId}`, "discord-bot");
-      await handleCategorySelection(interaction, categoryId);
+    // Handle modal submissions
+    if (interaction.isModalSubmit()) {
+      const customId = interaction.customId;
+      
+      if (customId.startsWith('item_modal:')) {
+        log(`User ${interaction.user.tag} submitted item modal`, "discord-bot");
+        await handleModalSubmission(interaction);
+      }
+      return;
     }
     
-    // Handle fulfill item button
-    if (customId === 'fulfill:item') {
-      log(`Processing fulfill request`, "discord-bot");
-      await handleFulfillRequest(interaction);
+    // Handle button interactions (legacy fulfill button)
+    if (interaction.isButton()) {
+      const customId = interaction.customId;
+      log(`Button clicked: ${customId} by user ${interaction.user.tag}`, "discord-bot");
+      
+      // Handle legacy category selection (keep for backward compatibility)
+      if (customId.startsWith('category:')) {
+        const categoryId = customId.split(':')[1];
+        log(`Processing legacy category selection: ${categoryId}`, "discord-bot");
+        await handleCategorySelection(interaction, categoryId);
+      }
+      
+      // Handle fulfill item button
+      if (customId === 'fulfill:item') {
+        log(`Processing fulfill request`, "discord-bot");
+        await handleFulfillRequest(interaction);
+      }
+      return;
     }
+    
+    log(`Ignoring unsupported interaction type`, "discord-bot");
   } catch (error) {
     log(`Error handling interaction: ${error}`, "discord-bot");
   }
