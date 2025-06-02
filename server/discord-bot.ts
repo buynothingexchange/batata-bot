@@ -603,117 +603,80 @@ async function handleActionSelection(interaction: any, selectedAction: string): 
   }
 }
 
-// Handle category selection and create simple item request
+// Handle category selection and show modal form
 async function handleCategoryModalSelection(interaction: any, selectedCategory: string): Promise<void> {
   try {
     // Get stored user data from the correct location
     const userData = global.tempUserData?.get(interaction.user.id);
     if (!userData || !userData.action) {
-      await interaction.update({
+      await interaction.reply({
         content: "Session expired. Please start over with a new ISO or PIF request.",
-        components: []
+        flags: 64 // Ephemeral
       });
       return;
     }
 
     const selectedAction = userData.action;
     
-    // Get the item name from the original slash command
-    const itemName = userData.itemName || "item";
-    
-    // Create a simple post directly without modal
-    await interaction.update({
-      content: `✅ Your ${selectedAction} request for "${itemName}" in category "${selectedCategory}" has been submitted and will be posted to the channels!`,
-      components: []
-    });
-    
-    // Create the embed and post to channels
-    const embed = new EmbedBuilder()
-      .setTimestamp(new Date());
+    // Create modal form based on action type
+    const modal = new ModalBuilder()
+      .setCustomId(`item_modal:${selectedAction}:${selectedCategory}`)
+      .setTitle(`${selectedAction.charAt(0).toUpperCase() + selectedAction.slice(1)} Item Details`);
 
-    let embedTitle = '';
-    let embedDescription = '';
+    // Item title field
+    const titleInput = new TextInputBuilder()
+      .setCustomId('item_title')
+      .setLabel('Item Name/Title')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('What is the item called?')
+      .setValue(userData.itemName || '')
+      .setRequired(true)
+      .setMaxLength(100);
+
+    // Description field
+    const descriptionInput = new TextInputBuilder()
+      .setCustomId('item_description')
+      .setLabel('Description')
+      .setStyle(TextInputStyle.Paragraph)
+      .setPlaceholder('Provide details about the item (condition, features, etc.)')
+      .setRequired(true)
+      .setMaxLength(1000);
+
+    const titleRow = new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput);
+    const descriptionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(descriptionInput);
     
-    if (selectedAction === 'trade') {
-      embedTitle = 'Trade Offer';
-      embedDescription = `<@${interaction.user.id}> wants to trade ${itemName}`;
-      embed.setColor(0x3498db); // Blue
-      embed.addFields(
-        { name: 'Category', value: selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1).replace('_', ' & '), inline: true },
-        { name: 'Offered by', value: interaction.user.tag, inline: true }
-      );
-    } else if (selectedAction === 'give') {
-      embedTitle = 'PIF Offer';
-      embedDescription = `<@${interaction.user.id}> is offering ${itemName}`;
-      embed.setColor(0x57F287); // Green
-      embed.addFields(
-        { name: 'Category', value: selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1).replace('_', ' & '), inline: true },
-        { name: 'Offered by', value: interaction.user.tag, inline: true }
-      );
-    } else if (selectedAction === 'request') {
-      embedTitle = 'ISO Request';
-      embedDescription = `<@${interaction.user.id}> is in search of ${itemName}`;
-      embed.setColor(0x2b2d31); // Dark
-      embed.addFields(
-        { name: 'Category', value: selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1).replace('_', ' & '), inline: true },
-        { name: 'Requested by', value: interaction.user.tag, inline: true }
-      );
+    modal.addComponents(titleRow, descriptionRow);
+
+    // Add urgency field for requests
+    if (selectedAction === 'request') {
+      const urgencyInput = new TextInputBuilder()
+        .setCustomId('item_urgency')
+        .setLabel('Urgency Level')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('e.g., "ASAP", "Within a week", "Not urgent"')
+        .setRequired(false)
+        .setMaxLength(50);
+
+      const urgencyRow = new ActionRowBuilder<TextInputBuilder>().addComponents(urgencyInput);
+      modal.addComponents(urgencyRow);
     }
 
-    embed.setTitle(embedTitle)
-         .setDescription(embedDescription);
-
-    // Find the items-exchange forum channel
-    const forumChannel = interaction.client.channels.cache.find(
-      (channel: any) => 
-        channel.type === ChannelType.GuildForum && 
-        channel.name?.toLowerCase() === 'items-exchange'
-    );
-
-    if (forumChannel) {
-      // Map categories to forum tag names
-      const categoryTagMap: {[key: string]: string} = {
-        'electronics': 'Electronics',
-        'accessories': 'Accessories', 
-        'clothing': 'Clothing',
-        'home_furniture': 'Home & Furniture',
-        'footwear': 'Footwear',
-        'misc': 'Miscellaneous'
-      };
-
-      const tagName = categoryTagMap[selectedCategory];
-      
-      // Find the tag ID for the category
-      const forumTags = (forumChannel as any).availableTags || [];
-      const categoryTag = forumTags.find((tag: any) => tag.name === tagName);
-      const appliedTags = categoryTag ? [categoryTag.id] : [];
-
-      // Create the forum post with the item name as title
-      const forumPost = await (forumChannel as any).threads.create({
-        name: `${embedTitle}: ${itemName}`,
-        message: { embeds: [embed] },
-        appliedTags: appliedTags
-      });
-      
-      log(`Created forum post in #items-exchange with ${tagName} tag for ${selectedAction} request`, "discord-bot");
-    } else {
-      log(`Could not find items-exchange forum channel`, "discord-bot");
-    }
-
-    // Clean up stored user data
-    global.tempUserData?.delete(interaction.user.id);
-    
-    log(`Successfully processed ${selectedAction} request for ${itemName} in category ${selectedCategory}`, "discord-bot");
+    // Show modal directly as response to category selection
+    await interaction.showModal(modal);
+    log(`Showed modal form for ${selectedAction} in category ${selectedCategory}`, "discord-bot");
   } catch (error) {
-    log(`Error handling category selection: ${error}`, "discord-bot");
+    log(`Error showing modal: ${error}`, "discord-bot");
     
-    try {
-      await interaction.update({
-        content: "There was an error processing your request. Please try again.",
-        components: []
-      });
-    } catch (updateError) {
-      log(`Error updating interaction: ${updateError}`, "discord-bot");
+    // Only try to reply if interaction hasn't been acknowledged
+    if (!interaction.replied && !interaction.deferred) {
+      try {
+        await interaction.reply({
+          content: "There was an error showing the form. Please try again.",
+          flags: 64 // Ephemeral
+        });
+      } catch (replyError) {
+        log(`Error replying to failed modal: ${replyError}`, "discord-bot");
+      }
     }
   }
 }
