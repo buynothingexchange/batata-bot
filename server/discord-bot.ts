@@ -294,14 +294,17 @@ async function handleMessage(message: Message) {
         return;
       }
       
-      // Handle direct ISO and PIF posts in server - no formatting, just send category buttons
-      const content = message.content.trim().toUpperCase();
-      if (message.guild && content.startsWith('ISO ') && content.length > 4) {
-        log(`Detected ISO request from ${message.author.username}`, "discord-bot");
-        await handleIsoRequest(message);
-      } else if (message.guild && content.startsWith('PIF ') && content.length > 4) {
-        log(`Detected PIF request from ${message.author.username}`, "discord-bot");
-        await handlePifRequest(message);
+      // Only handle ISO/PIF requests in general-chat
+      const channelName = (message.channel as any).name?.toLowerCase();
+      if (channelName === 'general-chat') {
+        const content = message.content.trim().toUpperCase();
+        if (message.guild && content.startsWith('ISO ') && content.length > 4) {
+          log(`Detected ISO request from ${message.author.username}`, "discord-bot");
+          await handleIsoRequest(message);
+        } else if (message.guild && content.startsWith('PIF ') && content.length > 4) {
+          log(`Detected PIF request from ${message.author.username}`, "discord-bot");
+          await handlePifRequest(message);
+        }
       }
     }
   } catch (error) {
@@ -617,52 +620,7 @@ async function handleModalSubmission(interaction: any): Promise<void> {
          .setDescription(embedDescription)
          .addFields({ name: 'Description', value: description, inline: false });
 
-    // First, find the items-exchange channel
-    const itemsExchangeChannel = interaction.client.channels.cache.find(
-      (channel: any) => 
-        channel.isTextBased() && 
-        !channel.isDMBased() && 
-        channel.name?.toLowerCase() === 'items-exchange'
-    ) as TextChannel;
-
-    if (!itemsExchangeChannel) {
-      await interaction.editReply({
-        content: "Could not find the #items-exchange channel. Please contact an admin."
-      });
-      return;
-    }
-
-    // Post to items-exchange channel first
-    const originalMessage = await itemsExchangeChannel.send({ embeds: [embed] });
-    
-    // Create a thread for the item in items-exchange
-    let thread;
-    try {
-      thread = await originalMessage.startThread({
-        name: `${title.slice(0, 80)}`, // Discord thread names have 100 char limit, keep some buffer
-        autoArchiveDuration: 4320, // 3 days
-        reason: `Discussion thread for ${action} item: ${title}`
-      });
-      
-      // Send a starter message in the thread
-      let starterMessage = '';
-      if (action === 'request') {
-        starterMessage = `💬 Discussion thread for this ISO request. Reply here to ask questions or offer help!`;
-      } else if (action === 'give') {
-        starterMessage = `💬 Discussion thread for this PIF offer. Reply here to claim or ask questions!`;
-      } else if (action === 'trade') {
-        starterMessage = `💬 Discussion thread for this trade offer. Reply here to propose trades or ask questions!`;
-      }
-      
-      await thread.send(starterMessage);
-      
-      log(`Created thread "${title}" for ${action} in #items-exchange`, "discord-bot");
-    } catch (threadError) {
-      log(`Error creating thread: ${threadError}`, "discord-bot");
-      // Continue without thread if creation fails
-    }
-
-    // Now cross-post to the appropriate category channel with link back to original
+    // Find the appropriate category channel
     const categoryChannelMap: {[key: string]: string} = {
       'electronics': 'electronics',
       'accessories': 'accessories', 
@@ -680,20 +638,64 @@ async function handleModalSubmission(interaction: any): Promise<void> {
         channel.name?.toLowerCase() === channelName.toLowerCase()
     ) as TextChannel;
 
-    if (categoryChannel) {
-      // Create cross-post embed with linked title
-      const crossPostEmbed = new EmbedBuilder()
+    if (!categoryChannel) {
+      await interaction.editReply({
+        content: `Could not find the #${channelName} channel. Please contact an admin.`
+      });
+      return;
+    }
+
+    // Post to category channel first
+    const categoryMessage = await categoryChannel.send({ embeds: [embed] });
+    
+    // Create a thread for the item in category channel
+    let thread;
+    try {
+      thread = await categoryMessage.startThread({
+        name: `${title.slice(0, 80)}`, // Discord thread names have 100 char limit, keep some buffer
+        autoArchiveDuration: 4320, // 3 days
+        reason: `Discussion thread for ${action} item: ${title}`
+      });
+      
+      // Send a starter message in the thread
+      let starterMessage = '';
+      if (action === 'request') {
+        starterMessage = `💬 Discussion thread for this ISO request. Reply here to ask questions or offer help!`;
+      } else if (action === 'give') {
+        starterMessage = `💬 Discussion thread for this PIF offer. Reply here to claim or ask questions!`;
+      } else if (action === 'trade') {
+        starterMessage = `💬 Discussion thread for this trade offer. Reply here to propose trades or ask questions!`;
+      }
+      
+      await thread.send(starterMessage);
+      
+      log(`Created thread "${title}" for ${action} in #${channelName}`, "discord-bot");
+    } catch (threadError) {
+      log(`Error creating thread: ${threadError}`, "discord-bot");
+      // Continue without thread if creation fails
+    }
+
+    // Also post to items-exchange channel as a hub
+    const itemsExchangeChannel = interaction.client.channels.cache.find(
+      (channel: any) => 
+        channel.isTextBased() && 
+        !channel.isDMBased() && 
+        channel.name?.toLowerCase() === 'items-exchange'
+    ) as TextChannel;
+
+    if (itemsExchangeChannel) {
+      // Create copy for items-exchange with same formatting
+      const hubEmbed = new EmbedBuilder()
         .setTitle(embedTitle)
-        .setURL(originalMessage.url) // This makes the title clickable and links to original
         .setDescription(embedDescription)
         .addFields(embed.data.fields || [])
         .setColor(embed.data.color)
         .setTimestamp(new Date())
-        .setFooter({ text: `Originally posted in #items-exchange` });
+        .setFooter({ text: `Originally posted in #${channelName}` });
 
-      await categoryChannel.send({ embeds: [crossPostEmbed] });
+      await itemsExchangeChannel.send({ embeds: [hubEmbed] });
       
-      log(`Cross-posted ${action} to #${channelName} with link to original`, "discord-bot");
+      log(`Posted ${action} to #items-exchange hub from #${channelName}`, "discord-bot");
     }
     
     // Store the request in database
@@ -705,12 +707,12 @@ async function handleModalSubmission(interaction: any): Promise<void> {
       timestamp: new Date()
     });
 
-    let responseMessage = `Your ${action} has been posted to #items-exchange`;
+    let responseMessage = `Your ${action} has been posted to #${channelName}`;
     if (thread) {
       responseMessage += ` with a discussion thread`;
     }
-    if (categoryChannel) {
-      responseMessage += ` and cross-posted to #${channelName}`;
+    if (itemsExchangeChannel) {
+      responseMessage += ` and copied to #items-exchange hub`;
     }
     responseMessage += `!`;
 
@@ -718,7 +720,7 @@ async function handleModalSubmission(interaction: any): Promise<void> {
       content: responseMessage
     });
 
-    log(`Posted ${action} to #items-exchange: ${title}`, "discord-bot");
+    log(`Posted ${action} to #${channelName}: ${title}`, "discord-bot");
 
     // Clean up temporary data
     global.tempUserData?.delete(interaction.user.id);
