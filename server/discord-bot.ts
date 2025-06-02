@@ -663,28 +663,41 @@ async function handleCategoryModalSelection(interaction: any, selectedCategory: 
     embed.setTitle(embedTitle)
          .setDescription(embedDescription);
 
-    // Find the appropriate category channel
-    const categoryChannelMap: {[key: string]: string} = {
-      'electronics': 'electronics',
-      'accessories': 'accessories', 
-      'clothing': 'clothing',
-      'home_furniture': 'home-and-furniture',
-      'footwear': 'footwear',
-      'misc': 'misc'
-    };
-
-    const channelName = categoryChannelMap[selectedCategory];
-    const categoryChannel = interaction.client.channels.cache.find(
+    // Find the items-exchange forum channel
+    const forumChannel = interaction.client.channels.cache.find(
       (channel: any) => 
-        channel.isTextBased() && 
-        !channel.isDMBased() && 
-        channel.name?.toLowerCase() === channelName.toLowerCase()
-    ) as TextChannel;
+        channel.type === ChannelType.GuildForum && 
+        channel.name?.toLowerCase() === 'items-exchange'
+    );
 
-    if (categoryChannel) {
-      // Post to category channel
-      await categoryChannel.send({ embeds: [embed] });
-      log(`Posted ${selectedAction} request to #${channelName}`, "discord-bot");
+    if (forumChannel) {
+      // Map categories to forum tag names
+      const categoryTagMap: {[key: string]: string} = {
+        'electronics': 'Electronics',
+        'accessories': 'Accessories', 
+        'clothing': 'Clothing',
+        'home_furniture': 'Home & Furniture',
+        'footwear': 'Footwear',
+        'misc': 'Miscellaneous'
+      };
+
+      const tagName = categoryTagMap[selectedCategory];
+      
+      // Find the tag ID for the category
+      const forumTags = (forumChannel as any).availableTags || [];
+      const categoryTag = forumTags.find((tag: any) => tag.name === tagName);
+      const appliedTags = categoryTag ? [categoryTag.id] : [];
+
+      // Create the forum post with the item name as title
+      const forumPost = await (forumChannel as any).threads.create({
+        name: `${embedTitle}: ${itemName}`,
+        message: { embeds: [embed] },
+        appliedTags: appliedTags
+      });
+      
+      log(`Created forum post in #items-exchange with ${tagName} tag for ${selectedAction} request`, "discord-bot");
+    } else {
+      log(`Could not find items-exchange forum channel`, "discord-bot");
     }
 
     // Clean up stored user data
