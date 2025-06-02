@@ -600,12 +600,12 @@ async function handleActionSelection(interaction: any, selectedAction: string): 
 // Handle category selection and show modal
 async function handleCategoryModalSelection(interaction: any, selectedCategory: string): Promise<void> {
   try {
-    // Get stored user data - don't defer yet since we need to show modal
+    // Get stored user data
     const storedAction = global[`userAction_${interaction.user.id}`];
     if (!storedAction) {
-      await interaction.update({
+      await interaction.reply({
         content: "Session expired. Please start over with a new ISO or PIF request.",
-        components: []
+        flags: 64 // Ephemeral
       });
       return;
     }
@@ -652,23 +652,22 @@ async function handleCategoryModalSelection(interaction: any, selectedCategory: 
       modal.addComponents(urgencyRow);
     }
 
+    // Show modal as the direct response to category selection - this is key!
     await interaction.showModal(modal);
     log(`Showed modal for ${selectedAction} in category ${selectedCategory}`, "discord-bot");
   } catch (error) {
     log(`Error showing modal: ${error}`, "discord-bot");
-    try {
-      if (!interaction.replied && !interaction.deferred) {
+    
+    // If modal fails, we can only reply if interaction hasn't been acknowledged
+    if (!interaction.replied && !interaction.deferred) {
+      try {
         await interaction.reply({
           content: "Session expired. Please start over with a new ISO or PIF request.",
-          ephemeral: true
+          flags: 64 // Ephemeral
         });
-      } else {
-        await interaction.editReply({
-          content: "Session expired. Please start over with a new ISO or PIF request."
-        });
+      } catch (replyError) {
+        log(`Error replying to failed modal: ${replyError}`, "discord-bot");
       }
-    } catch (replyError) {
-      log(`Error replying to failed modal: ${replyError}`, "discord-bot");
     }
   }
 }
