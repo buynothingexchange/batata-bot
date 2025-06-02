@@ -443,6 +443,9 @@ async function handleIsoRequest(message: Message): Promise<void> {
 // Handle action selection from dropdown
 async function handleActionSelection(interaction: any, selectedAction: string): Promise<void> {
   try {
+    // Defer the update to acknowledge the interaction
+    await interaction.deferUpdate();
+
     // Create category selection dropdown
     const categoryRow = new ActionRowBuilder<StringSelectMenuBuilder>()
       .addComponents(
@@ -459,8 +462,8 @@ async function handleActionSelection(interaction: any, selectedAction: string): 
           ])
       );
 
-    // Store the selected action in the interaction for later use
-    await interaction.update({
+    // Update the message to show category selection
+    await interaction.editReply({
       content: "What category is your item?",
       components: [categoryRow]
     });
@@ -480,10 +483,13 @@ async function handleActionSelection(interaction: any, selectedAction: string): 
 // Handle category selection and show modal
 async function handleCategoryModalSelection(interaction: any, selectedCategory: string): Promise<void> {
   try {
+    // Defer the update to acknowledge the interaction
+    await interaction.deferUpdate();
+
     // Get stored user data
     const userData = global.tempUserData?.get(interaction.user.id);
     if (!userData) {
-      await interaction.update({
+      await interaction.editReply({
         content: "Session expired. Please start over with a new ISO or PIF request.",
         components: []
       });
