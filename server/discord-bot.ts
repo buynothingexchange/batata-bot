@@ -600,9 +600,9 @@ async function handleActionSelection(interaction: any, selectedAction: string): 
 // Handle category selection and show modal
 async function handleCategoryModalSelection(interaction: any, selectedCategory: string): Promise<void> {
   try {
-    // Get stored user data
-    const storedAction = global[`userAction_${interaction.user.id}`];
-    if (!storedAction) {
+    // Get stored user data from the correct location
+    const userData = global.tempUserData?.get(interaction.user.id);
+    if (!userData || !userData.action) {
       await interaction.reply({
         content: "Session expired. Please start over with a new ISO or PIF request.",
         flags: 64 // Ephemeral
@@ -610,7 +610,7 @@ async function handleCategoryModalSelection(interaction: any, selectedCategory: 
       return;
     }
 
-    const selectedAction = storedAction;
+    const selectedAction = userData.action;
     
     // Create modal based on action type
     const modal = new ModalBuilder()
