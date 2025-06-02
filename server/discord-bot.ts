@@ -7,7 +7,8 @@ import {
   ButtonStyle, ActionRowBuilder, Collection,
   PermissionFlagsBits, ButtonInteraction,
   StringSelectMenuBuilder, ModalBuilder,
-  TextInputBuilder, TextInputStyle
+  TextInputBuilder, TextInputStyle, SlashCommandBuilder,
+  REST, Routes, ChatInputCommandInteraction
 } from 'discord.js';
 import { WebSocketServer } from 'ws';
 import { log } from './vite';
@@ -17,6 +18,25 @@ import { Server } from 'http';
 
 // Bot instance
 let bot: Client | null = null;
+
+// Slash command definitions
+const commands = [
+  new SlashCommandBuilder()
+    .setName('iso')
+    .setDescription('Request an item from the community')
+    .addStringOption(option =>
+      option.setName('item')
+        .setDescription('What item are you looking for?')
+        .setRequired(true)),
+  
+  new SlashCommandBuilder()
+    .setName('pif')
+    .setDescription('Offer or trade an item with the community')
+    .addStringOption(option =>
+      option.setName('item')
+        .setDescription('What item are you offering/trading?')
+        .setRequired(true))
+];
 
 // Track when we last received messages (for heartbeat)
 let lastMessageTimestamp = Date.now();
@@ -30,6 +50,30 @@ const processStartTime = new Date(); // When the entire process started
 
 // For processing ISO requests, use a global lock to prevent duplicates
 let isProcessingIsoRequest = false;
+
+// Register slash commands with Discord
+async function registerSlashCommands() {
+  const token = process.env.DISCORD_BOT_TOKEN;
+  if (!token || !bot?.user?.id) {
+    log("Cannot register slash commands: missing token or bot not ready", "discord-bot");
+    return;
+  }
+
+  const rest = new REST({ version: '10' }).setToken(token);
+
+  try {
+    log('Started refreshing application (/) commands.', "discord-bot");
+
+    await rest.put(
+      Routes.applicationCommands(bot.user.id),
+      { body: commands }
+    );
+
+    log('Successfully reloaded application (/) commands.', "discord-bot");
+  } catch (error) {
+    log(`Error registering slash commands: ${error}`, "discord-bot");
+  }
+}
 
 // Helper function to determine the correct article (a, an, or none for plurals)
 function getArticle(noun: string): string {
@@ -159,6 +203,9 @@ export async function initializeBot() {
     
     await bot.login(token);
     log(`Bot logged in as ${bot.user?.tag}`, "discord-bot");
+    
+    // Register slash commands
+    await registerSlashCommands();
     
     // Reset timestamp after login
     lastMessageTimestamp = Date.now();
@@ -401,7 +448,53 @@ async function handlePifRequest(message: Message): Promise<void> {
   await handleIsoRequest(message);
 }
 
-// Handle direct ISO request
+// Handle slash command for ISO/PIF requests
+async function handleSlashCommand(interaction: ChatInputCommandInteraction): Promise<void> {
+  try {
+    const commandName = interaction.commandName;
+    const itemParam = interaction.options.getString('item');
+    
+    log(`Processing /${commandName} command from ${interaction.user.tag} for item: ${itemParam}`, "discord-bot");
+    
+    // Create action selection dropdown
+    const actionRow = new ActionRowBuilder<StringSelectMenuBuilder>()
+      .addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId('action_select')
+          .setPlaceholder('What would you like to do?')
+          .addOptions([
+            {
+              label: 'Trade',
+              description: 'Exchange items with other members',
+              value: 'trade'
+            },
+            {
+              label: 'Give',
+              description: 'Offer items for free to the community',
+              value: 'give'
+            },
+            {
+              label: 'Request',
+              description: 'Request items from the community',
+              value: 'request'
+            }
+          ])
+      );
+    
+    // Send ephemeral reply - this is truly private!
+    await interaction.reply({
+      content: "What would you like to do?",
+      components: [actionRow],
+      ephemeral: true
+    });
+    
+    log(`Successfully sent ephemeral reply to ${interaction.user.tag}`, "discord-bot");
+  } catch (error) {
+    log(`Error handling slash command: ${error}`, "discord-bot");
+  }
+}
+
+// Handle direct ISO request (legacy text-based)
 async function handleIsoRequest(message: Message): Promise<void> {
   try {
     log(`Processing request from ${message.author.tag} in channel: ${(message.channel as any).name}`, "discord-bot");
