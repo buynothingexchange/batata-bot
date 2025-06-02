@@ -440,15 +440,16 @@ async function handleIsoRequest(message: Message): Promise<void> {
           ])
       );
     
-    // Send ephemeral message to user
-    await message.author.send({
+    // Send ephemeral reply in the same channel
+    await message.reply({
       content: "What would you like to do?",
-      components: [actionRow]
-    }).catch(async (dmError) => {
-      // If DM fails, send ephemeral reply in channel
-      log(`Could not DM ${message.author.tag}, sending ephemeral reply`, "discord-bot");
-      await message.channel.send({
-        content: `<@${message.author.id}> What would you like to do?`,
+      components: [actionRow],
+      ephemeral: true
+    }).catch(async (replyError) => {
+      // If ephemeral reply fails, send a regular reply
+      log(`Could not send ephemeral reply to ${message.author.tag}, sending regular reply`, "discord-bot");
+      await message.reply({
+        content: "What would you like to do?",
         components: [actionRow]
       });
     });
