@@ -1107,6 +1107,17 @@ async function handleInteraction(interaction: Interaction) {
   try {
     log(`Received interaction: type=${interaction.type}, user=${interaction.user?.tag}`, "discord-bot");
     
+    // Handle slash command interactions
+    if (interaction.isChatInputCommand()) {
+      const commandName = interaction.commandName;
+      
+      if (commandName === 'iso' || commandName === 'pif') {
+        log(`Processing /${commandName} slash command`, "discord-bot");
+        await handleSlashCommand(interaction);
+      }
+      return;
+    }
+    
     // Handle select menu interactions (action and category selection)
     if (interaction.isStringSelectMenu()) {
       const customId = interaction.customId;
