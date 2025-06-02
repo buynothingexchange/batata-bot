@@ -404,16 +404,7 @@ async function handlePifRequest(message: Message): Promise<void> {
 // Handle direct ISO request
 async function handleIsoRequest(message: Message): Promise<void> {
   try {
-    log(`Processing request from ${message.author.tag}`, "discord-bot");
-    
-    // Delete the user's original message to keep the channel clean
-    try {
-      await message.delete();
-      log(`Deleted original message from ${message.author.tag}`, "discord-bot");
-    } catch (deleteError) {
-      log(`Could not delete original message: ${deleteError}`, "discord-bot");
-      // Continue with the flow even if we can't delete the message
-    }
+    log(`Processing request from ${message.author.tag} in channel: ${(message.channel as any).name}`, "discord-bot");
     
     // Create action selection dropdown
     const actionRow = new ActionRowBuilder<StringSelectMenuBuilder>()
@@ -440,21 +431,34 @@ async function handleIsoRequest(message: Message): Promise<void> {
           ])
       );
     
-    // Send ephemeral reply in the same channel
-    await message.reply({
-      content: "What would you like to do?",
-      components: [actionRow],
-      ephemeral: true
-    }).catch(async (replyError) => {
-      // If ephemeral reply fails, send a regular reply
-      log(`Could not send ephemeral reply to ${message.author.tag}, sending regular reply`, "discord-bot");
-      await message.reply({
+    // Send DM with dropdown - this is the only way to make it truly private
+    log(`Attempting to send DM to ${message.author.tag}`, "discord-bot");
+    
+    try {
+      await message.author.send({
         content: "What would you like to do?",
         components: [actionRow]
       });
-    });
+      log(`Successfully sent DM to ${message.author.tag}`, "discord-bot");
+    } catch (dmError) {
+      log(`DM failed: ${dmError}`, "discord-bot");
+      // Try regular channel message as fallback
+      await message.channel.send({
+        content: `<@${message.author.id}> What would you like to do? (I couldn't DM you, please enable DMs from server members)`,
+        components: [actionRow]
+      });
+      log(`Sent regular channel message as fallback to ${message.author.tag}`, "discord-bot");
+    }
     
-    log(`Successfully sent action dropdown to user ${message.author.tag}`, "discord-bot");
+    // Now delete the original message
+    try {
+      await message.delete();
+      log(`Deleted original message from ${message.author.tag}`, "discord-bot");
+    } catch (deleteError) {
+      log(`Could not delete original message: ${deleteError}`, "discord-bot");
+    }
+    
+    log(`Completed ISO request handling for ${message.author.tag}`, "discord-bot");
   } catch (error) {
     log(`Error handling request: ${error}`, "discord-bot");
   }
