@@ -485,7 +485,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
     await interaction.reply({
       content: "What would you like to do?",
       components: [actionRow],
-      ephemeral: true
+      flags: 64 // InteractionResponseFlags.Ephemeral
     });
     
     log(`Successfully sent ephemeral reply to ${interaction.user.tag}`, "discord-bot");
@@ -600,20 +600,17 @@ async function handleActionSelection(interaction: any, selectedAction: string): 
 // Handle category selection and show modal
 async function handleCategoryModalSelection(interaction: any, selectedCategory: string): Promise<void> {
   try {
-    // Defer the update to acknowledge the interaction
-    await interaction.deferUpdate();
-
-    // Get stored user data
-    const userData = global.tempUserData?.get(interaction.user.id);
-    if (!userData) {
-      await interaction.editReply({
+    // Get stored user data - don't defer yet since we need to show modal
+    const storedAction = global[`userAction_${interaction.user.id}`];
+    if (!storedAction) {
+      await interaction.update({
         content: "Session expired. Please start over with a new ISO or PIF request.",
         components: []
       });
       return;
     }
 
-    const selectedAction = userData.action;
+    const selectedAction = storedAction;
     
     // Create modal based on action type
     const modal = new ModalBuilder()
@@ -659,17 +656,27 @@ async function handleCategoryModalSelection(interaction: any, selectedCategory: 
     log(`Showed modal for ${selectedAction} in category ${selectedCategory}`, "discord-bot");
   } catch (error) {
     log(`Error showing modal: ${error}`, "discord-bot");
-    await interaction.update({
-      content: "There was an error showing the form. Please try again.",
-      components: []
-    });
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: "Session expired. Please start over with a new ISO or PIF request.",
+          ephemeral: true
+        });
+      } else {
+        await interaction.editReply({
+          content: "Session expired. Please start over with a new ISO or PIF request."
+        });
+      }
+    } catch (replyError) {
+      log(`Error replying to failed modal: ${replyError}`, "discord-bot");
+    }
   }
 }
 
 // Handle modal submission and create the final post
 async function handleModalSubmission(interaction: any): Promise<void> {
   try {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: 64 }); // Use flags instead of ephemeral
     
     const [, action, category] = interaction.customId.split(':');
     const title = interaction.fields.getTextInputValue('item_title');
