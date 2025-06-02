@@ -675,27 +675,68 @@ async function handleModalSubmission(interaction: any): Promise<void> {
       // Continue without thread if creation fails
     }
 
-    // Also post to items-exchange channel as a hub
+    // Post to items-exchange forum channel
     const itemsExchangeChannel = interaction.client.channels.cache.find(
       (channel: any) => 
-        channel.isTextBased() && 
-        !channel.isDMBased() && 
         channel.name?.toLowerCase() === 'items-exchange'
-    ) as TextChannel;
+    );
 
-    if (itemsExchangeChannel) {
-      // Create copy for items-exchange with same formatting
-      const hubEmbed = new EmbedBuilder()
-        .setTitle(embedTitle)
-        .setDescription(embedDescription)
-        .addFields(embed.data.fields || [])
-        .setColor(embed.data.color)
-        .setTimestamp(new Date())
-        .setFooter({ text: `Originally posted in #${channelName}` });
+    if (itemsExchangeChannel && itemsExchangeChannel.isThread() === false) {
+      try {
+        // Map category to forum tag
+        const categoryTagMap: {[key: string]: string} = {
+          'electronics': 'Electronics',
+          'accessories': 'Accessories', 
+          'clothing': 'Clothing',
+          'home_furniture': 'Home & Furniture',
+          'footwear': 'Footwear',
+          'misc': 'Misc'
+        };
 
-      await itemsExchangeChannel.send({ embeds: [hubEmbed] });
-      
-      log(`Posted ${action} to #items-exchange hub from #${channelName}`, "discord-bot");
+        const tagName = categoryTagMap[category] || 'Misc';
+        
+        // Find the corresponding forum tag
+        let forumTag = null;
+        if ('availableTags' in itemsExchangeChannel) {
+          forumTag = (itemsExchangeChannel as any).availableTags.find(
+            (tag: any) => tag.name.toLowerCase() === tagName.toLowerCase()
+          );
+        }
+
+        // Create forum post with the item title
+        const forumPostOptions: any = {
+          name: title.slice(0, 100), // Forum post titles have 100 char limit
+          message: {
+            embeds: [embed]
+          }
+        };
+
+        // Add tag if found
+        if (forumTag) {
+          forumPostOptions.appliedTags = [forumTag.id];
+        }
+
+        const forumPost = await (itemsExchangeChannel as any).threads.create(forumPostOptions);
+        
+        log(`Created forum post "${title}" in #items-exchange with tag: ${tagName}`, "discord-bot");
+      } catch (forumError) {
+        log(`Error creating forum post: ${forumError}`, "discord-bot");
+        // Fall back to regular message if forum post fails
+        try {
+          const hubEmbed = new EmbedBuilder()
+            .setTitle(embedTitle)
+            .setDescription(embedDescription)
+            .addFields(embed.data.fields || [])
+            .setColor(embed.data.color)
+            .setTimestamp(new Date())
+            .setFooter({ text: `Originally posted in #${channelName}` });
+
+          await (itemsExchangeChannel as any).send({ embeds: [hubEmbed] });
+          log(`Posted ${action} to #items-exchange as regular message (forum fallback)`, "discord-bot");
+        } catch (fallbackError) {
+          log(`Error with forum fallback: ${fallbackError}`, "discord-bot");
+        }
+      }
     }
     
     // Store the request in database
@@ -712,7 +753,7 @@ async function handleModalSubmission(interaction: any): Promise<void> {
       responseMessage += ` with a discussion thread`;
     }
     if (itemsExchangeChannel) {
-      responseMessage += ` and copied to #items-exchange hub`;
+      responseMessage += ` and created as a forum post in #items-exchange`;
     }
     responseMessage += `!`;
 
