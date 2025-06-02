@@ -440,7 +440,214 @@ async function handleIsoRequest(message: Message): Promise<void> {
   }
 }
 
-// Handle category selection from button interaction
+// Handle action selection from dropdown
+async function handleActionSelection(interaction: any, selectedAction: string): Promise<void> {
+  try {
+    // Create category selection dropdown
+    const categoryRow = new ActionRowBuilder<StringSelectMenuBuilder>()
+      .addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId('category_select')
+          .setPlaceholder('What category is your item?')
+          .addOptions([
+            { label: 'Electronics', value: 'electronics' },
+            { label: 'Accessories', value: 'accessories' },
+            { label: 'Clothing', value: 'clothing' },
+            { label: 'Home & Furniture', value: 'home_furniture' },
+            { label: 'Footwear', value: 'footwear' },
+            { label: 'Misc', value: 'misc' }
+          ])
+      );
+
+    // Store the selected action in the interaction for later use
+    await interaction.update({
+      content: "What category is your item?",
+      components: [categoryRow]
+    });
+
+    // Store the action selection temporarily (we'll use it in modal)
+    const userData = { action: selectedAction, userId: interaction.user.id };
+    // Store in memory temporarily - in production you'd use a proper cache/database
+    if (!global.tempUserData) global.tempUserData = new Map();
+    global.tempUserData.set(interaction.user.id, userData);
+    
+    log(`User ${interaction.user.tag} action stored: ${selectedAction}`, "discord-bot");
+  } catch (error) {
+    log(`Error handling action selection: ${error}`, "discord-bot");
+  }
+}
+
+// Handle category selection and show modal
+async function handleCategoryModalSelection(interaction: any, selectedCategory: string): Promise<void> {
+  try {
+    // Get stored user data
+    const userData = global.tempUserData?.get(interaction.user.id);
+    if (!userData) {
+      await interaction.update({
+        content: "Session expired. Please start over with a new ISO or PIF request.",
+        components: []
+      });
+      return;
+    }
+
+    const selectedAction = userData.action;
+    
+    // Create modal based on action type
+    const modal = new ModalBuilder()
+      .setCustomId(`item_modal:${selectedAction}:${selectedCategory}`)
+      .setTitle(`${selectedAction.charAt(0).toUpperCase() + selectedAction.slice(1)} Item`);
+
+    // Title field (required for all)
+    const titleInput = new TextInputBuilder()
+      .setCustomId('item_title')
+      .setLabel('Title (name of the item)')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setMaxLength(100);
+
+    // Description field (required for all)
+    const descriptionInput = new TextInputBuilder()
+      .setCustomId('item_description')
+      .setLabel('Describe the item in detail')
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(true)
+      .setMaxLength(1000);
+
+    const titleRow = new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput);
+    const descriptionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(descriptionInput);
+    
+    modal.addComponents(titleRow, descriptionRow);
+
+    // Add urgency field for request items
+    if (selectedAction === 'request') {
+      const urgencyInput = new TextInputBuilder()
+        .setCustomId('item_urgency')
+        .setLabel('How urgently do you need this item?')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('e.g., "ASAP", "Within a week", "Not urgent"')
+        .setRequired(true)
+        .setMaxLength(100);
+
+      const urgencyRow = new ActionRowBuilder<TextInputBuilder>().addComponents(urgencyInput);
+      modal.addComponents(urgencyRow);
+    }
+
+    await interaction.showModal(modal);
+    log(`Showed modal for ${selectedAction} in category ${selectedCategory}`, "discord-bot");
+  } catch (error) {
+    log(`Error showing modal: ${error}`, "discord-bot");
+    await interaction.update({
+      content: "There was an error showing the form. Please try again.",
+      components: []
+    });
+  }
+}
+
+// Handle modal submission and create the final post
+async function handleModalSubmission(interaction: any): Promise<void> {
+  try {
+    await interaction.deferReply({ ephemeral: true });
+    
+    const [, action, category] = interaction.customId.split(':');
+    const title = interaction.fields.getTextInputValue('item_title');
+    const description = interaction.fields.getTextInputValue('item_description');
+    let urgency = '';
+    
+    if (action === 'request') {
+      urgency = interaction.fields.getTextInputValue('item_urgency');
+    }
+
+    // Create embed based on action type
+    const embed = new EmbedBuilder()
+      .setTimestamp(new Date());
+
+    let embedTitle = '';
+    let embedDescription = '';
+    
+    if (action === 'trade') {
+      embedTitle = 'Trade Offer';
+      embedDescription = `<@${interaction.user.id}> wants to trade ${title}`;
+      embed.setColor(0x3498db); // Blue
+      embed.addFields(
+        { name: 'Category', value: category.charAt(0).toUpperCase() + category.slice(1).replace('_', ' & '), inline: true },
+        { name: 'Offered by', value: interaction.user.tag, inline: true }
+      );
+    } else if (action === 'give') {
+      embedTitle = 'PIF Offer';
+      embedDescription = `<@${interaction.user.id}> is offering ${title}`;
+      embed.setColor(0x57F287); // Green
+      embed.addFields(
+        { name: 'Category', value: category.charAt(0).toUpperCase() + category.slice(1).replace('_', ' & '), inline: true },
+        { name: 'Offered by', value: interaction.user.tag, inline: true }
+      );
+    } else if (action === 'request') {
+      embedTitle = 'ISO Request';
+      embedDescription = `<@${interaction.user.id}> is in search of ${title}`;
+      embed.setColor(0x2b2d31); // Dark
+      embed.addFields(
+        { name: 'Category', value: category.charAt(0).toUpperCase() + category.slice(1).replace('_', ' & '), inline: true },
+        { name: 'Requested by', value: interaction.user.tag, inline: true },
+        { name: 'Urgency', value: urgency, inline: true }
+      );
+    }
+
+    embed.setTitle(embedTitle)
+         .setDescription(embedDescription)
+         .addFields({ name: 'Description', value: description, inline: false });
+
+    // Find the appropriate category channel
+    const categoryChannelMap: {[key: string]: string} = {
+      'electronics': 'electronics',
+      'accessories': 'accessories', 
+      'clothing': 'clothing',
+      'home_furniture': 'home-and-furniture',
+      'footwear': 'footwear',
+      'misc': 'misc'
+    };
+
+    const channelName = categoryChannelMap[category];
+    const targetChannel = interaction.client.channels.cache.find(
+      (channel: any) => 
+        channel.isTextBased() && 
+        !channel.isDMBased() && 
+        channel.name?.toLowerCase() === channelName.toLowerCase()
+    );
+
+    if (targetChannel && targetChannel.isTextBased()) {
+      // Post to category channel
+      await (targetChannel as TextChannel).send({ embeds: [embed] });
+      
+      // Store the request in database
+      await storage.createIsoRequest({
+        content: `${action.toUpperCase()} ${title}`,
+        username: interaction.user.tag,
+        userId: interaction.user.id,
+        category: category,
+        timestamp: new Date()
+      });
+
+      await interaction.editReply({
+        content: `Your ${action} has been posted to #${channelName}!`
+      });
+
+      log(`Posted ${action} to #${channelName}: ${title}`, "discord-bot");
+    } else {
+      await interaction.editReply({
+        content: `Could not find the #${channelName} channel. Please contact an admin.`
+      });
+    }
+
+    // Clean up temporary data
+    global.tempUserData?.delete(interaction.user.id);
+  } catch (error) {
+    log(`Error handling modal submission: ${error}`, "discord-bot");
+    await interaction.editReply({
+      content: "There was an error processing your submission. Please try again."
+    });
+  }
+}
+
+// Handle category selection from button interaction (legacy)
 async function handleCategorySelection(
   interaction: any, 
   categoryId: string
