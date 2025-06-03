@@ -22,19 +22,11 @@ let bot: Client | null = null;
 // Slash command definitions
 const commands = [
   new SlashCommandBuilder()
-    .setName('iso')
-    .setDescription('Request an item from the community')
+    .setName('exchange')
+    .setDescription('Exchange items with the community (request, offer, or trade)')
     .addStringOption(option =>
       option.setName('item')
-        .setDescription('What item are you looking for?')
-        .setRequired(true)),
-  
-  new SlashCommandBuilder()
-    .setName('pif')
-    .setDescription('Offer or trade an item with the community')
-    .addStringOption(option =>
-      option.setName('item')
-        .setDescription('What item are you offering/trading?')
+        .setDescription('What item are you looking for or offering?')
         .setRequired(true))
 ];
 
@@ -1058,7 +1050,7 @@ async function handleInteraction(interaction: Interaction) {
     if (interaction.isChatInputCommand()) {
       const commandName = interaction.commandName;
       
-      if (commandName === 'iso' || commandName === 'pif') {
+      if (commandName === 'exchange') {
         log(`Processing /${commandName} slash command`, "discord-bot");
         await handleSlashCommand(interaction);
       }
