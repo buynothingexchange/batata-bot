@@ -701,34 +701,38 @@ async function handleModalSubmission(interaction: any): Promise<void> {
 
     // Create embed based on action type
     const embed = new EmbedBuilder()
-      .setTimestamp(new Date());
+      .setTimestamp(new Date())
+      .setAuthor({
+        name: interaction.user.displayName || interaction.user.username,
+        iconURL: interaction.user.displayAvatarURL({ dynamic: true, size: 64 })
+      });
 
     let embedTitle = '';
     let embedDescription = '';
     
     if (action === 'trade') {
       embedTitle = 'Trade Offer';
-      embedDescription = `<@${interaction.user.id}> wants to trade ${title}`;
+      embedDescription = `Wants to trade: **${title}**`;
       embed.setColor(0x3498db); // Blue
       embed.addFields(
         { name: 'Category', value: category.charAt(0).toUpperCase() + category.slice(1).replace('_', ' & '), inline: true },
-        { name: 'Offered by', value: interaction.user.tag, inline: true }
+        { name: 'Type', value: 'Trade', inline: true }
       );
     } else if (action === 'give') {
       embedTitle = 'PIF Offer';
-      embedDescription = `<@${interaction.user.id}> is offering ${title}`;
+      embedDescription = `Offering to give away: **${title}**`;
       embed.setColor(0x57F287); // Green
       embed.addFields(
         { name: 'Category', value: category.charAt(0).toUpperCase() + category.slice(1).replace('_', ' & '), inline: true },
-        { name: 'Offered by', value: interaction.user.tag, inline: true }
+        { name: 'Type', value: 'Give Away', inline: true }
       );
     } else if (action === 'request') {
       embedTitle = 'ISO Request';
-      embedDescription = `<@${interaction.user.id}> is in search of ${title}`;
+      embedDescription = `Looking for: **${title}**`;
       embed.setColor(0x2b2d31); // Dark
       embed.addFields(
         { name: 'Category', value: category.charAt(0).toUpperCase() + category.slice(1).replace('_', ' & '), inline: true },
-        { name: 'Requested by', value: interaction.user.tag, inline: true },
+        { name: 'Type', value: 'Request', inline: true },
         { name: 'Urgency', value: urgency, inline: true }
       );
     }
