@@ -751,14 +751,14 @@ async function handleModalSubmission(interaction: any): Promise<void> {
       return;
     }
 
-    // Map categories to forum tag names
+    // Map categories to forum tag names (matching actual forum tags)
     const categoryTagMap: {[key: string]: string} = {
-      'electronics': 'Electronics',
-      'accessories': 'Accessories', 
-      'clothing': 'Clothing',
-      'home_furniture': 'Home & Furniture',
-      'footwear': 'Footwear',
-      'misc': 'Miscellaneous'
+      'electronics': 'electronics',
+      'accessories': 'accessories', 
+      'clothing': 'clothing',
+      'home_furniture': 'home and furniture',
+      'footwear': 'footwear',
+      'misc': 'misc'
     };
 
     const tagName = categoryTagMap[category];
