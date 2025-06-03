@@ -692,7 +692,11 @@ async function handleModalSubmission(interaction: any): Promise<void> {
     let urgency = '';
     
     if (action === 'request') {
-      urgency = interaction.fields.getTextInputValue('item_urgency');
+      try {
+        urgency = interaction.fields.getTextInputValue('item_urgency') || 'Not specified';
+      } catch {
+        urgency = 'Not specified';
+      }
     }
 
     // Create embed based on action type
@@ -733,124 +737,43 @@ async function handleModalSubmission(interaction: any): Promise<void> {
          .setDescription(embedDescription)
          .addFields({ name: 'Description', value: description, inline: false });
 
-    // Find the appropriate category channel
-    const categoryChannelMap: {[key: string]: string} = {
-      'electronics': 'electronics',
-      'accessories': 'accessories', 
-      'clothing': 'clothing',
-      'home_furniture': 'home-and-furniture',
-      'footwear': 'footwear',
-      'misc': 'misc'
-    };
-
-    const channelName = categoryChannelMap[category];
-    const categoryChannel = interaction.client.channels.cache.find(
+    // Find the items-exchange forum channel
+    const forumChannel = interaction.client.channels.cache.find(
       (channel: any) => 
-        channel.isTextBased() && 
-        !channel.isDMBased() && 
-        channel.name?.toLowerCase() === channelName.toLowerCase()
-    ) as TextChannel;
+        channel.type === ChannelType.GuildForum && 
+        channel.name?.toLowerCase() === 'items-exchange'
+    );
 
-    if (!categoryChannel) {
+    if (!forumChannel) {
       await interaction.editReply({
-        content: `Could not find the #${channelName} channel. Please contact an admin.`
+        content: "Could not find the items-exchange forum channel. Please contact an admin."
       });
       return;
     }
 
-    // Post to category channel first
-    const categoryMessage = await categoryChannel.send({ embeds: [embed] });
+    // Map categories to forum tag names
+    const categoryTagMap: {[key: string]: string} = {
+      'electronics': 'Electronics',
+      'accessories': 'Accessories', 
+      'clothing': 'Clothing',
+      'home_furniture': 'Home & Furniture',
+      'footwear': 'Footwear',
+      'misc': 'Miscellaneous'
+    };
+
+    const tagName = categoryTagMap[category];
     
-    // Create a thread for the item in category channel
-    let thread;
-    try {
-      thread = await categoryMessage.startThread({
-        name: `${title.slice(0, 80)}`, // Discord thread names have 100 char limit, keep some buffer
-        autoArchiveDuration: 4320, // 3 days
-        reason: `Discussion thread for ${action} item: ${title}`
-      });
-      
-      // Send a starter message in the thread
-      let starterMessage = '';
-      if (action === 'request') {
-        starterMessage = `💬 Discussion thread for this ISO request. Reply here to ask questions or offer help!`;
-      } else if (action === 'give') {
-        starterMessage = `💬 Discussion thread for this PIF offer. Reply here to claim or ask questions!`;
-      } else if (action === 'trade') {
-        starterMessage = `💬 Discussion thread for this trade offer. Reply here to propose trades or ask questions!`;
-      }
-      
-      await thread.send(starterMessage);
-      
-      log(`Created thread "${title}" for ${action} in #${channelName}`, "discord-bot");
-    } catch (threadError) {
-      log(`Error creating thread: ${threadError}`, "discord-bot");
-      // Continue without thread if creation fails
-    }
+    // Find the tag ID for the category
+    const forumTags = (forumChannel as any).availableTags || [];
+    const categoryTag = forumTags.find((tag: any) => tag.name === tagName);
+    const appliedTags = categoryTag ? [categoryTag.id] : [];
 
-    // Post to items-exchange forum channel
-    const itemsExchangeChannel = interaction.client.channels.cache.find(
-      (channel: any) => 
-        channel.name?.toLowerCase() === 'items-exchange'
-    );
-
-    if (itemsExchangeChannel && itemsExchangeChannel.isThread() === false) {
-      try {
-        // Map category to forum tag
-        const categoryTagMap: {[key: string]: string} = {
-          'electronics': 'Electronics',
-          'accessories': 'Accessories', 
-          'clothing': 'Clothing',
-          'home_furniture': 'Home & Furniture',
-          'footwear': 'Footwear',
-          'misc': 'Misc'
-        };
-
-        const tagName = categoryTagMap[category] || 'Misc';
-        
-        // Find the corresponding forum tag
-        let forumTag = null;
-        if ('availableTags' in itemsExchangeChannel) {
-          forumTag = (itemsExchangeChannel as any).availableTags.find(
-            (tag: any) => tag.name.toLowerCase() === tagName.toLowerCase()
-          );
-        }
-
-        // Create forum post with the item title
-        const forumPostOptions: any = {
-          name: title.slice(0, 100), // Forum post titles have 100 char limit
-          message: {
-            embeds: [embed]
-          }
-        };
-
-        // Add tag if found
-        if (forumTag) {
-          forumPostOptions.appliedTags = [forumTag.id];
-        }
-
-        const forumPost = await (itemsExchangeChannel as any).threads.create(forumPostOptions);
-        
-        log(`Created forum post "${title}" in #items-exchange with tag: ${tagName}`, "discord-bot");
-      } catch (forumError) {
-        log(`Error creating forum post: ${forumError}`, "discord-bot");
-        // Fall back to regular message if forum post fails
-        try {
-          const hubEmbed = new EmbedBuilder()
-            .setTitle(embedTitle)
-            .setDescription(embedDescription)
-            .addFields(embed.data.fields || [])
-            .setColor(embed.data.color)
-            .setTimestamp(new Date())
-            .setFooter({ text: `Originally posted in #${channelName}` });
-
-          await (itemsExchangeChannel as any).send({ embeds: [hubEmbed] });
-          log(`Posted ${action} to #items-exchange as regular message (forum fallback)`, "discord-bot");
-        } catch (fallbackError) {
-          log(`Error with forum fallback: ${fallbackError}`, "discord-bot");
-        }
-      }
-    }
+    // Create the forum post
+    const forumPost = await (forumChannel as any).threads.create({
+      name: `${embedTitle}: ${title}`,
+      message: { embeds: [embed] },
+      appliedTags: appliedTags
+    });
     
     // Store the request in database
     await storage.createIsoRequest({
@@ -861,28 +784,24 @@ async function handleModalSubmission(interaction: any): Promise<void> {
       timestamp: new Date()
     });
 
-    let responseMessage = `Your ${action} has been posted to #${channelName}`;
-    if (thread) {
-      responseMessage += ` with a discussion thread`;
-    }
-    if (itemsExchangeChannel) {
-      responseMessage += ` and created as a forum post in #items-exchange`;
-    }
-    responseMessage += `!`;
-
+    // Confirm to user
     await interaction.editReply({
-      content: responseMessage
+      content: `✅ Your ${action} request for "${title}" has been posted to the items-exchange forum with the ${tagName} tag!`
     });
 
-    log(`Posted ${action} to #${channelName}: ${title}`, "discord-bot");
+    log(`Created forum post in #items-exchange with ${tagName} tag for ${action} request: "${title}"`, "discord-bot");
 
     // Clean up temporary data
     global.tempUserData?.delete(interaction.user.id);
   } catch (error) {
     log(`Error handling modal submission: ${error}`, "discord-bot");
-    await interaction.editReply({
-      content: "There was an error processing your submission. Please try again."
-    });
+    try {
+      await interaction.editReply({
+        content: "There was an error processing your request. Please try again."
+      });
+    } catch (editError) {
+      log(`Error editing reply: ${editError}`, "discord-bot");
+    }
   }
 }
 
