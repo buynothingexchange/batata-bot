@@ -765,8 +765,17 @@ async function handleModalSubmission(interaction: any): Promise<void> {
     
     // Find the tag ID for the category
     const forumTags = (forumChannel as any).availableTags || [];
+    log(`Available forum tags: ${forumTags.map((tag: any) => tag.name).join(', ')}`, "discord-bot");
+    log(`Looking for tag: "${tagName}" for category: "${category}"`, "discord-bot");
+    
     const categoryTag = forumTags.find((tag: any) => tag.name === tagName);
     const appliedTags = categoryTag ? [categoryTag.id] : [];
+    
+    if (!categoryTag) {
+      log(`Tag "${tagName}" not found in available tags`, "discord-bot");
+    } else {
+      log(`Found tag "${tagName}" with ID: ${categoryTag.id}`, "discord-bot");
+    }
 
     // Create the forum post
     const forumPost = await (forumChannel as any).threads.create({
