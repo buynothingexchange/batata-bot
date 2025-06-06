@@ -92,3 +92,26 @@ export const insertIsoRequestSchema = createInsertSchema(isoRequests).omit({
 
 export type InsertIsoRequest = z.infer<typeof insertIsoRequestSchema>;
 export type IsoRequest = typeof isoRequests.$inferSelect;
+
+// Forum Post Tracking schema for auto-bump feature
+export const forumPosts = pgTable("forum_posts", {
+  id: serial("id").primaryKey(),
+  threadId: text("thread_id").notNull().unique(),
+  channelId: text("channel_id").notNull(),
+  guildId: text("guild_id").notNull(),
+  authorId: text("author_id").notNull(),
+  title: text("title").notNull(),
+  category: text("category").notNull(),
+  lastActivity: timestamp("last_activity").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  bumpCount: integer("bump_count").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+});
+
+export const insertForumPostSchema = createInsertSchema(forumPosts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertForumPost = z.infer<typeof insertForumPostSchema>;
+export type ForumPost = typeof forumPosts.$inferSelect;

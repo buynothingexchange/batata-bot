@@ -2,7 +2,9 @@ import {
   users, type User, type InsertUser,
   botConfig, type BotConfig, type InsertBotConfig,
   logs, type Log, type InsertLog,
-  allowedChannels, type AllowedChannel, type InsertAllowedChannel
+  allowedChannels, type AllowedChannel, type InsertAllowedChannel,
+  isoRequests, type IsoRequest, type InsertIsoRequest,
+  forumPosts, type ForumPost, type InsertForumPost
 } from "@shared/schema";
 
 // Storage interface for bot-related data
@@ -33,6 +35,14 @@ export interface IStorage {
   getActiveIsoRequests(limit?: number): Promise<IsoRequest[]>;
   updateIsoRequestCategory(id: number, category: string): Promise<IsoRequest | undefined>;
   markIsoRequestFulfilled(id: number): Promise<IsoRequest | undefined>;
+  
+  // Forum post tracking operations
+  createForumPost(post: InsertForumPost): Promise<ForumPost>;
+  getForumPost(threadId: string): Promise<ForumPost | undefined>;
+  updateForumPostActivity(threadId: string): Promise<ForumPost | undefined>;
+  getInactiveForumPosts(daysInactive: number): Promise<ForumPost[]>;
+  incrementBumpCount(threadId: string): Promise<ForumPost | undefined>;
+  deactivateForumPost(threadId: string): Promise<ForumPost | undefined>;
 }
 
 // In-memory storage implementation
@@ -42,12 +52,14 @@ export class MemStorage implements IStorage {
   private logEntries: Map<number, Log>;
   private channels: Map<string, AllowedChannel>;
   private isoRequestsMap: Map<number, IsoRequest>;
+  private forumPostsMap: Map<string, ForumPost>;
   
   private currentUserId: number;
   private currentConfigId: number;
   private currentLogId: number;
   private currentChannelId: number;
   private currentIsoRequestId: number;
+  private currentForumPostId: number;
 
   constructor() {
     this.users = new Map();
@@ -55,12 +67,14 @@ export class MemStorage implements IStorage {
     this.logEntries = new Map();
     this.channels = new Map();
     this.isoRequestsMap = new Map();
+    this.forumPostsMap = new Map();
     
     this.currentUserId = 1;
     this.currentConfigId = 1;
     this.currentLogId = 1;
     this.currentChannelId = 1;
     this.currentIsoRequestId = 1;
+    this.currentForumPostId = 1;
   }
 
   // User operations
@@ -233,6 +247,79 @@ export class MemStorage implements IStorage {
     
     this.isoRequestsMap.set(id, updatedRequest);
     return updatedRequest;
+  }
+
+  // Forum post tracking operations
+  async createForumPost(post: InsertForumPost): Promise<ForumPost> {
+    const id = this.currentForumPostId++;
+    const forumPost: ForumPost = {
+      id,
+      threadId: post.threadId,
+      channelId: post.channelId,
+      guildId: post.guildId,
+      authorId: post.authorId,
+      title: post.title,
+      category: post.category,
+      lastActivity: post.lastActivity || new Date(),
+      createdAt: new Date(),
+      bumpCount: post.bumpCount || 0,
+      isActive: post.isActive !== undefined ? post.isActive : true
+    };
+    
+    this.forumPostsMap.set(post.threadId, forumPost);
+    return forumPost;
+  }
+
+  async getForumPost(threadId: string): Promise<ForumPost | undefined> {
+    return this.forumPostsMap.get(threadId);
+  }
+
+  async updateForumPostActivity(threadId: string): Promise<ForumPost | undefined> {
+    const post = this.forumPostsMap.get(threadId);
+    if (!post) return undefined;
+    
+    const updatedPost = {
+      ...post,
+      lastActivity: new Date()
+    };
+    
+    this.forumPostsMap.set(threadId, updatedPost);
+    return updatedPost;
+  }
+
+  async getInactiveForumPosts(daysInactive: number): Promise<ForumPost[]> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysInactive);
+    
+    return Array.from(this.forumPostsMap.values())
+      .filter(post => post.isActive && post.lastActivity < cutoffDate);
+  }
+
+  async incrementBumpCount(threadId: string): Promise<ForumPost | undefined> {
+    const post = this.forumPostsMap.get(threadId);
+    if (!post) return undefined;
+    
+    const updatedPost = {
+      ...post,
+      bumpCount: post.bumpCount + 1,
+      lastActivity: new Date()
+    };
+    
+    this.forumPostsMap.set(threadId, updatedPost);
+    return updatedPost;
+  }
+
+  async deactivateForumPost(threadId: string): Promise<ForumPost | undefined> {
+    const post = this.forumPostsMap.get(threadId);
+    if (!post) return undefined;
+    
+    const updatedPost = {
+      ...post,
+      isActive: false
+    };
+    
+    this.forumPostsMap.set(threadId, updatedPost);
+    return updatedPost;
   }
 }
 
