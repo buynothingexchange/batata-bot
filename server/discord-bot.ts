@@ -1227,6 +1227,9 @@ export async function updateBotConfig(newConfig: { webhookUrl?: string; token?: 
 // Restart the bot
 export async function restartBot() {
   try {
+    // Stop auto-bump checker before restarting
+    stopAutoBumpChecker();
+    
     if (bot) {
       // Log out
       await bot.destroy();
