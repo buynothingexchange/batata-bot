@@ -43,6 +43,11 @@ const processStartTime = new Date(); // When the entire process started
 // For processing ISO requests, use a global lock to prevent duplicates
 let isProcessingIsoRequest = false;
 
+// Auto-bump functionality
+let autoBumpInterval: NodeJS.Timeout | null = null;
+const AUTO_BUMP_CHECK_INTERVAL = 60 * 60 * 1000; // Check every hour
+const DAYS_BEFORE_BUMP = 6;
+
 // Register slash commands with Discord
 async function registerSlashCommands() {
   const token = process.env.DISCORD_BOT_TOKEN;
@@ -212,6 +217,9 @@ export async function initializeBot() {
     setInterval(() => {
       performHealthCheck();
     }, 60000);
+    
+    // Start auto-bump checker
+    startAutoBumpChecker();
     
     log("Bot initialized successfully", "discord-bot");
     return bot;
@@ -778,6 +786,19 @@ async function handleModalSubmission(interaction: any): Promise<void> {
       name: `${embedTitle}: ${title}`,
       message: { embeds: [embed] },
       appliedTags: appliedTags
+    });
+    
+    // Track the forum post for auto-bump functionality
+    await storage.createForumPost({
+      threadId: forumPost.id,
+      channelId: forumChannel.id,
+      guildId: interaction.guild?.id || '',
+      authorId: interaction.user.id,
+      title: title,
+      category: category,
+      lastActivity: new Date(),
+      bumpCount: 0,
+      isActive: true
     });
     
     // Store the request in database
@@ -1445,4 +1466,99 @@ function isValidDiscordToken(token: string): boolean {
   // Basic format check: should be in three parts separated by periods
   const parts = token.split('.');
   return parts.length === 3 && parts.every(part => part.length > 0);
+}
+
+// Auto-bump functionality
+async function checkAndBumpInactivePosts(): Promise<void> {
+  if (!bot) return;
+  
+  try {
+    log('Checking for inactive forum posts to auto-bump', "discord-bot");
+    
+    // Get posts that have been inactive for 6 days
+    const inactivePosts = await storage.getInactiveForumPosts(DAYS_BEFORE_BUMP);
+    
+    for (const post of inactivePosts) {
+      try {
+        // Get the forum thread
+        const thread = await bot.channels.fetch(post.threadId);
+        
+        if (!thread || !thread.isThread()) {
+          log(`Thread ${post.threadId} not found or not a thread, deactivating post`, "discord-bot");
+          await storage.deactivateForumPost(post.threadId);
+          continue;
+        }
+        
+        // Check if thread is archived - if so, skip bumping
+        if (thread.archived) {
+          log(`Thread ${post.threadId} is archived, deactivating post`, "discord-bot");
+          await storage.deactivateForumPost(post.threadId);
+          continue;
+        }
+        
+        // Send silent bump message
+        log(`Auto-bumping post: ${post.title} (inactive for ${DAYS_BEFORE_BUMP} days)`, "discord-bot");
+        
+        const bumpMessage = await thread.send({
+          content: ".",
+          flags: ['SuppressNotifications'] // Silent message
+        });
+        
+        // Delete the bump message immediately
+        setTimeout(async () => {
+          try {
+            await bumpMessage.delete();
+            log(`Deleted auto-bump message for post: ${post.title}`, "discord-bot");
+          } catch (deleteError) {
+            log(`Could not delete auto-bump message: ${deleteError}`, "discord-bot");
+          }
+        }, 1000); // Delete after 1 second
+        
+        // Update the post's bump count and last activity
+        await storage.incrementBumpCount(post.threadId);
+        
+        log(`Successfully auto-bumped post: ${post.title} (bump #${post.bumpCount + 1})`, "discord-bot");
+        
+        // Add a small delay between bumps to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+      } catch (error) {
+        log(`Error auto-bumping post ${post.title}: ${error}`, "discord-bot");
+        
+        // If there's an error accessing the thread, deactivate tracking
+        if (error.message?.includes('Unknown Channel') || error.message?.includes('Missing Permissions')) {
+          await storage.deactivateForumPost(post.threadId);
+        }
+      }
+    }
+    
+    if (inactivePosts.length > 0) {
+      log(`Auto-bump check completed: processed ${inactivePosts.length} inactive posts`, "discord-bot");
+    }
+    
+  } catch (error) {
+    log(`Error in auto-bump check: ${error}`, "discord-bot");
+  }
+}
+
+function startAutoBumpChecker(): void {
+  // Clear existing interval if any
+  if (autoBumpInterval) {
+    clearInterval(autoBumpInterval);
+  }
+  
+  // Start the auto-bump checker
+  autoBumpInterval = setInterval(checkAndBumpInactivePosts, AUTO_BUMP_CHECK_INTERVAL);
+  log(`Auto-bump checker started (checking every ${AUTO_BUMP_CHECK_INTERVAL / 1000 / 60} minutes)`, "discord-bot");
+  
+  // Run an initial check after 1 minute
+  setTimeout(checkAndBumpInactivePosts, 60000);
+}
+
+function stopAutoBumpChecker(): void {
+  if (autoBumpInterval) {
+    clearInterval(autoBumpInterval);
+    autoBumpInterval = null;
+    log('Auto-bump checker stopped', "discord-bot");
+  }
 }
