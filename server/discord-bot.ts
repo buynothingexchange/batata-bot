@@ -27,7 +27,10 @@ const commands = [
     .addStringOption(option =>
       option.setName('item')
         .setDescription('What item are you looking for or offering?')
-        .setRequired(true))
+        .setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('help')
+    .setDescription('Get help with bot commands and features')
 ];
 
 // Track when we last received messages (for heartbeat)
@@ -452,48 +455,110 @@ async function handlePifRequest(message: Message): Promise<void> {
 async function handleSlashCommand(interaction: ChatInputCommandInteraction): Promise<void> {
   try {
     const commandName = interaction.commandName;
-    const itemParam = interaction.options.getString('item');
     
-    log(`Processing /${commandName} command from ${interaction.user.tag} for item: ${itemParam}`, "discord-bot");
-    
-    // Create action selection dropdown
-    const actionRow = new ActionRowBuilder<StringSelectMenuBuilder>()
-      .addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId('action_select')
-          .setPlaceholder('What would you like to do?')
-          .addOptions([
-            {
-              label: 'Trade',
-              description: 'Exchange items with other members',
-              value: 'trade'
-            },
-            {
-              label: 'Give',
-              description: 'Offer items for free to the community',
-              value: 'give'
-            },
-            {
-              label: 'Request',
-              description: 'Request items from the community',
-              value: 'request'
-            }
-          ])
-      );
-    
-    // Store the item name for later use
-    const userData = { itemName: itemParam };
-    if (!global.tempUserData) global.tempUserData = new Map();
-    global.tempUserData.set(interaction.user.id, userData);
-    
-    // Send ephemeral reply - this is truly private!
-    await interaction.reply({
-      content: "What would you like to do?",
-      components: [actionRow],
-      flags: 64 // InteractionResponseFlags.Ephemeral
-    });
-    
-    log(`Successfully sent ephemeral reply to ${interaction.user.tag}`, "discord-bot");
+    if (commandName === 'exchange') {
+      const itemParam = interaction.options.getString('item');
+      
+      log(`Processing /${commandName} command from ${interaction.user.tag} for item: ${itemParam}`, "discord-bot");
+      
+      // Create action selection dropdown
+      const actionRow = new ActionRowBuilder<StringSelectMenuBuilder>()
+        .addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId('action_select')
+            .setPlaceholder('What would you like to do?')
+            .addOptions([
+              {
+                label: 'Trade',
+                description: 'Exchange items with other members',
+                value: 'trade'
+              },
+              {
+                label: 'Give',
+                description: 'Offer items for free to the community',
+                value: 'give'
+              },
+              {
+                label: 'Request',
+                description: 'Request items from the community',
+                value: 'request'
+              }
+            ])
+        );
+      
+      // Store the item name for later use
+      const userData = { itemName: itemParam };
+      if (!global.tempUserData) global.tempUserData = new Map();
+      global.tempUserData.set(interaction.user.id, userData);
+      
+      // Send ephemeral reply - this is truly private!
+      await interaction.reply({
+        content: "What would you like to do?",
+        components: [actionRow],
+        flags: 64 // InteractionResponseFlags.Ephemeral
+      });
+      
+      log(`Successfully sent ephemeral reply to ${interaction.user.tag}`, "discord-bot");
+      
+    } else if (commandName === 'help') {
+      log(`Processing /help command from ${interaction.user.tag}`, "discord-bot");
+      
+      // Create help embed
+      const helpEmbed = new EmbedBuilder()
+        .setTitle('🤖 Batata Bot - Command Help')
+        .setDescription('Here are all the available commands and how to use them:')
+        .setColor(0x3498db)
+        .addFields(
+          {
+            name: '📦 /exchange',
+            value: '**Usage:** `/exchange item:[item name]`\n' +
+                   '**Description:** Create an exchange form that will be posted in the items-exchange forum channel.\n' +
+                   '**Process:**\n' +
+                   '• Choose your action: Trade, Give, or Request\n' +
+                   '• Select a category for your item\n' +
+                   '• Fill out details in the form\n' +
+                   '• Your post appears in the forum with proper tags\n' +
+                   '**Example:** `/exchange item:iPhone 14`',
+            inline: false
+          },
+          {
+            name: '❓ /help',
+            value: '**Usage:** `/help`\n' +
+                   '**Description:** Display this help message with information about all available commands.',
+            inline: false
+          },
+          {
+            name: '🔄 Auto-Bump Feature',
+            value: 'Forum posts are automatically bumped after 6 days of inactivity to keep them visible in the community.',
+            inline: false
+          },
+          {
+            name: '📋 Categories Available',
+            value: '• Electronics\n• Accessories\n• Clothing\n• Home & Furniture\n• Footwear\n• Miscellaneous',
+            inline: false
+          },
+          {
+            name: '💡 Tips',
+            value: '• All interactions are private (only you can see them)\n' +
+                   '• Be specific when describing your items\n' +
+                   '• Include condition and any relevant details\n' +
+                   '• Check the items-exchange forum regularly for new posts',
+            inline: false
+          }
+        )
+        .setFooter({ 
+          text: 'Need more help? Contact a server administrator.',
+          iconURL: interaction.client.user?.displayAvatarURL()
+        })
+        .setTimestamp();
+      
+      await interaction.reply({
+        embeds: [helpEmbed],
+        flags: 64 // InteractionResponseFlags.Ephemeral
+      });
+      
+      log(`Successfully sent help message to ${interaction.user.tag}`, "discord-bot");
+    }
   } catch (error) {
     log(`Error handling slash command: ${error}`, "discord-bot");
   }
@@ -1071,7 +1136,7 @@ async function handleInteraction(interaction: Interaction) {
     if (interaction.isChatInputCommand()) {
       const commandName = interaction.commandName;
       
-      if (commandName === 'exchange') {
+      if (commandName === 'exchange' || commandName === 'help') {
         log(`Processing /${commandName} slash command`, "discord-bot");
         await handleSlashCommand(interaction);
       }
