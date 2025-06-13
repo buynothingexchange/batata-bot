@@ -565,14 +565,14 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
     } else if (commandName === 'updatepost') {
       log(`Processing /updatepost command from ${interaction.user.tag}`, "discord-bot");
       
-      // Get user's active forum posts
+      // Get user's active forum posts from storage
       const userPosts = await storage.getForumPostsByUser(interaction.user.id);
       const activePosts = userPosts.filter(post => post.isActive);
       
       if (activePosts.length === 0) {
         await interaction.reply({
           content: "You don't have any active forum posts to update. Use `/exchange` to create a new post!",
-          flags: 64 // InteractionResponseFlags.Ephemeral
+          ephemeral: true
         });
         return;
       }
@@ -580,22 +580,22 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
       // Create dropdown with user's posts (limit to 25 due to Discord API limits)
       const postOptions = activePosts.slice(0, 25).map(post => ({
         label: post.title.length > 100 ? post.title.substring(0, 97) + "..." : post.title,
-        description: `Category: ${post.category} • Created: ${post.lastActivity.toLocaleDateString()}`,
+        description: "Click to manage this post",
         value: post.threadId
       }));
       
       const postSelectRow = new ActionRowBuilder<StringSelectMenuBuilder>()
         .addComponents(
           new StringSelectMenuBuilder()
-            .setCustomId('post_select')
-            .setPlaceholder('Select a post to update')
+            .setCustomId('update_post_select')
+            .setPlaceholder('Select the post you want to update')
             .addOptions(postOptions)
         );
       
       await interaction.reply({
-        content: `You have ${activePosts.length} active post${activePosts.length === 1 ? '' : 's'}. Select one to update:`,
+        content: "Select the post you want to update.",
         components: [postSelectRow],
-        flags: 64 // InteractionResponseFlags.Ephemeral
+        ephemeral: true
       });
       
       log(`Successfully sent post selection to ${interaction.user.tag} with ${activePosts.length} posts`, "discord-bot");
@@ -1177,7 +1177,7 @@ async function handleInteraction(interaction: Interaction) {
     if (interaction.isChatInputCommand()) {
       const commandName = interaction.commandName;
       
-      if (commandName === 'exchange' || commandName === 'help') {
+      if (commandName === 'exchange' || commandName === 'help' || commandName === 'updatepost') {
         log(`Processing /${commandName} slash command`, "discord-bot");
         await handleSlashCommand(interaction);
       }
