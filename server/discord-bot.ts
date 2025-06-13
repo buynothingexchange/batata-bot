@@ -1196,6 +1196,10 @@ async function handleInteraction(interaction: Interaction) {
         const selectedCategory = interaction.values[0];
         log(`User ${interaction.user.tag} selected category: ${selectedCategory}`, "discord-bot");
         await handleCategoryModalSelection(interaction, selectedCategory);
+      } else if (customId === 'update_post_select') {
+        const selectedThreadId = interaction.values[0];
+        log(`User ${interaction.user.tag} selected post to update: ${selectedThreadId}`, "discord-bot");
+        await handleUpdatePostSelection(interaction, selectedThreadId);
       }
       return;
     }
@@ -1207,6 +1211,9 @@ async function handleInteraction(interaction: Interaction) {
       if (customId.startsWith('item_modal:')) {
         log(`User ${interaction.user.tag} submitted item modal`, "discord-bot");
         await handleModalSubmission(interaction);
+      } else if (customId.startsWith('claim_modal:')) {
+        log(`User ${interaction.user.tag} submitted claim modal`, "discord-bot");
+        await handleClaimModalSubmission(interaction);
       }
       return;
     }
@@ -1227,6 +1234,17 @@ async function handleInteraction(interaction: Interaction) {
       if (customId === 'fulfill:item') {
         log(`Processing fulfill request`, "discord-bot");
         await handleFulfillRequest(interaction);
+      }
+      
+      // Handle post update buttons
+      if (customId.startsWith('mark_claimed:')) {
+        const threadId = customId.split(':')[1];
+        log(`Processing mark as claimed for thread: ${threadId}`, "discord-bot");
+        await handleMarkAsClaimed(interaction, threadId);
+      } else if (customId.startsWith('still_available:')) {
+        const threadId = customId.split(':')[1];
+        log(`Processing still available for thread: ${threadId}`, "discord-bot");
+        await handleStillAvailable(interaction, threadId);
       }
       return;
     }
@@ -1575,6 +1593,221 @@ function isValidDiscordToken(token: string): boolean {
   // Basic format check: should be in three parts separated by periods
   const parts = token.split('.');
   return parts.length === 3 && parts.every(part => part.length > 0);
+}
+
+// Handle post selection for update
+async function handleUpdatePostSelection(interaction: any, threadId: string): Promise<void> {
+  try {
+    // Get the forum post from storage
+    const post = await storage.getForumPost(threadId);
+    
+    if (!post) {
+      await interaction.update({
+        content: "Post not found in our records. It may have been deleted.",
+        components: [],
+        ephemeral: true
+      });
+      return;
+    }
+    
+    // Verify the user owns this post
+    if (post.authorId !== interaction.user.id) {
+      await interaction.update({
+        content: "You can only update your own posts.",
+        components: [],
+        ephemeral: true
+      });
+      return;
+    }
+    
+    // Create buttons for post status
+    const statusButtons = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId(`mark_claimed:${threadId}`)
+          .setLabel('Mark as Claimed')
+          .setStyle(ButtonStyle.Success)
+          .setEmoji('✅'),
+        new ButtonBuilder()
+          .setCustomId(`still_available:${threadId}`)
+          .setLabel('Still Available')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('🔄')
+      );
+    
+    // Include clickable link to the original post
+    const postLink = `[View Post](https://discord.com/channels/${post.guildId}/${threadId})`;
+    
+    await interaction.update({
+      content: `**${post.title}**\n\nHas this item been fulfilled?\n\n${postLink}`,
+      components: [statusButtons],
+      ephemeral: true
+    });
+    
+    log(`User ${interaction.user.tag} selected post for update: ${post.title}`, "discord-bot");
+  } catch (error) {
+    log(`Error handling post selection: ${error}`, "discord-bot");
+    try {
+      await interaction.update({
+        content: "There was an error loading your post. Please try again.",
+        components: [],
+        ephemeral: true
+      });
+    } catch (updateError) {
+      log(`Error updating interaction: ${updateError}`, "discord-bot");
+    }
+  }
+}
+
+// Handle "Mark as Claimed" button click
+async function handleMarkAsClaimed(interaction: any, threadId: string): Promise<void> {
+  try {
+    // Verify ownership again
+    const post = await storage.getForumPost(threadId);
+    if (!post || post.authorId !== interaction.user.id) {
+      await interaction.update({
+        content: "You can only update your own posts.",
+        components: [],
+        ephemeral: true
+      });
+      return;
+    }
+    
+    // Create modal to ask who received the item
+    const claimModal = new ModalBuilder()
+      .setCustomId(`claim_modal:${threadId}`)
+      .setTitle('Mark Item as Claimed');
+    
+    const recipientInput = new TextInputBuilder()
+      .setCustomId('recipient')
+      .setLabel('Who received this item?')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('Enter the username or @ mention')
+      .setRequired(true)
+      .setMaxLength(100);
+    
+    const actionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(recipientInput);
+    claimModal.addComponents(actionRow);
+    
+    await interaction.showModal(claimModal);
+    
+    log(`Showing claim modal for thread: ${threadId}`, "discord-bot");
+  } catch (error) {
+    log(`Error handling mark as claimed: ${error}`, "discord-bot");
+    try {
+      await interaction.update({
+        content: "There was an error processing your request. Please try again.",
+        components: [],
+        ephemeral: true
+      });
+    } catch (updateError) {
+      log(`Error updating interaction: ${updateError}`, "discord-bot");
+    }
+  }
+}
+
+// Handle "Still Available" button click
+async function handleStillAvailable(interaction: any, threadId: string): Promise<void> {
+  try {
+    // Verify ownership
+    const post = await storage.getForumPost(threadId);
+    if (!post || post.authorId !== interaction.user.id) {
+      await interaction.update({
+        content: "You can only update your own posts.",
+        components: [],
+        ephemeral: true
+      });
+      return;
+    }
+    
+    // Update the post activity to bump it up
+    await storage.updateForumPostActivity(threadId);
+    
+    // Create a link to the post
+    const postLink = `[View Post](https://discord.com/channels/${post.guildId}/${threadId})`;
+    
+    await interaction.update({
+      content: `✅ Your post "${post.title}" has been marked as still available and activity updated.\n\n${postLink}`,
+      components: [],
+      ephemeral: true
+    });
+    
+    log(`User ${interaction.user.tag} marked post as still available: ${post.title}`, "discord-bot");
+  } catch (error) {
+    log(`Error handling still available: ${error}`, "discord-bot");
+    try {
+      await interaction.update({
+        content: "There was an error updating your post. Please try again.",
+        components: [],
+        ephemeral: true
+      });
+    } catch (updateError) {
+      log(`Error updating interaction: ${updateError}`, "discord-bot");
+    }
+  }
+}
+
+// Handle claim modal submission
+async function handleClaimModalSubmission(interaction: any): Promise<void> {
+  try {
+    const threadId = interaction.customId.split(':')[1];
+    const recipient = interaction.fields.getTextInputValue('recipient');
+    
+    // Verify ownership
+    const post = await storage.getForumPost(threadId);
+    if (!post || post.authorId !== interaction.user.id) {
+      await interaction.reply({
+        content: "You can only update your own posts.",
+        ephemeral: true
+      });
+      return;
+    }
+    
+    // Deactivate the forum post in storage
+    await storage.deactivateForumPost(threadId);
+    
+    // Try to archive the thread
+    try {
+      const thread = await bot?.channels.fetch(threadId);
+      if (thread && thread.isThread()) {
+        await thread.setArchived(true);
+        log(`Archived thread: ${threadId}`, "discord-bot");
+      }
+    } catch (archiveError) {
+      log(`Could not archive thread ${threadId}: ${archiveError}`, "discord-bot");
+    }
+    
+    // Create a link to the post
+    const postLink = `[View Post](https://discord.com/channels/${post.guildId}/${threadId})`;
+    
+    await interaction.reply({
+      content: `✅ Your post "${post.title}" has been marked as fulfilled and given to **${recipient}**.\n\nThe thread has been archived.\n\n${postLink}`,
+      ephemeral: true
+    });
+    
+    // Log the fulfillment
+    await storage.createLog({
+      userId: interaction.user.id,
+      username: interaction.user.tag,
+      command: 'updatepost',
+      channel: 'items-exchange',
+      status: 'fulfilled',
+      message: `Post "${post.title}" marked as fulfilled by ${recipient}`,
+      messageId: threadId
+    });
+    
+    log(`User ${interaction.user.tag} marked post as fulfilled: ${post.title} -> ${recipient}`, "discord-bot");
+  } catch (error) {
+    log(`Error handling claim modal submission: ${error}`, "discord-bot");
+    try {
+      await interaction.reply({
+        content: "There was an error processing your request. Please try again.",
+        ephemeral: true
+      });
+    } catch (replyError) {
+      log(`Error replying to interaction: ${replyError}`, "discord-bot");
+    }
+  }
 }
 
 // Auto-bump functionality
