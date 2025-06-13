@@ -43,6 +43,7 @@ export interface IStorage {
   getInactiveForumPosts(daysInactive: number): Promise<ForumPost[]>;
   incrementBumpCount(threadId: string): Promise<ForumPost | undefined>;
   deactivateForumPost(threadId: string): Promise<ForumPost | undefined>;
+  getForumPostsByUser(userId: string): Promise<ForumPost[]>;
 }
 
 // In-memory storage implementation
@@ -320,6 +321,12 @@ export class MemStorage implements IStorage {
     
     this.forumPostsMap.set(threadId, updatedPost);
     return updatedPost;
+  }
+
+  async getForumPostsByUser(userId: string): Promise<ForumPost[]> {
+    return Array.from(this.forumPostsMap.values())
+      .filter(post => post.authorId === userId)
+      .sort((a, b) => b.lastActivity.getTime() - a.lastActivity.getTime()); // Most recent first
   }
 }
 

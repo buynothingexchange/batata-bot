@@ -30,7 +30,10 @@ const commands = [
         .setRequired(true)),
   new SlashCommandBuilder()
     .setName('help')
-    .setDescription('Get help with bot commands and features')
+    .setDescription('Get help with bot commands and features'),
+  new SlashCommandBuilder()
+    .setName('updatepost')
+    .setDescription('Update one of your active forum posts')
 ];
 
 // Track when we last received messages (for heartbeat)
@@ -558,6 +561,44 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
       });
       
       log(`Successfully sent help message to ${interaction.user.tag}`, "discord-bot");
+      
+    } else if (commandName === 'updatepost') {
+      log(`Processing /updatepost command from ${interaction.user.tag}`, "discord-bot");
+      
+      // Get user's active forum posts
+      const userPosts = await storage.getForumPostsByUser(interaction.user.id);
+      const activePosts = userPosts.filter(post => post.isActive);
+      
+      if (activePosts.length === 0) {
+        await interaction.reply({
+          content: "You don't have any active forum posts to update. Use `/exchange` to create a new post!",
+          flags: 64 // InteractionResponseFlags.Ephemeral
+        });
+        return;
+      }
+      
+      // Create dropdown with user's posts (limit to 25 due to Discord API limits)
+      const postOptions = activePosts.slice(0, 25).map(post => ({
+        label: post.title.length > 100 ? post.title.substring(0, 97) + "..." : post.title,
+        description: `Category: ${post.category} • Created: ${post.lastActivity.toLocaleDateString()}`,
+        value: post.threadId
+      }));
+      
+      const postSelectRow = new ActionRowBuilder<StringSelectMenuBuilder>()
+        .addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId('post_select')
+            .setPlaceholder('Select a post to update')
+            .addOptions(postOptions)
+        );
+      
+      await interaction.reply({
+        content: `You have ${activePosts.length} active post${activePosts.length === 1 ? '' : 's'}. Select one to update:`,
+        components: [postSelectRow],
+        flags: 64 // InteractionResponseFlags.Ephemeral
+      });
+      
+      log(`Successfully sent post selection to ${interaction.user.tag} with ${activePosts.length} posts`, "discord-bot");
     }
   } catch (error) {
     log(`Error handling slash command: ${error}`, "discord-bot");
