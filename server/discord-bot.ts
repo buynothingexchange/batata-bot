@@ -63,6 +63,18 @@ async function registerSlashCommands() {
   try {
     log('Started refreshing application (/) commands.', "discord-bot");
 
+    // Clear existing commands first to avoid caching issues
+    await rest.put(
+      Routes.applicationCommands(bot.user.id),
+      { body: [] }
+    );
+    
+    log('Cleared existing commands.', "discord-bot");
+    
+    // Small delay to ensure commands are cleared
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Re-register commands
     await rest.put(
       Routes.applicationCommands(bot.user.id),
       { body: commands }
