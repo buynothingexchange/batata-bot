@@ -63,24 +63,32 @@ async function registerSlashCommands() {
   try {
     log('Started refreshing application (/) commands.', "discord-bot");
 
-    // Clear existing commands first to avoid caching issues
+    // Get all guilds the bot is in
+    const guilds = bot.guilds.cache;
+    
+    for (const [guildId, guild] of guilds) {
+      log(`Registering commands for guild: ${guild.name} (${guildId})`, "discord-bot");
+      
+      // Clear existing guild commands first
+      await rest.put(
+        Routes.applicationGuildCommands(bot.user.id, guildId),
+        { body: [] }
+      );
+      
+      // Register new commands for this guild
+      await rest.put(
+        Routes.applicationGuildCommands(bot.user.id, guildId),
+        { body: commands }
+      );
+    }
+
+    // Also clear global commands to avoid conflicts
     await rest.put(
       Routes.applicationCommands(bot.user.id),
       { body: [] }
     );
-    
-    log('Cleared existing commands.', "discord-bot");
-    
-    // Small delay to ensure commands are cleared
-    await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // Re-register commands
-    await rest.put(
-      Routes.applicationCommands(bot.user.id),
-      { body: commands }
-    );
-
-    log('Successfully reloaded application (/) commands.', "discord-bot");
+    log('Successfully reloaded guild-specific commands.', "discord-bot");
   } catch (error) {
     log(`Error registering slash commands: ${error}`, "discord-bot");
   }
@@ -469,6 +477,10 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
     
     if (commandName === 'exchange') {
       log(`Processing /${commandName} command from ${interaction.user.tag}`, "discord-bot");
+      
+      // Debug: Log all options received
+      const options = interaction.options.data;
+      log(`Command options received: ${JSON.stringify(options)}`, "discord-bot");
       
       // Create action selection dropdown
       const actionRow = new ActionRowBuilder<StringSelectMenuBuilder>()
