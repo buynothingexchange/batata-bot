@@ -651,6 +651,11 @@ we make space for **deeper relationships**, **kindness**, and a more **connected
       
       // Get user's active forum posts from storage
       const userPosts = await storage.getForumPostsByUser(interaction.user.id);
+      log(`Found ${userPosts.length} total posts for user ${interaction.user.id}`, "discord-bot");
+      userPosts.forEach((post, index) => {
+        log(`Post ${index}: threadId=${post.threadId}, title="${post.title}", isActive=${post.isActive}`, "discord-bot");
+      });
+      
       const activePosts = userPosts.filter(post => post.isActive);
       
       if (activePosts.length === 0) {
@@ -985,6 +990,10 @@ async function handleModalSubmission(interaction: any): Promise<void> {
       appliedTags: appliedTags
     });
     
+    // Debug logging to understand the structure
+    log(`Forum post created with ID: ${forumPost.id}`, "discord-bot");
+    log(`Forum post object keys: ${Object.keys(forumPost)}`, "discord-bot");
+    
     // Track the forum post for auto-bump functionality
     await storage.createForumPost({
       threadId: forumPost.id,
@@ -997,6 +1006,8 @@ async function handleModalSubmission(interaction: any): Promise<void> {
       bumpCount: 0,
       isActive: true
     });
+    
+    log(`Stored forum post with threadId: ${forumPost.id}`, "discord-bot");
     
     // Store the request in database
     await storage.createIsoRequest({
@@ -1689,10 +1700,20 @@ function isValidDiscordToken(token: string): boolean {
 // Handle post selection for update
 async function handleUpdatePostSelection(interaction: any, threadId: string): Promise<void> {
   try {
+    log(`Looking for post with threadId: ${threadId}`, "discord-bot");
+    
+    // Debug: Get all posts for this user to see what's actually stored
+    const allUserPosts = await storage.getForumPostsByUser(interaction.user.id);
+    log(`All posts for user ${interaction.user.id}:`, "discord-bot");
+    allUserPosts.forEach(p => {
+      log(`  - threadId: ${p.threadId}, title: ${p.title}, isActive: ${p.isActive}`, "discord-bot");
+    });
+    
     // Get the forum post from storage
     const post = await storage.getForumPost(threadId);
     
     if (!post) {
+      log(`Post with threadId ${threadId} not found in storage`, "discord-bot");
       await interaction.update({
         content: "Post not found in our records. It may have been deleted.",
         components: [],

@@ -330,4 +330,178 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// Database storage implementation
+import { db } from "./db";
+import { eq, desc, and, lt } from "drizzle-orm";
+
+export class DatabaseStorage implements IStorage {
+  async getUser(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db.insert(users).values(insertUser).returning();
+    return user;
+  }
+
+  async getBotConfig(): Promise<BotConfig | undefined> {
+    const [config] = await db.select().from(botConfig).limit(1);
+    return config || undefined;
+  }
+
+  async createBotConfig(config: InsertBotConfig): Promise<BotConfig> {
+    const [newConfig] = await db.insert(botConfig).values(config).returning();
+    return newConfig;
+  }
+
+  async updateBotConfig(config: Partial<BotConfig>): Promise<BotConfig> {
+    const existingConfig = await this.getBotConfig();
+    if (!existingConfig) {
+      throw new Error('No bot config found to update');
+    }
+    
+    const [updatedConfig] = await db
+      .update(botConfig)
+      .set(config)
+      .where(eq(botConfig.id, existingConfig.id))
+      .returning();
+    return updatedConfig;
+  }
+
+  async getLogs(limit: number = 100): Promise<Log[]> {
+    return await db.select().from(logs).orderBy(desc(logs.timestamp)).limit(limit);
+  }
+
+  async createLog(insertLog: InsertLog): Promise<Log> {
+    const [log] = await db.insert(logs).values(insertLog).returning();
+    return log;
+  }
+
+  async getAllowedChannels(): Promise<AllowedChannel[]> {
+    return await db.select().from(allowedChannels);
+  }
+
+  async getChannelById(channelId: string): Promise<AllowedChannel | undefined> {
+    const [channel] = await db.select().from(allowedChannels).where(eq(allowedChannels.channelId, channelId));
+    return channel || undefined;
+  }
+
+  async createAllowedChannel(channel: InsertAllowedChannel): Promise<AllowedChannel> {
+    const [newChannel] = await db.insert(allowedChannels).values(channel).returning();
+    return newChannel;
+  }
+
+  async updateAllowedChannel(channelId: string, enabled: boolean): Promise<AllowedChannel | undefined> {
+    const [updatedChannel] = await db
+      .update(allowedChannels)
+      .set({ enabled })
+      .where(eq(allowedChannels.channelId, channelId))
+      .returning();
+    return updatedChannel || undefined;
+  }
+
+  async createIsoRequest(request: InsertIsoRequest): Promise<IsoRequest> {
+    const [isoRequest] = await db.insert(isoRequests).values(request).returning();
+    return isoRequest;
+  }
+
+  async getIsoRequestsByUser(userId: string, limit: number = 10): Promise<IsoRequest[]> {
+    return await db.select().from(isoRequests)
+      .where(eq(isoRequests.userId, userId))
+      .orderBy(desc(isoRequests.timestamp))
+      .limit(limit);
+  }
+
+  async getActiveIsoRequests(limit: number = 20): Promise<IsoRequest[]> {
+    return await db.select().from(isoRequests)
+      .where(eq(isoRequests.fulfilled, false))
+      .orderBy(desc(isoRequests.timestamp))
+      .limit(limit);
+  }
+
+  async updateIsoRequestCategory(id: number, category: string): Promise<IsoRequest | undefined> {
+    const [updatedRequest] = await db
+      .update(isoRequests)
+      .set({ category })
+      .where(eq(isoRequests.id, id))
+      .returning();
+    return updatedRequest || undefined;
+  }
+
+  async markIsoRequestFulfilled(id: number): Promise<IsoRequest | undefined> {
+    const [updatedRequest] = await db
+      .update(isoRequests)
+      .set({ fulfilled: true })
+      .where(eq(isoRequests.id, id))
+      .returning();
+    return updatedRequest || undefined;
+  }
+
+  async createForumPost(post: InsertForumPost): Promise<ForumPost> {
+    const [forumPost] = await db.insert(forumPosts).values(post).returning();
+    return forumPost;
+  }
+
+  async getForumPost(threadId: string): Promise<ForumPost | undefined> {
+    const [post] = await db.select().from(forumPosts).where(eq(forumPosts.threadId, threadId));
+    return post || undefined;
+  }
+
+  async updateForumPostActivity(threadId: string): Promise<ForumPost | undefined> {
+    const [updatedPost] = await db
+      .update(forumPosts)
+      .set({ lastActivity: new Date() })
+      .where(eq(forumPosts.threadId, threadId))
+      .returning();
+    return updatedPost || undefined;
+  }
+
+  async getInactiveForumPosts(daysInactive: number): Promise<ForumPost[]> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysInactive);
+    
+    return await db.select().from(forumPosts)
+      .where(and(
+        eq(forumPosts.isActive, true),
+        lt(forumPosts.lastActivity, cutoffDate)
+      ));
+  }
+
+  async incrementBumpCount(threadId: string): Promise<ForumPost | undefined> {
+    const post = await this.getForumPost(threadId);
+    if (!post) return undefined;
+    
+    const [updatedPost] = await db
+      .update(forumPosts)
+      .set({ 
+        bumpCount: post.bumpCount + 1,
+        lastActivity: new Date()
+      })
+      .where(eq(forumPosts.threadId, threadId))
+      .returning();
+    return updatedPost || undefined;
+  }
+
+  async deactivateForumPost(threadId: string): Promise<ForumPost | undefined> {
+    const [updatedPost] = await db
+      .update(forumPosts)
+      .set({ isActive: false })
+      .where(eq(forumPosts.threadId, threadId))
+      .returning();
+    return updatedPost || undefined;
+  }
+
+  async getForumPostsByUser(userId: string): Promise<ForumPost[]> {
+    return await db.select().from(forumPosts)
+      .where(eq(forumPosts.authorId, userId))
+      .orderBy(desc(forumPosts.lastActivity));
+  }
+}
+
+export const storage = new DatabaseStorage();
