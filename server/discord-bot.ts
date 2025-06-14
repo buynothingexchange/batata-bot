@@ -23,11 +23,7 @@ let bot: Client | null = null;
 const commands = [
   new SlashCommandBuilder()
     .setName('exchange')
-    .setDescription('Exchange items with the community (request, offer, or trade)')
-    .addStringOption(option =>
-      option.setName('item')
-        .setDescription('What item are you looking for or offering?')
-        .setRequired(true)),
+    .setDescription('Exchange items with the community (request, offer, or trade)'),
   new SlashCommandBuilder()
     .setName('help')
     .setDescription('Get help with bot commands and features'),
@@ -460,9 +456,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
     const commandName = interaction.commandName;
     
     if (commandName === 'exchange') {
-      const itemParam = interaction.options.getString('item');
-      
-      log(`Processing /${commandName} command from ${interaction.user.tag} for item: ${itemParam}`, "discord-bot");
+      log(`Processing /${commandName} command from ${interaction.user.tag}`, "discord-bot");
       
       // Create action selection dropdown
       const actionRow = new ActionRowBuilder<StringSelectMenuBuilder>()
@@ -489,10 +483,9 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
             ])
         );
       
-      // Store the item name for later use
-      const userData = { itemName: itemParam };
+      // Initialize temp user data without item name (will be collected in modal)
       if (!global.tempUserData) global.tempUserData = new Map();
-      global.tempUserData.set(interaction.user.id, userData);
+      global.tempUserData.set(interaction.user.id, { timestamp: Date.now() });
       
       // Send ephemeral reply - this is truly private!
       await interaction.reply({
@@ -514,14 +507,14 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
         .addFields(
           {
             name: '📦 /exchange',
-            value: '**Usage:** `/exchange item:[item name]`\n' +
+            value: '**Usage:** `/exchange`\n' +
                    '**Description:** Create an exchange form that will be posted in the items-exchange forum channel.\n' +
                    '**Process:**\n' +
                    '• Choose your action: Trade, Give, or Request\n' +
                    '• Select a category for your item\n' +
-                   '• Fill out details in the form\n' +
+                   '• Fill out item details in the form\n' +
                    '• Your post appears in the forum with proper tags\n' +
-                   '**Example:** `/exchange item:iPhone 14`',
+                   '**Example:** Simply type `/exchange` to start',
             inline: false
           },
           {
