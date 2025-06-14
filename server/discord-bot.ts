@@ -525,6 +525,17 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
             inline: false
           },
           {
+            name: '🔄 /updatepost',
+            value: '**Usage:** `/updatepost`\n' +
+                   '**Description:** Update or manage your existing forum posts.\n' +
+                   '**Features:**\n' +
+                   '• View all your active posts\n' +
+                   '• Mark items as claimed/fulfilled\n' +
+                   '• Update post status to keep them active\n' +
+                   '• Archive completed exchanges',
+            inline: false
+          },
+          {
             name: '❓ /help',
             value: '**Usage:** `/help`\n' +
                    '**Description:** Display this help message with information about all available commands.',
@@ -811,6 +822,11 @@ async function handleModalSubmission(interaction: any): Promise<void> {
       .setAuthor({
         name: interaction.user.displayName || interaction.user.username,
         iconURL: interaction.user.displayAvatarURL({ dynamic: true, size: 64 })
+      })
+      .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 256 }))
+      .setFooter({ 
+        text: `User ID: ${interaction.user.id}`,
+        iconURL: interaction.client.user?.displayAvatarURL()
       });
 
     let embedTitle = '';
@@ -818,34 +834,36 @@ async function handleModalSubmission(interaction: any): Promise<void> {
     
     if (action === 'trade') {
       embedTitle = 'Trade Offer';
-      embedDescription = `Wants to trade: **${title}**`;
+      embedDescription = `**${interaction.user.displayName || interaction.user.username}** wants to trade: **${title}**`;
       embed.setColor(0x3498db); // Blue
       embed.addFields(
         { name: 'Category', value: category.charAt(0).toUpperCase() + category.slice(1).replace('_', ' & '), inline: true },
-        { name: 'Type', value: 'Trade', inline: true }
+        { name: 'Type', value: 'Trade', inline: true },
+        { name: 'Contact', value: `${interaction.user.displayName || interaction.user.username}`, inline: true }
       );
     } else if (action === 'give') {
       embedTitle = 'PIF Offer';
-      embedDescription = `Offering to give away: **${title}**`;
+      embedDescription = `**${interaction.user.displayName || interaction.user.username}** is offering to give away: **${title}**`;
       embed.setColor(0x57F287); // Green
       embed.addFields(
         { name: 'Category', value: category.charAt(0).toUpperCase() + category.slice(1).replace('_', ' & '), inline: true },
-        { name: 'Type', value: 'Give Away', inline: true }
+        { name: 'Type', value: 'Give Away', inline: true },
+        { name: 'Contact', value: `${interaction.user.displayName || interaction.user.username}`, inline: true }
       );
     } else if (action === 'request') {
       embedTitle = 'ISO Request';
-      embedDescription = `Looking for: **${title}**`;
+      embedDescription = `**${interaction.user.displayName || interaction.user.username}** is looking for: **${title}**`;
       embed.setColor(0x2b2d31); // Dark
       embed.addFields(
         { name: 'Category', value: category.charAt(0).toUpperCase() + category.slice(1).replace('_', ' & '), inline: true },
         { name: 'Type', value: 'Request', inline: true },
-        { name: 'Urgency', value: urgency, inline: true }
+        { name: 'Urgency', value: urgency, inline: true },
+        { name: 'Contact', value: `${interaction.user.displayName || interaction.user.username}`, inline: true }
       );
     }
 
     embed.setTitle(embedTitle)
-         .setDescription(embedDescription)
-         .addFields({ name: 'Description', value: description, inline: false });
+         .setDescription(`${embedDescription}\n\n**Description:**\n${description}`);
 
     // Find the items-exchange forum channel
     const forumChannel = interaction.client.channels.cache.find(
