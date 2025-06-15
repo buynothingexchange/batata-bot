@@ -915,18 +915,28 @@ async function handleModalSubmission(interaction: any): Promise<void> {
 
     const tagName = categoryTagMap[category];
     
-    // Find the tag ID for the category
+    // Find the tag IDs for both category and action type
     const forumTags = (forumChannel as any).availableTags || [];
     log(`Available forum tags: ${forumTags.map((tag: any) => tag.name).join(', ')}`, "discord-bot");
-    log(`Looking for tag: "${tagName}" for category: "${category}"`, "discord-bot");
+    log(`Looking for category tag: "${tagName}" and action tag: "${action}"`, "discord-bot");
     
     const categoryTag = forumTags.find((tag: any) => tag.name === tagName);
-    const appliedTags = categoryTag ? [categoryTag.id] : [];
+    const actionTag = forumTags.find((tag: any) => tag.name === action);
     
-    if (!categoryTag) {
-      log(`Tag "${tagName}" not found in available tags`, "discord-bot");
+    // Apply both category and action tags
+    const appliedTags = [];
+    if (categoryTag) {
+      appliedTags.push(categoryTag.id);
+      log(`Found category tag "${tagName}" with ID: ${categoryTag.id}`, "discord-bot");
     } else {
-      log(`Found tag "${tagName}" with ID: ${categoryTag.id}`, "discord-bot");
+      log(`Category tag "${tagName}" not found in available tags`, "discord-bot");
+    }
+    
+    if (actionTag) {
+      appliedTags.push(actionTag.id);
+      log(`Found action tag "${action}" with ID: ${actionTag.id}`, "discord-bot");
+    } else {
+      log(`Action tag "${action}" not found in available tags`, "discord-bot");
     }
 
     // Create the forum post
@@ -965,11 +975,19 @@ async function handleModalSubmission(interaction: any): Promise<void> {
     });
 
     // Confirm to user
+    const appliedTagNames = [];
+    if (categoryTag) appliedTagNames.push(tagName);
+    if (actionTag) appliedTagNames.push(action);
+    
+    const tagText = appliedTagNames.length > 0 
+      ? `with ${appliedTagNames.join(' and ')} tags` 
+      : 'without tags (tags not found)';
+    
     await interaction.editReply({
-      content: `✅ Your ${action} request for "${title}" has been posted to the items-exchange forum with the ${tagName} tag!`
+      content: `✅ Your ${action} request for "${title}" has been posted to the items-exchange forum ${tagText}!`
     });
 
-    log(`Created forum post in #items-exchange with ${tagName} tag for ${action} request: "${title}"`, "discord-bot");
+    log(`Created forum post in #items-exchange with tags: ${appliedTagNames.join(', ')} for ${action} request: "${title}"`, "discord-bot");
 
     // Clean up temporary data
     global.tempUserData?.delete(interaction.user.id);
