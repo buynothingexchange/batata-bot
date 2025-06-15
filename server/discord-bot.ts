@@ -1014,8 +1014,8 @@ async function handleModalSubmission(interaction: any): Promise<void> {
       content: `${action.toUpperCase()} ${title}`,
       username: interaction.user.tag,
       userId: interaction.user.id,
-      category: category,
-      timestamp: new Date()
+      discordMessageId: forumPost.id,
+      category: category
     });
 
     // Confirm to user
@@ -1279,7 +1279,7 @@ async function handleInteraction(interaction: Interaction) {
     if (interaction.isChatInputCommand()) {
       const commandName = interaction.commandName;
       
-      if (commandName === 'exchange' || commandName === 'help' || commandName === 'updatepost') {
+      if (commandName === 'exchange' || commandName === 'help' || commandName === 'updatepost' || commandName === 'about') {
         log(`Processing /${commandName} slash command`, "discord-bot");
         await handleSlashCommand(interaction);
       }
