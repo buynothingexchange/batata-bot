@@ -2,8 +2,8 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName('aboutus')
-    .setDescription('Display the About Us section for the community'),
+    .setName('about')
+    .setDescription('Learn about Buy Nothing Exchange and our community values'),
 
   async execute(interaction) {
     const embed = new EmbedBuilder()
@@ -18,27 +18,30 @@ Whether you're ✨ offering something you no longer need, 🧩 searching for a u
         {
           name: '🎁 Why Gifts Matter',
           value: `Here, the **value of a gift** lies in the *intention behind it*.  
-By sharing instead of discarding, we reduce waste and promote mindful consumption.`
+By sharing instead of discarding, we reduce waste and promote mindful consumption.`,
+          inline: false
         },
         {
           name: '🌟 Beyond Things',
           value: `We also welcome the giving of **time, skills, and ideas** —  
-anything that brings people together in a spirit of *mutual aid*, *care*, and *abundance*.`
+anything that brings people together in a spirit of *mutual aid*, *care*, and *abundance*.`,
+          inline: false
         },
         {
           name: '🤝 Our Vision',
           value: `By giving and receiving without obligation,  
-we make space for **deeper relationships**, **kindness**, and a more **connected way of living**.`
+we make space for **deeper relationships**, **kindness**, and a more **connected way of living**.`,
+          inline: false
         }
       )
-      .setThumbnail('https://i.imgur.com/HU5k5NB.png') // Replace with your custom thumbnail
-      .setImage('https://i.imgur.com/tGbaZCY.png') // Optional banner image
+      .setThumbnail('https://i.imgur.com/HU5k5NB.png')
+      .setImage('https://i.imgur.com/tGbaZCY.png')
       .setFooter({ 
         text: '💚 Join us in co-creating a space where giving is joyful and community is everything.', 
-        iconURL: 'https://i.imgur.com/HU5k5NB.png' // Optional logo
-      });
+        iconURL: 'https://i.imgur.com/HU5k5NB.png'
+      })
+      .setTimestamp();
 
     await interaction.reply({ embeds: [embed], ephemeral: false });
   }
 };
-
