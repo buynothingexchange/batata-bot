@@ -51,6 +51,9 @@ const processStartTime = new Date(); // When the entire process started
 // For processing ISO requests, use a global lock to prevent duplicates
 let isProcessingIsoRequest = false;
 
+// Temporary user data storage
+const tempUserData = new Map<string, any>();
+
 // Auto-bump functionality
 let autoBumpInterval: NodeJS.Timeout | null = null;
 const AUTO_BUMP_CHECK_INTERVAL = 60 * 60 * 1000; // Check every hour
@@ -72,18 +75,21 @@ async function registerSlashCommands() {
     // Get all guilds the bot is in
     const guilds = bot.guilds.cache;
     
-    for (const [guildId, guild] of guilds) {
-      log(`Registering commands for guild: ${guild.name} (${guildId})`, "discord-bot");
+    // Use Array.from to convert Collection to array for iteration
+    const guildArray = Array.from(guilds.values());
+    
+    for (const guild of guildArray) {
+      log(`Registering commands for guild: ${guild.name} (${guild.id})`, "discord-bot");
       
       // Clear existing guild commands first
       await rest.put(
-        Routes.applicationGuildCommands(bot.user.id, guildId),
+        Routes.applicationGuildCommands(bot.user.id, guild.id),
         { body: [] }
       );
       
       // Register new commands for this guild
       await rest.put(
-        Routes.applicationGuildCommands(bot.user.id, guildId),
+        Routes.applicationGuildCommands(bot.user.id, guild.id),
         { body: commands }
       );
     }
@@ -763,8 +769,19 @@ async function handleIsoRequest(message: Message): Promise<void> {
 // Handle action selection from dropdown
 async function handleActionSelection(interaction: any, selectedAction: string): Promise<void> {
   try {
-    // Defer the update to acknowledge the interaction
-    await interaction.deferUpdate();
+    // Immediately acknowledge the interaction to prevent timeout
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.deferUpdate();
+    }
+
+    // Store the action selection temporarily, preserving existing data
+    const existingData = global.tempUserData?.get(interaction.user.id) || {};
+    const userData = { ...existingData, action: selectedAction, userId: interaction.user.id };
+    // Store in memory temporarily - in production you'd use a proper cache/database
+    if (!global.tempUserData) global.tempUserData = new Map();
+    global.tempUserData.set(interaction.user.id, userData);
+    
+    log(`User ${interaction.user.tag} action stored: ${selectedAction}`, "discord-bot");
 
     // Create category selection dropdown
     const categoryRow = new ActionRowBuilder<StringSelectMenuBuilder>()
@@ -788,16 +805,19 @@ async function handleActionSelection(interaction: any, selectedAction: string): 
       components: [categoryRow]
     });
 
-    // Store the action selection temporarily, preserving existing data
-    const existingData = global.tempUserData?.get(interaction.user.id) || {};
-    const userData = { ...existingData, action: selectedAction, userId: interaction.user.id };
-    // Store in memory temporarily - in production you'd use a proper cache/database
-    if (!global.tempUserData) global.tempUserData = new Map();
-    global.tempUserData.set(interaction.user.id, userData);
-    
-    log(`User ${interaction.user.tag} action stored: ${selectedAction}`, "discord-bot");
   } catch (error) {
     log(`Error handling action selection: ${error}`, "discord-bot");
+    // Try to respond with error if interaction hasn't been acknowledged
+    if (!interaction.replied && !interaction.deferred) {
+      try {
+        await interaction.reply({
+          content: "There was an error processing your selection. Please try again.",
+          ephemeral: true
+        });
+      } catch (replyError) {
+        log(`Error replying to action selection error: ${replyError}`, "discord-bot");
+      }
+    }
   }
 }
 
@@ -807,10 +827,12 @@ async function handleCategoryModalSelection(interaction: any, selectedCategory: 
     // Get stored user data from the correct location
     const userData = global.tempUserData?.get(interaction.user.id);
     if (!userData || !userData.action) {
-      await interaction.reply({
-        content: "Session expired. Please start over with a new ISO or PIF request.",
-        flags: 64 // Ephemeral
-      });
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: "Session expired. Please start over with a new ISO or PIF request.",
+          ephemeral: true
+        });
+      }
       return;
     }
 
@@ -860,6 +882,7 @@ async function handleCategoryModalSelection(interaction: any, selectedCategory: 
     }
 
     // Show modal directly as response to category selection
+    // showModal() automatically acknowledges the interaction
     await interaction.showModal(modal);
     log(`Showed modal form for ${selectedAction} in category ${selectedCategory}`, "discord-bot");
   } catch (error) {
@@ -870,7 +893,7 @@ async function handleCategoryModalSelection(interaction: any, selectedCategory: 
       try {
         await interaction.reply({
           content: "There was an error showing the form. Please try again.",
-          flags: 64 // Ephemeral
+          ephemeral: true
         });
       } catch (replyError) {
         log(`Error replying to failed modal: ${replyError}`, "discord-bot");
