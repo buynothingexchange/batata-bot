@@ -952,7 +952,7 @@ async function handleContactModalSubmission(interaction: any): Promise<void> {
     const embed = new EmbedBuilder()
       .setTimestamp(new Date())
       .setFooter({ 
-        text: `Contact Submission`,
+        text: `Submission ID: ${Date.now()}`,
         iconURL: interaction.client.user?.displayAvatarURL()
       });
 
@@ -985,7 +985,8 @@ async function handleContactModalSubmission(interaction: any): Promise<void> {
       })
       .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 256 }))
       .addFields(
-        { name: 'Submitted by', value: `${interaction.user.displayName || interaction.user.username}`, inline: true }
+        { name: 'Submitted by', value: `${interaction.user.displayName || interaction.user.username}`, inline: true },
+        { name: 'User ID', value: interaction.user.id, inline: true }
       );
     } else {
       embed.setAuthor({
