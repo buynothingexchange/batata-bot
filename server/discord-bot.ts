@@ -1012,20 +1012,36 @@ async function handleContactModalSubmission(interaction: any): Promise<void> {
       return;
     }
 
+    // Find and apply the contact type tag
+    const forumTags = (forumChannel as any).availableTags || [];
+    log(`Available contact forum tags: ${forumTags.map((tag: any) => tag.name).join(', ')}`, "discord-bot");
+    log(`Looking for contact type tag: "${contactType}"`, "discord-bot");
+    
+    const contactTypeTag = forumTags.find((tag: any) => tag.name.toLowerCase() === contactType.toLowerCase());
+    const appliedTags = contactTypeTag ? [contactTypeTag.id] : [];
+    
+    if (contactTypeTag) {
+      log(`Found contact type tag "${contactType}" with ID: ${contactTypeTag.id}`, "discord-bot");
+    } else {
+      log(`Contact type tag "${contactType}" not found in available tags`, "discord-bot");
+    }
+
     // Create the forum post
     const forumPost = await (forumChannel as any).threads.create({
       name: `${embedTitle}: ${title}`,
-      message: { embeds: [embed] }
+      message: { embeds: [embed] },
+      appliedTags: appliedTags
     });
     
     log(`Contact forum post created with ID: ${forumPost.id}`, "discord-bot");
 
     // Confirm to user
+    const tagText = contactTypeTag ? ` with ${contactType} tag` : ' (tag not found)';
     await interaction.editReply({
-      content: `✅ Your ${contactType} "${title}" has been submitted to the contact-us forum${isAnonymous ? ' anonymously' : ''}!`
+      content: `✅ Your ${contactType} "${title}" has been submitted to the contact-us forum${isAnonymous ? ' anonymously' : ''}${tagText}!`
     });
 
-    log(`Created contact forum post for ${contactType} by ${isAnonymous ? 'anonymous user' : interaction.user.tag}: "${title}"`, "discord-bot");
+    log(`Created contact forum post for ${contactType} by ${isAnonymous ? 'anonymous user' : interaction.user.tag}: "${title}" with tag: ${contactTypeTag ? contactType : 'none'}`, "discord-bot");
   } catch (error) {
     log(`Error handling contact modal submission: ${error}`, "discord-bot");
     try {
