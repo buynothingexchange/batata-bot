@@ -29,7 +29,13 @@ const commands = [
     .setDescription('Get help with bot commands and features'),
   new SlashCommandBuilder()
     .setName('updatepost')
-    .setDescription('Update one of your active forum posts')
+    .setDescription('Update one of your active forum posts'),
+  new SlashCommandBuilder()
+    .setName('contactus')
+    .setDescription('Submit comments, suggestions, or reports to the community moderators'),
+  new SlashCommandBuilder()
+    .setName('contactusanon')
+    .setDescription('Submit anonymous comments, suggestions, or reports to the community moderators')
 ];
 
 // Track when we last received messages (for heartbeat)
@@ -554,6 +560,20 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
           },
 
           {
+            name: '📞 /contactus',
+            value: '**Usage:** `/contactus`\n' +
+                   '**Description:** Submit comments, suggestions, or reports to community moderators.\n' +
+                   '**Options:** Comments, Suggestions, Reports with your identity visible.',
+            inline: false
+          },
+          {
+            name: '🕵️ /contactusanon',
+            value: '**Usage:** `/contactusanon`\n' +
+                   '**Description:** Submit anonymous comments, suggestions, or reports to community moderators.\n' +
+                   '**Options:** Same as /contactus but completely anonymous.',
+            inline: false
+          },
+          {
             name: '❓ /help',
             value: '**Usage:** `/help`\n' +
                    '**Description:** Display this help message with information about all available commands.',
@@ -634,6 +654,43 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
       });
       
       log(`Successfully sent post selection to ${interaction.user.tag} with ${activePosts.length} posts`, "discord-bot");
+    
+    } else if (commandName === 'contactus' || commandName === 'contactusanon') {
+      const isAnonymous = commandName === 'contactusanon';
+      log(`Processing /${commandName} command from ${interaction.user.tag}`, "discord-bot");
+      
+      // Create dropdown with contact options
+      const contactOptionsRow = new ActionRowBuilder<StringSelectMenuBuilder>()
+        .addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId(`contact_select:${isAnonymous}`)
+            .setPlaceholder('Select the type of feedback you want to submit')
+            .addOptions([
+              {
+                label: 'Comments',
+                description: 'General comments about the community',
+                value: 'comments'
+              },
+              {
+                label: 'Suggestions',
+                description: 'Ideas to improve the community',
+                value: 'suggestions'
+              },
+              {
+                label: 'Report',
+                description: 'Report concerns or issues',
+                value: 'report'
+              }
+            ])
+        );
+      
+      await interaction.reply({
+        content: `Please select the type of feedback you want to submit${isAnonymous ? ' (anonymously)' : ''}:`,
+        components: [contactOptionsRow],
+        flags: 64 // Ephemeral
+      });
+      
+      log(`Successfully sent contact options to ${interaction.user.tag}`, "discord-bot");
     }
   } catch (error) {
     log(`Error handling slash command: ${error}`, "discord-bot");
@@ -818,6 +875,165 @@ async function handleCategoryModalSelection(interaction: any, selectedCategory: 
       } catch (replyError) {
         log(`Error replying to failed modal: ${replyError}`, "discord-bot");
       }
+    }
+  }
+}
+
+// Handle contact type selection and show appropriate modal
+async function handleContactSelection(interaction: any, contactType: string, isAnonymous: boolean): Promise<void> {
+  try {
+    let bodyPlaceholder = '';
+    
+    switch (contactType) {
+      case 'comments':
+        bodyPlaceholder = 'Please share your general comments about the community...';
+        break;
+      case 'suggestions':
+        bodyPlaceholder = 'Please give us some feedback. Its much appreciated.';
+        break;
+      case 'report':
+        bodyPlaceholder = 'Please detail any concerns that you may have and any users that may be involved';
+        break;
+    }
+
+    const modal = new ModalBuilder()
+      .setCustomId(`contact_modal:${contactType}:${isAnonymous}`)
+      .setTitle(`${contactType.charAt(0).toUpperCase() + contactType.slice(1)} ${isAnonymous ? '(Anonymous)' : ''}`);
+
+    const titleInput = new TextInputBuilder()
+      .setCustomId('contact_title')
+      .setLabel('Title')
+      .setStyle(TextInputStyle.Short)
+      .setMaxLength(100)
+      .setRequired(true);
+
+    const bodyInput = new TextInputBuilder()
+      .setCustomId('contact_body')
+      .setLabel('Details')
+      .setStyle(TextInputStyle.Paragraph)
+      .setPlaceholder(bodyPlaceholder)
+      .setMaxLength(2000)
+      .setRequired(true);
+
+    const titleRow = new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput);
+    const bodyRow = new ActionRowBuilder<TextInputBuilder>().addComponents(bodyInput);
+
+    modal.addComponents(titleRow, bodyRow);
+
+    await interaction.showModal(modal);
+    log(`Showed ${contactType} modal to ${interaction.user.tag} (anonymous: ${isAnonymous})`, "discord-bot");
+  } catch (error) {
+    log(`Error showing contact modal: ${error}`, "discord-bot");
+    
+    if (!interaction.replied && !interaction.deferred) {
+      try {
+        await interaction.reply({
+          content: "There was an error showing the form. Please try again.",
+          flags: 64
+        });
+      } catch (replyError) {
+        log(`Error replying to failed contact modal: ${replyError}`, "discord-bot");
+      }
+    }
+  }
+}
+
+// Handle contact modal submission and create forum post
+async function handleContactModalSubmission(interaction: any): Promise<void> {
+  try {
+    await interaction.deferReply({ flags: 64 });
+    
+    const [, contactType, isAnonymousStr] = interaction.customId.split(':');
+    const isAnonymous = isAnonymousStr === 'true';
+    const title = interaction.fields.getTextInputValue('contact_title');
+    const body = interaction.fields.getTextInputValue('contact_body');
+
+    // Create embed for the contact submission
+    const embed = new EmbedBuilder()
+      .setTimestamp(new Date())
+      .setFooter({ 
+        text: `Submission ID: ${Date.now()}`,
+        iconURL: interaction.client.user?.displayAvatarURL()
+      });
+
+    let embedTitle = '';
+    let embedColor = 0x2b2d31; // Default dark color
+
+    switch (contactType) {
+      case 'comments':
+        embedTitle = 'Community Comment';
+        embedColor = 0x3498db; // Blue
+        break;
+      case 'suggestions':
+        embedTitle = 'Community Suggestion';
+        embedColor = 0x2ecc71; // Green
+        break;
+      case 'report':
+        embedTitle = 'Community Report';
+        embedColor = 0xe74c3c; // Red
+        break;
+    }
+
+    embed.setTitle(`${embedTitle}: ${title}`)
+         .setDescription(body)
+         .setColor(embedColor);
+
+    if (!isAnonymous) {
+      embed.setAuthor({
+        name: interaction.user.displayName || interaction.user.username,
+        iconURL: interaction.user.displayAvatarURL({ dynamic: true, size: 64 })
+      })
+      .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 256 }))
+      .addFields(
+        { name: 'Submitted by', value: `${interaction.user.displayName || interaction.user.username}`, inline: true },
+        { name: 'User ID', value: interaction.user.id, inline: true }
+      );
+    } else {
+      embed.setAuthor({
+        name: 'Anonymous Submission',
+        iconURL: 'https://cdn.discordapp.com/embed/avatars/0.png'
+      })
+      .addFields(
+        { name: 'Submitted by', value: 'Anonymous User', inline: true }
+      );
+    }
+
+    // Find the contact-us forum channel
+    const forumChannel = interaction.client.channels.cache.find(
+      (channel: any) => 
+        channel.type === ChannelType.GuildForum && 
+        channel.name?.toLowerCase() === 'contact-us'
+    );
+
+    if (!forumChannel) {
+      await interaction.editReply({
+        content: "Could not find the contact-us forum channel. Please contact an admin."
+      });
+      return;
+    }
+
+    // Create the forum post
+    const forumPost = await (forumChannel as any).threads.create({
+      name: `${embedTitle}: ${title}`,
+      message: { embeds: [embed] }
+    });
+    
+    log(`Contact forum post created with ID: ${forumPost.id}`, "discord-bot");
+
+    // Confirm to user
+    await interaction.editReply({
+      content: `✅ Your ${contactType} "${title}" has been submitted to the contact-us forum${isAnonymous ? ' anonymously' : ''}!`
+    });
+
+    log(`Created contact forum post for ${contactType} by ${isAnonymous ? 'anonymous user' : interaction.user.tag}: "${title}"`, "discord-bot");
+  } catch (error) {
+    log(`Error handling contact modal submission: ${error}`, "discord-bot");
+    try {
+      await interaction.editReply({
+        content: "There was an error processing your submission. Please try again."
+      });
+    } catch (editError) {
+      log(`Error editing contact reply: ${editError}`, "discord-bot");
     }
   }
 }
@@ -1243,7 +1459,7 @@ async function handleInteraction(interaction: Interaction) {
     if (interaction.isChatInputCommand()) {
       const commandName = interaction.commandName;
       
-      if (commandName === 'exchange' || commandName === 'help' || commandName === 'updatepost') {
+      if (commandName === 'exchange' || commandName === 'help' || commandName === 'updatepost' || commandName === 'contactus' || commandName === 'contactusanon') {
         log(`Processing /${commandName} slash command`, "discord-bot");
         await handleSlashCommand(interaction);
       }
@@ -1266,6 +1482,11 @@ async function handleInteraction(interaction: Interaction) {
         const selectedThreadId = interaction.values[0];
         log(`User ${interaction.user.tag} selected post to update: ${selectedThreadId}`, "discord-bot");
         await handleUpdatePostSelection(interaction, selectedThreadId);
+      } else if (customId.startsWith('contact_select:')) {
+        const isAnonymous = customId.split(':')[1] === 'true';
+        const selectedType = interaction.values[0];
+        log(`User ${interaction.user.tag} selected contact type: ${selectedType} (anonymous: ${isAnonymous})`, "discord-bot");
+        await handleContactSelection(interaction, selectedType, isAnonymous);
       }
       return;
     }
@@ -1280,6 +1501,9 @@ async function handleInteraction(interaction: Interaction) {
       } else if (customId.startsWith('claim_modal:')) {
         log(`User ${interaction.user.tag} submitted claim modal`, "discord-bot");
         await handleClaimModalSubmission(interaction);
+      } else if (customId.startsWith('contact_modal:')) {
+        log(`User ${interaction.user.tag} submitted contact modal`, "discord-bot");
+        await handleContactModalSubmission(interaction);
       }
       return;
     }
