@@ -1,14 +1,14 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName('about')
-    .setDescription('Display the About section for the community'),
+    .setName("about")
+    .setDescription("Display the About section for the community"),
 
   async execute(interaction) {
     const embed = new EmbedBuilder()
       .setColor(0x2ecc71) // Green accent color
-      .setTitle('🌱 Welcome to Buy Nothing Exchange')
+      .setTitle("🌱 Welcome to Buy Nothing Exchange")
       .setDescription(
         `**Buy Nothing Exchange** is a passion project that aims to create a space rooted in the principles of a gift economy, where we have the ability to not only trade items and services, but also give freely without expecting anything in return. 
 
@@ -18,9 +18,9 @@ Here, the value of a gift lies in the intention behind it. By sharing instead of
 
 We believe that by giving and receiving without obligation, we make room for deeper relationships, kindness, and a more connected way of living.  
 
-🌟 *Join us in co-creating a space where giving is joyful and community is everything.*`
+🌟 *Join us in co-creating a space where giving is joyful and community is everything.*`,
       );
 
     await interaction.reply({ embeds: [embed], ephemeral: false });
-  }
+  },
 };
