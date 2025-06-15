@@ -3,44 +3,23 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('about')
-    .setDescription('Learn about Buy Nothing Exchange and our community values'),
+    .setDescription('Display the About section for the community'),
 
   async execute(interaction) {
     const embed = new EmbedBuilder()
-      .setColor(0x2ecc71) // Soft green
+      .setColor(0x2ecc71) // Green accent color
       .setTitle('🌱 Welcome to Buy Nothing Exchange')
       .setDescription(
-        `*Buy Nothing Exchange* is a **passion project** rooted in the principles of a gift economy — a space to **give freely**, **receive gratefully**, and **connect meaningfully**.
+        `**Buy Nothing Exchange** is a passion project that aims to create a space rooted in the principles of a gift economy, where we have the ability to not only trade items and services, but also give freely without expecting anything in return. 
 
-Whether you're ✨ offering something you no longer need, 🧩 searching for a useful item, or 🌍 simply looking to connect — our goal is to build a community centered on **generosity, sustainability, and humanism**.`
-      )
-      .addFields(
-        {
-          name: '🎁 Why Gifts Matter',
-          value: `Here, the **value of a gift** lies in the *intention behind it*.  
-By sharing instead of discarding, we reduce waste and promote mindful consumption.`,
-          inline: false
-        },
-        {
-          name: '🌟 Beyond Things',
-          value: `We also welcome the giving of **time, skills, and ideas** —  
-anything that brings people together in a spirit of *mutual aid*, *care*, and *abundance*.`,
-          inline: false
-        },
-        {
-          name: '🤝 Our Vision',
-          value: `By giving and receiving without obligation,  
-we make space for **deeper relationships**, **kindness**, and a more **connected way of living**.`,
-          inline: false
-        }
-      )
-      .setThumbnail('https://i.imgur.com/HU5k5NB.png')
-      .setImage('https://i.imgur.com/tGbaZCY.png')
-      .setFooter({ 
-        text: '💚 Join us in co-creating a space where giving is joyful and community is everything.', 
-        iconURL: 'https://i.imgur.com/HU5k5NB.png'
-      })
-      .setTimestamp();
+Whether you're offering something you no longer need, searching for a useful item, or simply looking to connect, our goal is to create a community built on generosity, sustainability, and humanism. We hope to connect you with people who share these similar values.
+
+Here, the value of a gift lies in the intention behind it. By sharing instead of discarding, we reduce waste and promote mindful consumption. But beyond physical goods, we also encourage the sharing of time, skills, and ideas—whatever brings people together in a spirit of mutual aid, care and abundance.
+
+We believe that by giving and receiving without obligation, we make room for deeper relationships, kindness, and a more connected way of living.  
+
+🌟 *Join us in co-creating a space where giving is joyful and community is everything.*`
+      );
 
     await interaction.reply({ embeds: [embed], ephemeral: false });
   }
