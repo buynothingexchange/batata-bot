@@ -75,24 +75,26 @@ async function registerSlashCommands() {
     // Get all guilds the bot is in
     const guilds = bot.guilds.cache;
     
-    // Use Array.from to convert Collection to array for iteration
-    const guildArray = Array.from(guilds.values());
-    
-    for (const guild of guildArray) {
+    // Iterate over guilds using forEach
+    guilds.forEach(async (guild) => {
       log(`Registering commands for guild: ${guild.name} (${guild.id})`, "discord-bot");
       
-      // Clear existing guild commands first
-      await rest.put(
-        Routes.applicationGuildCommands(bot.user.id, guild.id),
-        { body: [] }
-      );
-      
-      // Register new commands for this guild
-      await rest.put(
-        Routes.applicationGuildCommands(bot.user.id, guild.id),
-        { body: commands }
-      );
-    }
+      try {
+        // Clear existing guild commands first
+        await rest.put(
+          Routes.applicationGuildCommands(bot!.user!.id, guild.id),
+          { body: [] }
+        );
+        
+        // Register new commands for this guild
+        await rest.put(
+          Routes.applicationGuildCommands(bot!.user!.id, guild.id),
+          { body: commands }
+        );
+      } catch (guildError) {
+        log(`Error registering commands for guild ${guild.name}: ${guildError}`, "discord-bot");
+      }
+    });
 
     // Also clear global commands to avoid conflicts
     await rest.put(
@@ -775,11 +777,9 @@ async function handleActionSelection(interaction: any, selectedAction: string): 
     }
 
     // Store the action selection temporarily, preserving existing data
-    const existingData = global.tempUserData?.get(interaction.user.id) || {};
+    const existingData = tempUserData.get(interaction.user.id) || {};
     const userData = { ...existingData, action: selectedAction, userId: interaction.user.id };
-    // Store in memory temporarily - in production you'd use a proper cache/database
-    if (!global.tempUserData) global.tempUserData = new Map();
-    global.tempUserData.set(interaction.user.id, userData);
+    tempUserData.set(interaction.user.id, userData);
     
     log(`User ${interaction.user.tag} action stored: ${selectedAction}`, "discord-bot");
 
@@ -825,7 +825,7 @@ async function handleActionSelection(interaction: any, selectedAction: string): 
 async function handleCategoryModalSelection(interaction: any, selectedCategory: string): Promise<void> {
   try {
     // Get stored user data from the correct location
-    const userData = global.tempUserData?.get(interaction.user.id);
+    const userData = tempUserData.get(interaction.user.id);
     if (!userData || !userData.action) {
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
