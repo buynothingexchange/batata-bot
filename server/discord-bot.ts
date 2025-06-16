@@ -31,6 +31,9 @@ const commands = [
     .setName('updatepost')
     .setDescription('Update one of your active forum posts'),
   new SlashCommandBuilder()
+    .setName('mystats')
+    .setDescription('View your exchange activity and statistics'),
+  new SlashCommandBuilder()
     .setName('contactus')
     .setDescription('Submit comments, suggestions, or reports to the community moderators'),
   new SlashCommandBuilder()
@@ -699,6 +702,102 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
       });
       
       log(`Successfully sent contact options to ${interaction.user.tag}`, "discord-bot");
+    
+    } else if (commandName === 'mystats') {
+      log(`Processing /mystats command from ${interaction.user.tag}`, "discord-bot");
+      
+      try {
+        // Get user's ISO requests and forum posts
+        const userRequests = await storage.getIsoRequestsByUser(interaction.user.id);
+        const userPosts = await storage.getForumPostsByUser(interaction.user.id);
+        
+        // Calculate statistics
+        const totalRequests = userRequests.length;
+        const fulfilledRequests = userRequests.filter(req => req.isFulfilled).length;
+        const activeRequests = userRequests.filter(req => !req.isFulfilled).length;
+        
+        const totalPosts = userPosts.length;
+        const activePosts = userPosts.filter(post => post.isActive).length;
+        const inactivePosts = userPosts.filter(post => !post.isActive).length;
+        
+        // Group requests by category
+        const requestsByCategory = userRequests.reduce((acc: any, req) => {
+          acc[req.category] = (acc[req.category] || 0) + 1;
+          return acc;
+        }, {});
+        
+        // Create stats embed
+        const statsEmbed = new EmbedBuilder()
+          .setTitle(`📊 Exchange Statistics for ${interaction.user.displayName || interaction.user.username}`)
+          .setColor(0x5865F2) // Discord blurple
+          .setThumbnail(interaction.user.displayAvatarURL())
+          .addFields(
+            {
+              name: '🔄 ISO Requests',
+              value: `**Total:** ${totalRequests}\n**Active:** ${activeRequests}\n**Fulfilled:** ${fulfilledRequests}`,
+              inline: true
+            },
+            {
+              name: '📝 Forum Posts',
+              value: `**Total:** ${totalPosts}\n**Active:** ${activePosts}\n**Completed:** ${inactivePosts}`,
+              inline: true
+            },
+            {
+              name: '📈 Success Rate',
+              value: totalRequests > 0 ? `${Math.round((fulfilledRequests / totalRequests) * 100)}%` : 'No data yet',
+              inline: true
+            }
+          )
+          .setTimestamp()
+          .setFooter({ 
+            text: 'Use /exchange to create new posts • Use /updatepost to manage existing posts',
+            iconURL: interaction.client.user?.displayAvatarURL()
+          });
+        
+        // Add category breakdown if there are requests
+        if (Object.keys(requestsByCategory).length > 0) {
+          const categoryText = Object.entries(requestsByCategory)
+            .map(([category, count]) => `**${category.charAt(0).toUpperCase() + category.slice(1).replace('_', ' & ')}:** ${count}`)
+            .join('\n');
+          
+          statsEmbed.addFields({
+            name: '📂 Requests by Category',
+            value: categoryText,
+            inline: false
+          });
+        }
+        
+        // Add recent activity if there are any requests
+        if (userRequests.length > 0) {
+          const recentRequests = userRequests
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .slice(0, 3);
+          
+          const recentText = recentRequests
+            .map(req => `• ${req.content} ${req.isFulfilled ? '✅' : '⏳'}`)
+            .join('\n');
+          
+          statsEmbed.addFields({
+            name: '🕐 Recent Activity',
+            value: recentText || 'No recent activity',
+            inline: false
+          });
+        }
+        
+        await interaction.reply({
+          embeds: [statsEmbed],
+          ephemeral: true
+        });
+        
+        log(`Successfully sent stats to ${interaction.user.tag}`, "discord-bot");
+        
+      } catch (statsError) {
+        log(`Error fetching user stats: ${statsError}`, "discord-bot");
+        await interaction.reply({
+          content: "Sorry, I couldn't retrieve your statistics right now. Please try again later.",
+          ephemeral: true
+        });
+      }
     }
   } catch (error) {
     log(`Error handling slash command: ${error}`, "discord-bot");
@@ -1513,7 +1612,7 @@ async function handleInteraction(interaction: Interaction) {
     if (interaction.isChatInputCommand()) {
       const commandName = interaction.commandName;
       
-      if (commandName === 'exchange' || commandName === 'help' || commandName === 'updatepost' || commandName === 'contactus' || commandName === 'contactusanon') {
+      if (commandName === 'exchange' || commandName === 'help' || commandName === 'updatepost' || commandName === 'mystats' || commandName === 'contactus' || commandName === 'contactusanon') {
         log(`Processing /${commandName} slash command`, "discord-bot");
         await handleSlashCommand(interaction);
       }
