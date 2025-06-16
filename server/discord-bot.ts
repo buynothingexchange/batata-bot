@@ -752,7 +752,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
         const statsEmbed = new EmbedBuilder()
           .setTitle(`📊 Exchange Statistics for ${interaction.user.displayName || interaction.user.username}`)
           .setColor(0x5865F2) // Discord blurple
-          .setThumbnail(interaction.user.displayAvatarURL())
+          .setThumbnail(interaction.user.displayAvatarURL({ extension: 'png' }))
           .addFields(
             {
               name: '🔄 ISO Requests',
@@ -1213,9 +1213,9 @@ async function handleContactModalSubmission(interaction: any): Promise<void> {
     if (!isAnonymous) {
       embed.setAuthor({
         name: interaction.user.displayName || interaction.user.username,
-        iconURL: interaction.user.displayAvatarURL({ dynamic: true, size: 64 })
+        iconURL: interaction.user.displayAvatarURL({ size: 64, extension: 'png' })
       })
-      .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 256 }))
+      .setThumbnail(interaction.user.displayAvatarURL({ size: 256, extension: 'png' }))
       .addFields(
         { name: 'Submitted by', value: `${interaction.user.displayName || interaction.user.username}`, inline: true },
         { name: 'User ID', value: interaction.user.id, inline: true }
@@ -1309,9 +1309,9 @@ async function handleModalSubmission(interaction: any): Promise<void> {
       .setTimestamp(new Date())
       .setAuthor({
         name: interaction.user.displayName || interaction.user.username,
-        iconURL: interaction.user.displayAvatarURL({ dynamic: true, size: 64 })
+        iconURL: interaction.user.displayAvatarURL({ dynamic: false, size: 64, extension: 'png' })
       })
-      .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 256 }))
+      .setThumbnail(interaction.user.displayAvatarURL({ dynamic: false, size: 256, extension: 'png' }))
       .setFooter({ 
         text: `User ID: ${interaction.user.id}`,
         iconURL: interaction.client.user?.displayAvatarURL()
