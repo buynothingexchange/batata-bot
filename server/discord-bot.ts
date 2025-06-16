@@ -1309,9 +1309,9 @@ async function handleModalSubmission(interaction: any): Promise<void> {
       .setTimestamp(new Date())
       .setAuthor({
         name: interaction.user.displayName || interaction.user.username,
-        iconURL: interaction.user.displayAvatarURL({ dynamic: false, size: 64, extension: 'png' })
+        iconURL: interaction.user.displayAvatarURL({ size: 64, extension: 'png' })
       })
-      .setThumbnail(interaction.user.displayAvatarURL({ dynamic: false, size: 256, extension: 'png' }))
+      .setThumbnail(interaction.user.displayAvatarURL({ size: 256, extension: 'png' }))
       .setFooter({ 
         text: `User ID: ${interaction.user.id}`,
         iconURL: interaction.client.user?.displayAvatarURL()
