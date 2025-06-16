@@ -2368,6 +2368,38 @@ async function handleClaimModalSubmission(interaction: any): Promise<void> {
       messageId: threadId
     });
     
+    // Record the confirmed exchange for tracking
+    try {
+      // Determine exchange type based on post title/category
+      let exchangeType = 'give'; // Default to give
+      const titleLower = post.title.toLowerCase();
+      if (titleLower.includes('trade') || titleLower.includes('swap') || titleLower.includes('exchange')) {
+        exchangeType = 'trade';
+      } else if (titleLower.includes('iso') || titleLower.includes('looking for') || titleLower.includes('need')) {
+        exchangeType = 'request';
+      }
+      
+      // Clean up recipient name (remove @ mentions and extra whitespace)
+      const cleanRecipient = recipient.replace(/<@!?(\d+)>/g, '').trim();
+      
+      await storage.createConfirmedExchange({
+        guildId: post.guildId,
+        threadId: threadId,
+        category: post.category,
+        originalPosterId: interaction.user.id,
+        originalPosterUsername: interaction.user.displayName || interaction.user.username,
+        tradingPartnerId: cleanRecipient, // We don't have their Discord ID, just name
+        tradingPartnerUsername: cleanRecipient,
+        itemDescription: post.title,
+        exchangeType: exchangeType
+      });
+      
+      log(`Recorded confirmed exchange: ${interaction.user.tag} -> ${cleanRecipient} (${post.title})`, "discord-bot");
+    } catch (exchangeError) {
+      log(`Error recording confirmed exchange: ${exchangeError}`, "discord-bot");
+      // Don't fail the whole operation if exchange recording fails
+    }
+    
     log(`User ${interaction.user.tag} marked post as fulfilled: ${post.title} -> ${recipient}`, "discord-bot");
   } catch (error) {
     log(`Error handling claim modal submission: ${error}`, "discord-bot");

@@ -343,7 +343,11 @@ export class MemStorage implements IStorage {
   // Confirmed exchange operations for MemStorage
   async createConfirmedExchange(exchange: InsertConfirmedExchange): Promise<ConfirmedExchange> {
     const id = this.currentForumPostId++; // Reuse counter for simplicity
-    const confirmedExchange: ConfirmedExchange = { ...exchange, id };
+    const confirmedExchange: ConfirmedExchange = { 
+      ...exchange, 
+      id,
+      confirmedAt: new Date()
+    };
     return confirmedExchange;
   }
 
