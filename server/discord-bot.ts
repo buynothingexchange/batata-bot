@@ -1205,6 +1205,21 @@ async function handleModalSubmission(interaction: any): Promise<void> {
     log(`Forum post created with ID: ${forumPost.id}`, "discord-bot");
     log(`Forum post object keys: ${Object.keys(forumPost)}`, "discord-bot");
     
+    // Add the original user as a follower to the forum post
+    try {
+      await forumPost.members.add(interaction.user.id);
+      log(`Added user ${interaction.user.tag} as follower to forum post ${forumPost.id}`, "discord-bot");
+    } catch (followError) {
+      log(`Could not add user ${interaction.user.tag} as follower: ${followError}`, "discord-bot");
+      // Try alternative method - send a message mentioning the user to ensure they're notified
+      try {
+        await forumPost.send(`<@${interaction.user.id}> You've been added to follow this post for updates!`);
+        log(`Mentioned user ${interaction.user.tag} in forum post ${forumPost.id} as fallback`, "discord-bot");
+      } catch (mentionError) {
+        log(`Could not mention user in forum post: ${mentionError}`, "discord-bot");
+      }
+    }
+    
     // Track the forum post for auto-bump functionality
     await storage.createForumPost({
       threadId: forumPost.id,
@@ -1245,7 +1260,7 @@ async function handleModalSubmission(interaction: any): Promise<void> {
     log(`Created forum post in #items-exchange with tags: ${appliedTagNames.join(', ')} for ${action} request: "${title}"`, "discord-bot");
 
     // Clean up temporary data
-    global.tempUserData?.delete(interaction.user.id);
+    tempUserData.delete(interaction.user.id);
   } catch (error) {
     log(`Error handling modal submission: ${error}`, "discord-bot");
     try {
