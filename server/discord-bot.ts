@@ -809,9 +809,8 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
           });
         }
         
-        await interaction.reply({
-          embeds: [statsEmbed],
-          ephemeral: true
+        await sendEphemeralWithAutoDelete(interaction, {
+          embeds: [statsEmbed]
         });
         
         log(`Successfully sent stats to ${interaction.user.tag}`, "discord-bot");
@@ -837,10 +836,9 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
                           (interaction.channel as any).name?.toLowerCase().includes('mod');
       
       if (!hasModPerms || !isModChannel) {
-        await interaction.reply({
-          content: "This command is restricted to moderators and can only be used in mod channels.",
-          ephemeral: true
-        });
+        await sendEphemeralWithAutoDelete(interaction, 
+          "This command is restricted to moderators and can only be used in mod channels."
+        );
         log(`${interaction.user.tag} attempted to use /exchanges without proper permissions or in wrong channel`, "discord-bot");
         return;
       }
@@ -850,10 +848,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
         const exchanges = await storage.getAllConfirmedExchanges(25);
         
         if (exchanges.length === 0) {
-          await interaction.reply({
-            content: "No confirmed exchanges found yet.",
-            ephemeral: true
-          });
+          await sendEphemeralWithAutoDelete(interaction, "No confirmed exchanges found yet.");
           return;
         }
         
@@ -903,19 +898,17 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
         // Add total count
         exchangesEmbed.setDescription(`Total confirmed exchanges in the system: **${exchanges.length}**`);
         
-        await interaction.reply({
-          embeds: [exchangesEmbed],
-          ephemeral: true
+        await sendEphemeralWithAutoDelete(interaction, {
+          embeds: [exchangesEmbed]
         });
         
         log(`Successfully sent exchanges list to ${interaction.user.tag}`, "discord-bot");
         
       } catch (exchangesError) {
         log(`Error fetching exchanges: ${exchangesError}`, "discord-bot");
-        await interaction.reply({
-          content: "Sorry, I couldn't retrieve the exchanges right now. Please try again later.",
-          ephemeral: true
-        });
+        await sendEphemeralWithAutoDelete(interaction,
+          "Sorry, I couldn't retrieve the exchanges right now. Please try again later."
+        );
       }
     }
   } catch (error) {
@@ -2087,6 +2080,31 @@ function calculateUptime(startTime: Date): string {
   const remainingHours = hours % 24;
   
   return `${days} ${days === 1 ? 'day' : 'days'}, ${remainingHours} ${remainingHours === 1 ? 'hour' : 'hours'}`;
+}
+
+// Helper function to send ephemeral message with auto-deletion
+async function sendEphemeralWithAutoDelete(interaction: any, content: string | { content?: string; embeds?: any[]; components?: any[] }, deleteAfterSeconds: number = 15) {
+  try {
+    const response = await interaction.reply({
+      ...(typeof content === 'string' ? { content } : content),
+      ephemeral: true
+    });
+    
+    // Schedule deletion after specified seconds
+    setTimeout(async () => {
+      try {
+        await interaction.deleteReply();
+        log(`Auto-deleted ephemeral message after ${deleteAfterSeconds} seconds`, "discord-bot");
+      } catch (deleteError) {
+        log(`Could not auto-delete ephemeral message: ${deleteError}`, "discord-bot");
+      }
+    }, deleteAfterSeconds * 1000);
+    
+    return response;
+  } catch (error) {
+    log(`Error sending ephemeral message with auto-delete: ${error}`, "discord-bot");
+    throw error;
+  }
 }
 
 // Set up default bot configuration
