@@ -620,9 +620,8 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
         })
         .setTimestamp();
       
-      await interaction.reply({
-        embeds: [helpEmbed],
-        flags: 64 // InteractionResponseFlags.Ephemeral
+      await sendEphemeralWithAutoDelete(interaction, {
+        embeds: [helpEmbed]
       });
       
       log(`Successfully sent help message to ${interaction.user.tag}`, "discord-bot");
@@ -641,10 +640,9 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
       const activePosts = userPosts.filter(post => post.isActive);
       
       if (activePosts.length === 0) {
-        await interaction.reply({
-          content: "You don't have any active forum posts to update. Use `/exchange` to create a new post!",
-          ephemeral: true
-        });
+        await sendEphemeralWithAutoDelete(interaction,
+          "You don't have any active forum posts to update. Use `/exchange` to create a new post!"
+        );
         return;
       }
       
@@ -817,10 +815,9 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
         
       } catch (statsError) {
         log(`Error fetching user stats: ${statsError}`, "discord-bot");
-        await interaction.reply({
-          content: "Sorry, I couldn't retrieve your statistics right now. Please try again later.",
-          ephemeral: true
-        });
+        await sendEphemeralWithAutoDelete(interaction,
+          "Sorry, I couldn't retrieve your statistics right now. Please try again later."
+        );
       }
     
     } else if (commandName === 'exchanges') {
