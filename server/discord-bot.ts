@@ -620,8 +620,9 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
         })
         .setTimestamp();
       
-      await sendEphemeralWithAutoDelete(interaction, {
-        embeds: [helpEmbed]
+      await interaction.reply({
+        embeds: [helpEmbed],
+        ephemeral: true
       });
       
       log(`Successfully sent help message to ${interaction.user.tag}`, "discord-bot");
@@ -661,10 +662,9 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
             .addOptions(postOptions)
         );
       
-      await interaction.reply({
+      await sendEphemeralWithAutoDelete(interaction, {
         content: "Select the post you want to update.",
-        components: [postSelectRow],
-        ephemeral: true
+        components: [postSelectRow]
       });
       
       log(`Successfully sent post selection to ${interaction.user.tag} with ${activePosts.length} posts`, "discord-bot");
@@ -698,10 +698,9 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
             ])
         );
       
-      await interaction.reply({
+      await sendEphemeralWithAutoDelete(interaction, {
         content: `Please select the type of feedback you want to submit${isAnonymous ? ' (anonymously)' : ''}:`,
-        components: [contactOptionsRow],
-        flags: 64 // Ephemeral
+        components: [contactOptionsRow]
       });
       
       log(`Successfully sent contact options to ${interaction.user.tag}`, "discord-bot");
@@ -807,17 +806,19 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
           });
         }
         
-        await sendEphemeralWithAutoDelete(interaction, {
-          embeds: [statsEmbed]
+        await interaction.reply({
+          embeds: [statsEmbed],
+          ephemeral: true
         });
         
         log(`Successfully sent stats to ${interaction.user.tag}`, "discord-bot");
         
       } catch (statsError) {
         log(`Error fetching user stats: ${statsError}`, "discord-bot");
-        await sendEphemeralWithAutoDelete(interaction,
-          "Sorry, I couldn't retrieve your statistics right now. Please try again later."
-        );
+        await interaction.reply({
+          content: "Sorry, I couldn't retrieve your statistics right now. Please try again later.",
+          ephemeral: true
+        });
       }
     
     } else if (commandName === 'exchanges') {
@@ -2367,10 +2368,9 @@ async function handleClaimModalSubmission(interaction: any): Promise<void> {
     // Create a link to the post
     const postLink = `[View Post](https://discord.com/channels/${post.guildId}/${threadId})`;
     
-    await interaction.reply({
-      content: `✅ Your post "${post.title}" has been marked as fulfilled and given to **${recipient}**.\n\nThe thread has been archived.\n\n${postLink}`,
-      ephemeral: true
-    });
+    await sendEphemeralWithAutoDelete(interaction, 
+      `✅ Your post "${post.title}" has been marked as fulfilled and given to **${recipient}**.\n\nThe thread has been archived.\n\n${postLink}`
+    );
     
     // Log the fulfillment
     await storage.createLog({
