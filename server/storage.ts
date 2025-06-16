@@ -115,8 +115,9 @@ export class MemStorage implements IStorage {
     const id = this.currentConfigId++;
     const timestamp = new Date();
     const newConfig: BotConfig = { 
-      ...config, 
       id,
+      webhookUrl: config.webhookUrl ?? null,
+      token: config.token ?? null,
       updatedAt: timestamp
     };
     
@@ -134,6 +135,8 @@ export class MemStorage implements IStorage {
     const updatedConfig: BotConfig = {
       ...existingConfig,
       ...config,
+      webhookUrl: config.webhookUrl ?? existingConfig.webhookUrl,
+      token: config.token ?? existingConfig.token,
       updatedAt: new Date()
     };
     
@@ -335,6 +338,29 @@ export class MemStorage implements IStorage {
     return Array.from(this.forumPostsMap.values())
       .filter(post => post.authorId === userId)
       .sort((a, b) => b.lastActivity.getTime() - a.lastActivity.getTime()); // Most recent first
+  }
+
+  // Confirmed exchange operations for MemStorage
+  async createConfirmedExchange(exchange: InsertConfirmedExchange): Promise<ConfirmedExchange> {
+    const id = this.currentForumPostId++; // Reuse counter for simplicity
+    const confirmedExchange: ConfirmedExchange = { ...exchange, id };
+    return confirmedExchange;
+  }
+
+  async getAllConfirmedExchanges(limit: number = 50): Promise<ConfirmedExchange[]> {
+    return [];
+  }
+
+  async getConfirmedExchangesByUser(userId: string): Promise<ConfirmedExchange[]> {
+    return [];
+  }
+
+  async getConfirmedExchangesByCategory(category: string): Promise<ConfirmedExchange[]> {
+    return [];
+  }
+
+  async getConfirmedExchangesByDateRange(startDate: Date, endDate: Date): Promise<ConfirmedExchange[]> {
+    return [];
   }
 }
 

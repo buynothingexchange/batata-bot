@@ -34,6 +34,9 @@ const commands = [
     .setName('mystats')
     .setDescription('View your exchange activity and statistics'),
   new SlashCommandBuilder()
+    .setName('exchanges')
+    .setDescription('View all confirmed exchanges in the community (moderator only)'),
+  new SlashCommandBuilder()
     .setName('contactus')
     .setDescription('Submit comments, suggestions, or reports to the community moderators'),
   new SlashCommandBuilder()
@@ -817,6 +820,100 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
         log(`Error fetching user stats: ${statsError}`, "discord-bot");
         await interaction.reply({
           content: "Sorry, I couldn't retrieve your statistics right now. Please try again later.",
+          ephemeral: true
+        });
+      }
+    
+    } else if (commandName === 'exchanges') {
+      log(`Processing /exchanges command from ${interaction.user.tag}`, "discord-bot");
+      
+      // Check if user has moderator permissions and is in mod-chat channel
+      const member = interaction.guild?.members.cache.get(interaction.user.id);
+      const hasModPerms = member?.permissions.has(PermissionFlagsBits.ManageMessages) || 
+                         member?.permissions.has(PermissionFlagsBits.ModerateMembers) ||
+                         member?.permissions.has(PermissionFlagsBits.Administrator);
+      
+      const isModChannel = interaction.channel?.type === ChannelType.GuildText && 
+                          (interaction.channel as any).name?.toLowerCase().includes('mod');
+      
+      if (!hasModPerms || !isModChannel) {
+        await interaction.reply({
+          content: "This command is restricted to moderators and can only be used in mod channels.",
+          ephemeral: true
+        });
+        log(`${interaction.user.tag} attempted to use /exchanges without proper permissions or in wrong channel`, "discord-bot");
+        return;
+      }
+      
+      try {
+        // Get all confirmed exchanges
+        const exchanges = await storage.getAllConfirmedExchanges(25);
+        
+        if (exchanges.length === 0) {
+          await interaction.reply({
+            content: "No confirmed exchanges found yet.",
+            ephemeral: true
+          });
+          return;
+        }
+        
+        // Create exchanges embed
+        const exchangesEmbed = new EmbedBuilder()
+          .setTitle(`📊 Confirmed Exchanges (Last ${exchanges.length})`)
+          .setColor(0x00FF00) // Green for successful exchanges
+          .setTimestamp()
+          .setFooter({ 
+            text: 'Exchange tracking system',
+            iconURL: interaction.client.user?.displayAvatarURL()
+          });
+        
+        // Group exchanges by type for summary
+        const exchangeTypes = exchanges.reduce((acc: any, ex) => {
+          acc[ex.exchangeType] = (acc[ex.exchangeType] || 0) + 1;
+          return acc;
+        }, {});
+        
+        const summaryText = Object.entries(exchangeTypes)
+          .map(([type, count]) => `**${type.charAt(0).toUpperCase() + type.slice(1)}:** ${count}`)
+          .join('\n');
+        
+        exchangesEmbed.addFields({
+          name: '📈 Exchange Summary',
+          value: summaryText,
+          inline: false
+        });
+        
+        // Add recent exchanges (limit to 10 to fit in embed)
+        const recentExchanges = exchanges.slice(0, 10);
+        const exchangeText = recentExchanges
+          .map(ex => {
+            const date = new Date(ex.confirmedAt).toLocaleDateString();
+            const typeIcon = ex.exchangeType === 'give' ? '🎁' : ex.exchangeType === 'trade' ? '🔄' : '🙏';
+            return `${typeIcon} **${ex.originalPosterUsername}** ↔ **${ex.tradingPartnerUsername}**\n` +
+                   `   "${ex.itemDescription}" (${ex.category}) - ${date}`;
+          })
+          .join('\n\n');
+        
+        exchangesEmbed.addFields({
+          name: '🔄 Recent Exchanges',
+          value: exchangeText || 'No recent exchanges',
+          inline: false
+        });
+        
+        // Add total count
+        exchangesEmbed.setDescription(`Total confirmed exchanges in the system: **${exchanges.length}**`);
+        
+        await interaction.reply({
+          embeds: [exchangesEmbed],
+          ephemeral: true
+        });
+        
+        log(`Successfully sent exchanges list to ${interaction.user.tag}`, "discord-bot");
+        
+      } catch (exchangesError) {
+        log(`Error fetching exchanges: ${exchangesError}`, "discord-bot");
+        await interaction.reply({
+          content: "Sorry, I couldn't retrieve the exchanges right now. Please try again later.",
           ephemeral: true
         });
       }
@@ -1634,7 +1731,7 @@ async function handleInteraction(interaction: Interaction) {
     if (interaction.isChatInputCommand()) {
       const commandName = interaction.commandName;
       
-      if (commandName === 'exchange' || commandName === 'help' || commandName === 'updatepost' || commandName === 'mystats' || commandName === 'contactus' || commandName === 'contactusanon') {
+      if (commandName === 'exchange' || commandName === 'help' || commandName === 'updatepost' || commandName === 'mystats' || commandName === 'exchanges' || commandName === 'contactus' || commandName === 'contactusanon') {
         log(`Processing /${commandName} slash command`, "discord-bot");
         await handleSlashCommand(interaction);
       }
