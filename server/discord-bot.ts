@@ -706,6 +706,24 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
     } else if (commandName === 'mystats') {
       log(`Processing /mystats command from ${interaction.user.tag}`, "discord-bot");
       
+      // Check if user has moderator permissions and is in mod-chat channel
+      const member = interaction.guild?.members.cache.get(interaction.user.id);
+      const hasModPerms = member?.permissions.has(PermissionFlagsBits.ManageMessages) || 
+                         member?.permissions.has(PermissionFlagsBits.ModerateMembers) ||
+                         member?.permissions.has(PermissionFlagsBits.Administrator);
+      
+      const isModChannel = interaction.channel?.type === ChannelType.GuildText && 
+                          (interaction.channel as any).name?.toLowerCase().includes('mod');
+      
+      if (!hasModPerms || !isModChannel) {
+        await interaction.reply({
+          content: "This command is restricted to moderators and can only be used in mod channels.",
+          ephemeral: true
+        });
+        log(`${interaction.user.tag} attempted to use /mystats without proper permissions or in wrong channel`, "discord-bot");
+        return;
+      }
+      
       try {
         // Get user's ISO requests and forum posts
         const userRequests = await storage.getIsoRequestsByUser(interaction.user.id);
@@ -713,8 +731,8 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
         
         // Calculate statistics
         const totalRequests = userRequests.length;
-        const fulfilledRequests = userRequests.filter(req => req.isFulfilled).length;
-        const activeRequests = userRequests.filter(req => !req.isFulfilled).length;
+        const fulfilledRequests = userRequests.filter(req => req.fulfilled).length;
+        const activeRequests = userRequests.filter(req => !req.fulfilled).length;
         
         const totalPosts = userPosts.length;
         const activePosts = userPosts.filter(post => post.isActive).length;
@@ -722,7 +740,9 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
         
         // Group requests by category
         const requestsByCategory = userRequests.reduce((acc: any, req) => {
-          acc[req.category] = (acc[req.category] || 0) + 1;
+          if (req.category) {
+            acc[req.category] = (acc[req.category] || 0) + 1;
+          }
           return acc;
         }, {});
         
@@ -770,11 +790,11 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
         // Add recent activity if there are any requests
         if (userRequests.length > 0) {
           const recentRequests = userRequests
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
             .slice(0, 3);
           
           const recentText = recentRequests
-            .map(req => `• ${req.content} ${req.isFulfilled ? '✅' : '⏳'}`)
+            .map(req => `• ${req.content} ${req.fulfilled ? '✅' : '⏳'}`)
             .join('\n');
           
           statsEmbed.addFields({
