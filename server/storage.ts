@@ -4,7 +4,8 @@ import {
   logs, type Log, type InsertLog,
   allowedChannels, type AllowedChannel, type InsertAllowedChannel,
   isoRequests, type IsoRequest, type InsertIsoRequest,
-  forumPosts, type ForumPost, type InsertForumPost
+  forumPosts, type ForumPost, type InsertForumPost,
+  confirmedExchanges, type ConfirmedExchange, type InsertConfirmedExchange
 } from "@shared/schema";
 
 // Storage interface for bot-related data
@@ -44,6 +45,13 @@ export interface IStorage {
   incrementBumpCount(threadId: string): Promise<ForumPost | undefined>;
   deactivateForumPost(threadId: string): Promise<ForumPost | undefined>;
   getForumPostsByUser(userId: string): Promise<ForumPost[]>;
+  
+  // Confirmed exchange operations
+  createConfirmedExchange(exchange: InsertConfirmedExchange): Promise<ConfirmedExchange>;
+  getAllConfirmedExchanges(limit?: number): Promise<ConfirmedExchange[]>;
+  getConfirmedExchangesByUser(userId: string): Promise<ConfirmedExchange[]>;
+  getConfirmedExchangesByCategory(category: string): Promise<ConfirmedExchange[]>;
+  getConfirmedExchangesByDateRange(startDate: Date, endDate: Date): Promise<ConfirmedExchange[]>;
 }
 
 // In-memory storage implementation
@@ -332,7 +340,7 @@ export class MemStorage implements IStorage {
 
 // Database storage implementation
 import { db } from "./db";
-import { eq, desc, and, lt } from "drizzle-orm";
+import { eq, desc, and, lt, or, gte, lte } from "drizzle-orm";
 
 export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
@@ -501,6 +509,42 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(forumPosts)
       .where(eq(forumPosts.authorId, userId))
       .orderBy(desc(forumPosts.lastActivity));
+  }
+
+  // Confirmed exchange operations
+  async createConfirmedExchange(exchange: InsertConfirmedExchange): Promise<ConfirmedExchange> {
+    const [newExchange] = await db.insert(confirmedExchanges).values(exchange).returning();
+    return newExchange;
+  }
+
+  async getAllConfirmedExchanges(limit: number = 50): Promise<ConfirmedExchange[]> {
+    return await db.select().from(confirmedExchanges)
+      .orderBy(desc(confirmedExchanges.confirmedAt))
+      .limit(limit);
+  }
+
+  async getConfirmedExchangesByUser(userId: string): Promise<ConfirmedExchange[]> {
+    return await db.select().from(confirmedExchanges)
+      .where(or(
+        eq(confirmedExchanges.originalPosterId, userId),
+        eq(confirmedExchanges.tradingPartnerId, userId)
+      ))
+      .orderBy(desc(confirmedExchanges.confirmedAt));
+  }
+
+  async getConfirmedExchangesByCategory(category: string): Promise<ConfirmedExchange[]> {
+    return await db.select().from(confirmedExchanges)
+      .where(eq(confirmedExchanges.category, category))
+      .orderBy(desc(confirmedExchanges.confirmedAt));
+  }
+
+  async getConfirmedExchangesByDateRange(startDate: Date, endDate: Date): Promise<ConfirmedExchange[]> {
+    return await db.select().from(confirmedExchanges)
+      .where(and(
+        gte(confirmedExchanges.confirmedAt, startDate),
+        lte(confirmedExchanges.confirmedAt, endDate)
+      ))
+      .orderBy(desc(confirmedExchanges.confirmedAt));
   }
 }
 

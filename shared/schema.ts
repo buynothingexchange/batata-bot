@@ -115,3 +115,26 @@ export const insertForumPostSchema = createInsertSchema(forumPosts).omit({
 
 export type InsertForumPost = z.infer<typeof insertForumPostSchema>;
 export type ForumPost = typeof forumPosts.$inferSelect;
+
+// Confirmed Exchanges schema for tracking completed trades
+export const confirmedExchanges = pgTable("confirmed_exchanges", {
+  id: serial("id").primaryKey(),
+  originalPosterId: text("original_poster_id").notNull(),
+  originalPosterUsername: text("original_poster_username").notNull(),
+  tradingPartnerId: text("trading_partner_id").notNull(),
+  tradingPartnerUsername: text("trading_partner_username").notNull(),
+  itemDescription: text("item_description").notNull(),
+  exchangeType: text("exchange_type").notNull(), // 'trade', 'give', 'request'
+  category: text("category").notNull(),
+  threadId: text("thread_id").notNull(),
+  confirmedAt: timestamp("confirmed_at").notNull().defaultNow(),
+  guildId: text("guild_id").notNull(),
+});
+
+export const insertConfirmedExchangeSchema = createInsertSchema(confirmedExchanges).omit({
+  id: true,
+  confirmedAt: true,
+});
+
+export type InsertConfirmedExchange = z.infer<typeof insertConfirmedExchangeSchema>;
+export type ConfirmedExchange = typeof confirmedExchanges.$inferSelect;
