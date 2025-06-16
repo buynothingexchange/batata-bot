@@ -78,26 +78,28 @@ async function registerSlashCommands() {
     // Get all guilds the bot is in
     const guilds = bot.guilds.cache;
     
-    // Iterate over guilds using forEach
-    guilds.forEach(async (guild) => {
+    // Iterate over guilds and register commands
+    for (const guild of guilds.values()) {
       log(`Registering commands for guild: ${guild.name} (${guild.id})`, "discord-bot");
       
       try {
         // Clear existing guild commands first
         await rest.put(
-          Routes.applicationGuildCommands(bot!.user!.id, guild.id),
+          Routes.applicationGuildCommands(bot.user.id, guild.id),
           { body: [] }
         );
         
         // Register new commands for this guild
         await rest.put(
-          Routes.applicationGuildCommands(bot!.user!.id, guild.id),
+          Routes.applicationGuildCommands(bot.user.id, guild.id),
           { body: commands }
         );
+        
+        log(`Successfully registered ${commands.length} commands for guild: ${guild.name}`, "discord-bot");
       } catch (guildError) {
         log(`Error registering commands for guild ${guild.name}: ${guildError}`, "discord-bot");
       }
-    });
+    }
 
     // Also clear global commands to avoid conflicts
     await rest.put(
