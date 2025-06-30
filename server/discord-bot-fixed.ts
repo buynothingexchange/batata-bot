@@ -45,7 +45,7 @@ const commands = [
   // Ko-fi donation commands
   new SlashCommandBuilder()
     .setName('initgoal')
-    .setDescription('Create a new donation progress tracker in this channel')
+    .setDescription('Create a new donation progress tracker in this channel (moderator only)')
     .addIntegerOption(option =>
       option.setName('amount')
         .setDescription('Goal amount in dollars (e.g., 100 for $100)')
@@ -58,6 +58,9 @@ const commands = [
   new SlashCommandBuilder()
     .setName('donate')
     .setDescription('Show Ko-fi donation link with clickable button'),
+  new SlashCommandBuilder()
+    .setName('progress')
+    .setDescription('View current donation progress'),
   new SlashCommandBuilder()
     .setName('testkofi')
     .setDescription('Test Ko-fi webhook functionality (admin only)')
@@ -1325,6 +1328,12 @@ async function handleDonationCommand(interaction: ChatInputCommandInteraction): 
 
 // Handle /initgoal command
 async function handleInitGoal(interaction: ChatInputCommandInteraction): Promise<void> {
+  // Check if user has moderator permissions
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages)) {
+    await interaction.reply({ content: 'You need moderator permissions (Manage Messages) to create donation goals.', ephemeral: true });
+    return;
+  }
+  
   const goalAmount = interaction.options.getInteger('amount', true) * 100; // Convert to cents
   const channelId = interaction.channelId;
   const guildId = interaction.guildId || '';
