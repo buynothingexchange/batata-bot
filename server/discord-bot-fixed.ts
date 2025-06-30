@@ -1399,8 +1399,15 @@ async function handleInitGoal(interaction: ChatInputCommandInteraction): Promise
         .setColor(0x3b82f6)
         .setTimestamp();
       
-      // Send the initial message
-      const message = await interaction.reply({ embeds: [embed], fetchReply: true });
+      // Send the initial message - check if in donate channel for ephemeral setting
+      const isDonateChannel = interaction.channel?.isTextBased() && 'name' in interaction.channel
+        ? interaction.channel.name?.toLowerCase().includes('donat') || false 
+        : false;
+      const message = await interaction.reply({ 
+        embeds: [embed], 
+        ephemeral: isDonateChannel,
+        fetchReply: true 
+      });
       
       // Create donation goal in database
       await storage.createDonationGoal({
@@ -1493,7 +1500,15 @@ async function handleDonate(interaction: ChatInputCommandInteraction): Promise<v
     
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(donateButton);
     
-    await interaction.reply({ embeds: [embed], components: [row] });
+    // Check if in donate channel to make response ephemeral
+    const isDonateChannel = interaction.channel?.isTextBased() && 'name' in interaction.channel
+      ? interaction.channel.name?.toLowerCase().includes('donat') || false 
+      : false;
+    await interaction.reply({ 
+      embeds: [embed], 
+      components: [row], 
+      ephemeral: isDonateChannel 
+    });
     
     log(`User ${interaction.user.username} viewed donation link`, "discord-bot");
   } catch (error) {
