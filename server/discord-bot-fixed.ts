@@ -451,16 +451,26 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
     if (commandName === 'exchange') {
       log(`Processing /${commandName} command from ${interaction.user.tag}`, "discord-bot");
       
-      // URL to the form page within this project
-      const formUrl = 'https://bfdf1125-76ec-481d-be0b-bc578a7396ba-00-3325314juelsm.worf.replit.dev/exchange';
-      
-      // Send ephemeral reply with form URL
-      await interaction.reply({
-        content: `Please fill out the exchange form here: ${formUrl}`,
-        flags: 64 // Use flags instead of ephemeral property
-      });
-      
-      log(`Successfully sent form URL to ${interaction.user.tag}: ${formUrl}`, "discord-bot");
+      try {
+        // URL to the form page within this project
+        const formUrl = process.env.EXCHANGE_FORM_URL || 'https://bfdf1125-76ec-481d-be0b-bc578a7396ba-00-3325314juelsm.worf.replit.dev/exchange';
+        
+        // Send ephemeral reply with form URL
+        await interaction.reply({
+          content: `Please fill out the exchange form here: ${formUrl}`,
+          ephemeral: true
+        });
+        
+        log(`Successfully sent form URL to ${interaction.user.tag}: ${formUrl}`, "discord-bot");
+      } catch (error) {
+        log(`Error handling exchange command: ${error}`, "discord-bot");
+        if (!interaction.replied) {
+          await interaction.reply({
+            content: 'Sorry, there was an error processing your request. Please try again.',
+            ephemeral: true
+          });
+        }
+      }
       
     } else if (commandName === 'help') {
       log(`Processing /help command from ${interaction.user.tag}`, "discord-bot");
@@ -1560,7 +1570,11 @@ export async function createForumPost(postData: {
         content: `**${postData.type.charAt(0).toUpperCase() + postData.type.slice(1)}:** ${postData.description}\n\n**Category:** ${postData.category}${postData.location ? `\n**Location:** ${postData.location}` : ''}`,
         embeds: [{
           color: postData.type === 'give' ? 0x57F287 : postData.type === 'request' ? 0x3498DB : 0xF39C12,
-          image: { url: postData.imageUrl },
+          image: { 
+            url: postData.imageUrl,
+            width: 600,
+            height: 600
+          },
           footer: { text: 'Submitted via external form' }
         }]
       },

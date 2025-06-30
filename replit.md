@@ -13,6 +13,13 @@ A sophisticated Discord bot application designed to streamline cross-server item
 
 ## Recent Changes (Latest Updates)
 
+### Fixed "/exchange" Command Discord Integration - June 30, 2025
+- ✅ **Fixed "Unknown Integration" error** - corrected interaction reply format from flags to ephemeral property
+- ✅ **Added proper error handling** - enhanced error catching and fallback responses
+- ✅ **Improved bot restart process** - automatic command re-registration after fixes
+- ✅ **Enhanced logging** - better debugging for slash command processing
+- ✅ **Validated command functionality** - /exchange command now properly responds with form URL
+
 ### Dark Theme with Green Accents - June 30, 2025
 - ✅ **Updated theme configuration** - changed from light to dark mode with green primary color
 - ✅ **Enhanced form styling** - black background with dark gray card container
