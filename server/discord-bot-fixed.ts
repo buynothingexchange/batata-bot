@@ -1620,7 +1620,7 @@ export async function createForumPost(postData: {
 
     // Create the forum post with proper tags
     const thread = await (forumChannel as any).threads.create({
-      name: `${typeDisplayNames[postData.type as keyof typeof typeDisplayNames] === 'Offer' ? 'PIF' : typeDisplayNames[postData.type as keyof typeof typeDisplayNames] || postData.type.charAt(0).toUpperCase() + postData.type.slice(1)} ${typeDisplayNames[postData.type as keyof typeof typeDisplayNames] || postData.type.charAt(0).toUpperCase() + postData.type.slice(1)}: ${postData.title}`,
+      name: `${typeDisplayNames[postData.type as keyof typeof typeDisplayNames] || postData.type.charAt(0).toUpperCase() + postData.type.slice(1)}: ${postData.title}`,
       message: {
         embeds: [mainEmbed]
       },

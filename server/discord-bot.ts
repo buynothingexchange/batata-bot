@@ -381,20 +381,17 @@ async function handleMessage(message: Message) {
       if (message.mentions.has(bot?.user as User) && 
           /\b(hi|hello|hey|howdy|hola|greetings|yo|sup)\b/i.test(message.content)) {
         log(`Bot was greeted by ${message.author.username}`, "discord-bot");
-        await message.reply("Hello! I'm Batata, and I format ISO requests and PIF offers in a standardized way. Post a message starting with ISO or PIF to see me in action!");
+        await message.reply("Hello! I'm Batata, and I help format exchange requests in a standardized way. Use the `/exchange` command to create exchange posts!");
         return;
       }
       
-      // Only handle ISO/PIF requests in general-chat
+      // Only handle ISO requests in general-chat
       const channelName = (message.channel as any).name?.toLowerCase();
       if (channelName === 'general-chat') {
         const content = message.content.trim().toUpperCase();
         if (message.guild && content.startsWith('ISO ') && content.length > 4) {
           log(`Detected ISO request from ${message.author.username}`, "discord-bot");
           await handleIsoRequest(message);
-        } else if (message.guild && content.startsWith('PIF ') && content.length > 4) {
-          log(`Detected PIF request from ${message.author.username}`, "discord-bot");
-          await handlePifRequest(message);
         }
       }
     }
@@ -479,20 +476,13 @@ function isDirectIsoRequest(message: Message): boolean {
 }
 
 // Detect if message is direct PIF request
-function isDirectPifRequest(message: Message): boolean {
-  const content = message.content.trim().toUpperCase();
-  return content.startsWith('PIF ') && content.length > 4;
-}
 
 
 
-// Handle direct PIF request
-async function handlePifRequest(message: Message): Promise<void> {
-  // PIF requests now use the same workflow as ISO - redirect to handleIsoRequest
-  await handleIsoRequest(message);
-}
 
-// Handle slash command for ISO/PIF requests
+
+
+// Handle slash command for ISO requests
 async function handleSlashCommand(interaction: ChatInputCommandInteraction): Promise<void> {
   try {
     const commandName = interaction.commandName;
