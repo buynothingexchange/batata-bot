@@ -436,7 +436,7 @@ export class MemStorage implements IStorage {
 
 // Database storage implementation
 import { db } from "./db";
-import { eq, desc, and, lt, or, gte, lte } from "drizzle-orm";
+import { and, eq, desc, gte, lte, lt, or, sum } from "drizzle-orm";
 
 export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {

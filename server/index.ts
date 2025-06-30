@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { processKofiDonation } from "./discord-bot-fixed";
 
 // Track server start time for uptime calculations
 const SERVER_START_TIME = new Date();
@@ -17,6 +18,35 @@ process.on('uncaughtException', (error) => {
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Ko-fi webhook endpoint
+app.post('/kofi', async (req: Request, res: Response) => {
+  try {
+    const { data } = req.body;
+    log(`Ko-fi webhook received: ${JSON.stringify(data)}`, "kofi");
+    
+    if (data && data.type === 'Donation') {
+      const donationAmount = Math.round(parseFloat(data.amount) * 100); // Convert to cents
+      
+      // Process the donation webhook
+      await processKofiDonation({
+        kofiTransactionId: data.kofi_transaction_id,
+        donorName: data.from_name,
+        amount: donationAmount,
+        message: data.message,
+        email: data.email,
+        isPublic: data.is_public !== false
+      });
+      
+      log(`Processed Ko-fi donation of $${data.amount} from ${data.from_name}`, "kofi");
+    }
+    
+    res.status(200).send('OK');
+  } catch (error) {
+    log(`Ko-fi webhook error: ${error}`, "kofi");
+    res.status(500).send('Error processing donation');
+  }
+});
 
 app.use((req, res, next) => {
   const start = Date.now();

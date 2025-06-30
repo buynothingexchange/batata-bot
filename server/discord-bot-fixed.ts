@@ -5,13 +5,15 @@ import {
   PartialMessageReaction, PartialUser, Partials, 
   User, EmbedBuilder, TextChannel, ButtonBuilder, 
   ButtonStyle, ActionRowBuilder, Collection,
-  PermissionFlagsBits
+  PermissionFlagsBits, SlashCommandBuilder,
+  REST, Routes, ChatInputCommandInteraction
 } from 'discord.js';
 import { WebSocketServer } from 'ws';
 import { log } from './vite';
 import { storage } from './storage';
 import { analyzeISORequest } from './openai-service';
 import { Server } from 'http';
+import type { InsertDonation } from '@shared/schema';
 
 // Bot instance
 let bot: Client | null = null;
@@ -1148,4 +1150,74 @@ function isValidDiscordToken(token: string): boolean {
   // Basic format check: should be in three parts separated by periods
   const parts = token.split('.');
   return parts.length === 3 && parts.every(part => part.length > 0);
+}
+
+// Ko-fi donation processing function
+export async function processKofiDonation(donationData: InsertDonation): Promise<void> {
+  try {
+    // Record the donation in the database
+    await storage.createDonation(donationData);
+    
+    // Update all active donation goals
+    const activeGoals = await storage.getActiveDonationGoals(process.env.GUILD_ID || '');
+    
+    for (const goal of activeGoals) {
+      // Calculate new total amount
+      const totalDonations = await storage.getTotalDonationAmount();
+      
+      // Update the goal's current amount
+      await storage.updateDonationGoalAmount(goal.id, totalDonations);
+      
+      // Update the Discord message with new progress
+      await updateDonationProgressMessage(goal.channelId, goal.messageId, totalDonations, goal.goalAmount);
+    }
+    
+    log(`Ko-fi donation processed: $${donationData.amount / 100} from ${donationData.donorName}`, "discord-bot");
+  } catch (error) {
+    log(`Error processing Ko-fi donation: ${error}`, "discord-bot");
+  }
+}
+
+// Update donation progress message in Discord
+async function updateDonationProgressMessage(channelId: string, messageId: string, currentAmount: number, goalAmount: number): Promise<void> {
+  try {
+    if (!bot) return;
+    
+    const channel = await bot.channels.fetch(channelId) as TextChannel;
+    if (!channel) return;
+    
+    const message = await channel.messages.fetch(messageId);
+    if (!message) return;
+    
+    const progressPercent = Math.min((currentAmount / goalAmount) * 100, 100);
+    const progressBar = createProgressBar(progressPercent);
+    
+    const embed = new EmbedBuilder()
+      .setTitle('💰 Donation Progress')
+      .setDescription(`**Current Progress: $${(currentAmount / 100).toFixed(2)} / $${(goalAmount / 100).toFixed(2)}**\n\n${progressBar}\n\n${progressPercent.toFixed(1)}% Complete`)
+      .setColor(progressPercent >= 100 ? 0x00ff00 : 0x3b82f6)
+      .setTimestamp();
+    
+    if (progressPercent >= 100) {
+      embed.setDescription(`**🎉 GOAL REACHED! $${(currentAmount / 100).toFixed(2)} / $${(goalAmount / 100).toFixed(2)}**\n\n${progressBar}\n\n✅ 100% Complete - Thank you for your support!`);
+    }
+    
+    await message.edit({ embeds: [embed] });
+    
+    log(`Updated donation progress: ${progressPercent.toFixed(1)}% ($${(currentAmount / 100).toFixed(2)}/$${(goalAmount / 100).toFixed(2)})`, "discord-bot");
+  } catch (error) {
+    log(`Error updating donation progress message: ${error}`, "discord-bot");
+  }
+}
+
+// Create a visual progress bar
+function createProgressBar(percent: number): string {
+  const barLength = 20;
+  const filledLength = Math.round((percent / 100) * barLength);
+  const emptyLength = barLength - filledLength;
+  
+  const filled = '█'.repeat(filledLength);
+  const empty = '░'.repeat(emptyLength);
+  
+  return `[${filled}${empty}] ${percent.toFixed(1)}%`;
 }
