@@ -42,6 +42,9 @@ A sophisticated Discord bot application designed to streamline cross-server item
 - ✅ **Improved bot restart process** - automatic command re-registration after fixes
 - ✅ **Enhanced logging** - better debugging for slash command processing
 - ✅ **Validated command functionality** - /exchange command now properly responds with form URL
+- ✅ **Switched to global command registration** - fixed command visibility issues by using Discord global commands
+- ✅ **Fixed command iteration errors** - resolved TypeScript iteration issues in command registration
+- ✅ **Enhanced command logging** - added detailed command registration feedback for debugging
 
 ### Dark Theme with Green Accents - June 30, 2025
 - ✅ **Updated theme configuration** - changed from light to dark mode with green primary color
