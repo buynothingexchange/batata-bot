@@ -5,7 +5,9 @@ import {
   PartialMessageReaction, PartialUser, Partials, 
   User, EmbedBuilder, TextChannel, ButtonBuilder, 
   ButtonStyle, ActionRowBuilder, Collection,
-  PermissionFlagsBits, SlashCommandBuilder,
+  PermissionFlagsBits, ButtonInteraction,
+  StringSelectMenuBuilder, ModalBuilder,
+  TextInputBuilder, TextInputStyle, SlashCommandBuilder,
   REST, Routes, ChatInputCommandInteraction
 } from 'discord.js';
 import { WebSocketServer } from 'ws';
@@ -20,6 +22,11 @@ import { eq } from 'drizzle-orm';
 
 // Bot instance
 let bot: Client | null = null;
+
+// Global temp user data for multi-step interactions
+declare global {
+  var tempUserData: Map<string, any>;
+}
 
 // Slash command definitions
 const commands = [
@@ -436,6 +443,296 @@ async function handleMessage(message: Message) {
   }
 }
 
+// Handle slash command for exchange/help/etc.
+async function handleSlashCommand(interaction: ChatInputCommandInteraction): Promise<void> {
+  try {
+    const commandName = interaction.commandName;
+    
+    if (commandName === 'exchange') {
+      log(`Processing /${commandName} command from ${interaction.user.tag}`, "discord-bot");
+      
+      // Create action selection dropdown
+      const actionRow = new ActionRowBuilder<StringSelectMenuBuilder>()
+        .addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId('action_select')
+            .setPlaceholder('What would you like to do?')
+            .addOptions([
+              {
+                label: 'Trade',
+                description: 'Exchange items with other members',
+                value: 'trade'
+              },
+              {
+                label: 'Give',
+                description: 'Offer items for free to the community',
+                value: 'give'
+              },
+              {
+                label: 'Request',
+                description: 'Request items from the community',
+                value: 'request'
+              }
+            ])
+        );
+      
+      // Initialize temp user data
+      if (!global.tempUserData) global.tempUserData = new Map();
+      global.tempUserData.set(interaction.user.id, { timestamp: Date.now() });
+      
+      // Send ephemeral reply
+      await interaction.reply({
+        content: "What would you like to do?",
+        components: [actionRow],
+        ephemeral: true
+      });
+      
+      log(`Successfully sent action selection to ${interaction.user.tag}`, "discord-bot");
+      
+    } else if (commandName === 'help') {
+      log(`Processing /help command from ${interaction.user.tag}`, "discord-bot");
+      
+      // Create help embed
+      const helpEmbed = new EmbedBuilder()
+        .setTitle('🤖 Batata Bot - Command Help')
+        .setDescription('Here are all the available commands and how to use them:')
+        .setColor(0x3498db)
+        .addFields(
+          {
+            name: '📦 /exchange',
+            value: '**Usage:** `/exchange`\n' +
+                   '**Description:** Create an exchange form that will be posted in the items-exchange forum channel.\n' +
+                   '**Process:**\n' +
+                   '• Choose your action: Trade, Give, or Request\n' +
+                   '• Select a category for your item\n' +
+                   '• Fill out item details in the form\n' +
+                   '• Your post appears in the forum with proper tags\n' +
+                   '**Example:** Simply type `/exchange` to start',
+            inline: false
+          },
+          {
+            name: '🔄 /updatepost',
+            value: '**Usage:** `/updatepost`\n' +
+                   '**Description:** Update or manage your existing forum posts.\n' +
+                   '**Features:**\n' +
+                   '• View all your active posts\n' +
+                   '• Mark items as claimed/fulfilled\n' +
+                   '• Update post status to keep them active\n' +
+                   '• Archive completed exchanges',
+            inline: false
+          },
+          {
+            name: '📞 /contactus',
+            value: '**Usage:** `/contactus`\n' +
+                   '**Description:** Submit comments, suggestions, or reports to community moderators.\n' +
+                   '**Options:** Comments, Suggestions, Reports with your identity visible.',
+            inline: false
+          },
+          {
+            name: '🕵️ /contactusanon',
+            value: '**Usage:** `/contactusanon`\n' +
+                   '**Description:** Submit anonymous comments, suggestions, or reports to community moderators.\n' +
+                   '**Options:** Same as /contactus but completely anonymous.',
+            inline: false
+          },
+          {
+            name: '❓ /help',
+            value: '**Usage:** `/help`\n' +
+                   '**Description:** Display this help message with information about all available commands.',
+            inline: false
+          }
+        )
+        .setFooter({ 
+          text: 'Need more help? Contact a server administrator.',
+          iconURL: interaction.client.user?.displayAvatarURL()
+        })
+        .setTimestamp();
+      
+      await interaction.reply({
+        embeds: [helpEmbed],
+        ephemeral: true
+      });
+      
+      log(`Successfully sent help message to ${interaction.user.tag}`, "discord-bot");
+      
+    } else {
+      // Handle other commands (updatepost, mystats, exchanges, contactus, contactusanon)
+      await interaction.reply({
+        content: `Command /${commandName} is not yet implemented in this version.`,
+        ephemeral: true
+      });
+    }
+  } catch (error) {
+    log(`Error handling slash command: ${error}`, "discord-bot");
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        content: "There was an error processing your command. Please try again.",
+        ephemeral: true
+      });
+    }
+  }
+}
+
+// Handle action selection from exchange command
+async function handleActionSelection(interaction: any, selectedAction: string): Promise<void> {
+  try {
+    // Create category selection dropdown
+    const categoryRow = new ActionRowBuilder<StringSelectMenuBuilder>()
+      .addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId('category_select')
+          .setPlaceholder('Select a category for your item')
+          .addOptions([
+            {
+              label: 'Electronics',
+              description: 'Phones, computers, gadgets, etc.',
+              value: 'electronics'
+            },
+            {
+              label: 'Accessories',
+              description: 'Jewelry, bags, small items, etc.',
+              value: 'accessories'
+            },
+            {
+              label: 'Clothing',
+              description: 'Shirts, pants, dresses, etc.',
+              value: 'clothing'
+            },
+            {
+              label: 'Home & Furniture',
+              description: 'Household items, furniture, decor',
+              value: 'home_furniture'
+            },
+            {
+              label: 'Footwear',
+              description: 'Shoes, boots, sandals, etc.',
+              value: 'footwear'
+            },
+            {
+              label: 'Miscellaneous',
+              description: 'Other items not listed above',
+              value: 'misc'
+            }
+          ])
+      );
+
+    // Store the selected action in temp data
+    if (!global.tempUserData) global.tempUserData = new Map();
+    const userData = global.tempUserData.get(interaction.user.id) || {};
+    userData.action = selectedAction;
+    global.tempUserData.set(interaction.user.id, userData);
+
+    await interaction.update({
+      content: `You selected: **${selectedAction}**\nNow choose a category for your item:`,
+      components: [categoryRow]
+    });
+
+    log(`User ${interaction.user.tag} selected action: ${selectedAction}`, "discord-bot");
+  } catch (error) {
+    log(`Error handling action selection: ${error}`, "discord-bot");
+  }
+}
+
+// Handle category selection and show modal
+async function handleCategoryModalSelection(interaction: any, selectedCategory: string): Promise<void> {
+  try {
+    // Store the category in temp data
+    if (!global.tempUserData) global.tempUserData = new Map();
+    const userData = global.tempUserData.get(interaction.user.id) || {};
+    userData.category = selectedCategory;
+    global.tempUserData.set(interaction.user.id, userData);
+
+    // Create modal based on action type
+    const action = userData.action || 'request';
+    let modalTitle = 'Request Item Details';
+    let itemLabel = 'What are you looking for?';
+    let itemPlaceholder = 'Describe the item you need...';
+
+    if (action === 'give') {
+      modalTitle = 'Give Item Details';
+      itemLabel = 'What are you offering?';
+      itemPlaceholder = 'Describe the item you\'re giving away...';
+    } else if (action === 'trade') {
+      modalTitle = 'Trade Item Details';
+      itemLabel = 'What do you want to trade?';
+      itemPlaceholder = 'Describe what you have and what you want...';
+    }
+
+    const modal = new ModalBuilder()
+      .setCustomId(`item_modal:${selectedCategory}`)
+      .setTitle(modalTitle);
+
+    const itemInput = new TextInputBuilder()
+      .setCustomId('item_description')
+      .setLabel(itemLabel)
+      .setStyle(TextInputStyle.Paragraph)
+      .setPlaceholder(itemPlaceholder)
+      .setRequired(true)
+      .setMaxLength(1000);
+
+    const conditionInput = new TextInputBuilder()
+      .setCustomId('condition')
+      .setLabel('Condition/Additional Details')
+      .setStyle(TextInputStyle.Paragraph)
+      .setPlaceholder('Condition, size, color, any other relevant details...')
+      .setRequired(false)
+      .setMaxLength(500);
+
+    const firstActionRow = new ActionRowBuilder<ModalActionRowComponentBuilder>().addComponents(itemInput);
+    const secondActionRow = new ActionRowBuilder<ModalActionRowComponentBuilder>().addComponents(conditionInput);
+    
+    modal.addComponents(firstActionRow, secondActionRow);
+
+    await interaction.showModal(modal);
+    log(`User ${interaction.user.tag} selected category: ${selectedCategory}`, "discord-bot");
+  } catch (error) {
+    log(`Error handling category selection: ${error}`, "discord-bot");
+  }
+}
+
+// Handle modal submission (basic version)
+async function handleModalSubmission(interaction: any): Promise<void> {
+  try {
+    await interaction.reply({
+      content: "✅ Your exchange request has been submitted! (Full forum posting will be implemented soon)",
+      ephemeral: true
+    });
+    log(`User ${interaction.user.tag} submitted exchange form`, "discord-bot");
+  } catch (error) {
+    log(`Error handling modal submission: ${error}`, "discord-bot");
+  }
+}
+
+// Placeholder functions for missing handlers
+async function handleUpdatePostSelection(interaction: any, threadId: string): Promise<void> {
+  await interaction.reply({ content: "Update post feature coming soon!", ephemeral: true });
+}
+
+async function handleContactSelection(interaction: any, contactType: string, isAnonymous: boolean): Promise<void> {
+  await interaction.reply({ content: "Contact feature coming soon!", ephemeral: true });
+}
+
+async function handleClaimModalSubmission(interaction: any): Promise<void> {
+  await interaction.reply({ content: "Claim submission coming soon!", ephemeral: true });
+}
+
+async function handleContactModalSubmission(interaction: any): Promise<void> {
+  await interaction.reply({ content: "Contact submission coming soon!", ephemeral: true });
+}
+
+// Helper function for ephemeral messages with auto-delete
+async function sendEphemeralWithAutoDelete(interaction: any, content: string | { content?: string; embeds?: any[]; components?: any[] }, deleteAfterSeconds: number = 15) {
+  try {
+    if (typeof content === 'string') {
+      await interaction.reply({ content, ephemeral: true });
+    } else {
+      await interaction.reply({ ...content, ephemeral: true });
+    }
+  } catch (error) {
+    log(`Error sending ephemeral message: ${error}`, "discord-bot");
+  }
+}
+
 // Handle interactions (buttons, etc.)
 async function handleInteraction(interaction: Interaction) {
   // Update activity timestamp
@@ -443,6 +740,8 @@ async function handleInteraction(interaction: Interaction) {
   lastSuccessfulActivity = Date.now();
   
   try {
+    log(`Received interaction: type=${interaction.type}, user=${interaction.user?.tag}`, "discord-bot");
+    
     // Handle slash command interactions
     if (interaction.isChatInputCommand()) {
       const commandName = interaction.commandName;
@@ -450,6 +749,51 @@ async function handleInteraction(interaction: Interaction) {
       if (['initgoal', 'resetgoal', 'donate', 'testkofi'].includes(commandName)) {
         log(`Processing /${commandName} slash command`, "discord-bot");
         await handleDonationCommand(interaction);
+      } else if (commandName === 'exchange' || commandName === 'help' || commandName === 'updatepost' || commandName === 'mystats' || commandName === 'exchanges' || commandName === 'contactus' || commandName === 'contactusanon') {
+        log(`Processing /${commandName} slash command`, "discord-bot");
+        await handleSlashCommand(interaction);
+      }
+      return;
+    }
+    
+    // Handle select menu interactions (action and category selection)
+    if (interaction.isStringSelectMenu()) {
+      const customId = interaction.customId;
+      
+      if (customId === 'action_select') {
+        const selectedAction = interaction.values[0];
+        log(`User ${interaction.user.tag} selected action: ${selectedAction}`, "discord-bot");
+        await handleActionSelection(interaction, selectedAction);
+      } else if (customId === 'category_select') {
+        const selectedCategory = interaction.values[0];
+        log(`User ${interaction.user.tag} selected category: ${selectedCategory}`, "discord-bot");
+        await handleCategoryModalSelection(interaction, selectedCategory);
+      } else if (customId === 'update_post_select') {
+        const selectedThreadId = interaction.values[0];
+        log(`User ${interaction.user.tag} selected post to update: ${selectedThreadId}`, "discord-bot");
+        await handleUpdatePostSelection(interaction, selectedThreadId);
+      } else if (customId.startsWith('contact_select:')) {
+        const isAnonymous = customId.split(':')[1] === 'true';
+        const selectedType = interaction.values[0];
+        log(`User ${interaction.user.tag} selected contact type: ${selectedType} (anonymous: ${isAnonymous})`, "discord-bot");
+        await handleContactSelection(interaction, selectedType, isAnonymous);
+      }
+      return;
+    }
+    
+    // Handle modal submissions
+    if (interaction.isModalSubmit()) {
+      const customId = interaction.customId;
+      
+      if (customId.startsWith('item_modal:')) {
+        log(`User ${interaction.user.tag} submitted item modal`, "discord-bot");
+        await handleModalSubmission(interaction);
+      } else if (customId.startsWith('claim_modal:')) {
+        log(`User ${interaction.user.tag} submitted claim modal`, "discord-bot");
+        await handleClaimModalSubmission(interaction);
+      } else if (customId.startsWith('contact_modal:')) {
+        log(`User ${interaction.user.tag} submitted contact modal`, "discord-bot");
+        await handleContactModalSubmission(interaction);
       }
       return;
     }
