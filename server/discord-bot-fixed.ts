@@ -1603,6 +1603,44 @@ export async function createForumPost(postData: {
       return { success: false, error: "Items-exchange forum channel not found" };
     }
 
+    // Discover and map Discord forum tags dynamically
+    const availableTags = (forumChannel as any).availableTags || [];
+    log(`Found ${availableTags.length} available forum tags`, "discord-bot");
+    
+    // Map form category/type values to Discord tag IDs by name matching
+    const categoryTags: Record<string, string> = {};
+    const typeTags: Record<string, string> = {};
+    
+    for (const tag of availableTags) {
+      const tagName = tag.name.toLowerCase();
+      log(`Processing forum tag: ${tag.name} (ID: ${tag.id})`, "discord-bot");
+      
+      // Map category tags
+      if (tagName.includes('clothing')) categoryTags['clothing'] = tag.id;
+      else if (tagName.includes('footwear') || tagName.includes('shoes')) categoryTags['footwear'] = tag.id;
+      else if (tagName.includes('accessories')) categoryTags['accessories'] = tag.id;
+      else if (tagName.includes('home') || tagName.includes('furniture')) categoryTags['home_furniture'] = tag.id;
+      else if (tagName.includes('electronics') || tagName.includes('tech')) categoryTags['electronics'] = tag.id;
+      else if (tagName.includes('misc') || tagName.includes('other')) categoryTags['misc'] = tag.id;
+      
+      // Map type tags
+      if (tagName.includes('give') || tagName.includes('offer')) typeTags['give'] = tag.id;
+      else if (tagName.includes('trade') || tagName.includes('swap')) typeTags['trade'] = tag.id;
+      else if (tagName.includes('request') || tagName.includes('iso') || tagName.includes('want')) typeTags['request'] = tag.id;
+    }
+    
+    log(`Category tags mapped: ${JSON.stringify(categoryTags)}`, "discord-bot");
+    log(`Type tags mapped: ${JSON.stringify(typeTags)}`, "discord-bot");
+
+    // Get tag IDs for the category and type
+    const categoryTagId = categoryTags[postData.category.toLowerCase()];
+    const typeTagId = typeTags[postData.type.toLowerCase()];
+
+    // Build applied tags array - only include valid tag IDs
+    const appliedTags: string[] = [];
+    if (categoryTagId) appliedTags.push(categoryTagId);
+    if (typeTagId) appliedTags.push(typeTagId);
+
     // Map exchange type to emoji
     const typeEmojis = {
       'give': '🎁',
@@ -1610,7 +1648,7 @@ export async function createForumPost(postData: {
       'trade': '🔄'
     };
 
-    // Create the forum post
+    // Create the forum post with proper tags
     const thread = await (forumChannel as any).threads.create({
       name: `${typeEmojis[postData.type as keyof typeof typeEmojis] || '📦'} ${postData.title}`,
       message: {
@@ -1621,7 +1659,7 @@ export async function createForumPost(postData: {
           footer: { text: 'Submitted via external form' }
         }]
       },
-      appliedTags: [] // Forum tags would be applied here if configured
+      appliedTags: appliedTags // Apply the category and type tags automatically
     });
 
     // Store in database

@@ -51,6 +51,9 @@ A sophisticated Discord bot application designed to streamline cross-server item
 - ✅ **Created `createForumPost` function** to handle external data and create Discord forum posts
 - ✅ **Full integration with image upload server** - accepts title, description, category, type, image_url, location
 - ✅ **Automatic forum posting** with proper formatting, embeds, and database storage
+- ✅ **Dynamic Discord forum tag discovery** - automatically maps form categories/types to Discord tag IDs
+- ✅ **Smart tag matching** - matches form values to existing forum tags using intelligent name matching
+- ✅ **Automatic tag application** - forum posts created with correct category and type tags applied
 
 ### Previous Updates
 - ✅ **Selective auto-deletion** of ephemeral messages (15 seconds for workflow commands, persistent for informational commands)
