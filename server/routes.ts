@@ -287,8 +287,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ success: false, message: "No image file provided" });
       }
 
-      // Use the same uploadToImgur function from server.js
-      const { uploadToImgur } = await import('../server.js');
+      // Upload image to Imgur
       const imageUrl = await uploadToImgur(req.file.buffer);
       
       res.json({ 
@@ -329,7 +328,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description: validatedData.description,
         category: validatedData.category,
         type: validatedData.type,
-        imageUrl: validatedData.image_url,
+        imageUrl: validatedData.image_url || "",
         location: validatedData.location,
         userId: 'external-form', // Special identifier for external submissions
         username: 'External Form'
