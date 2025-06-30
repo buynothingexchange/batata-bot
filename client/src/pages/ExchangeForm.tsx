@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
 const baseExchangeFormSchema = z.object({
+  username: z.string().min(2, "Username must be at least 2 characters"),
   title: z.string().min(3, "Title must be at least 3 characters"),
   description: z.string().min(10, "Description must be at least 10 characters"),
   category: z.enum(["electronics", "clothing", "accessories", "home_furniture", "footwear", "misc"]),
@@ -253,6 +254,26 @@ export default function ExchangeForm() {
                         <SelectItem value="trade">Trade - Exchange items</SelectItem>
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="username"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-gray-200">
+                      Username <span className="text-green-400">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Your Discord username or display name" 
+                        {...field} 
+                        className="bg-gray-800 border-gray-700 text-white"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

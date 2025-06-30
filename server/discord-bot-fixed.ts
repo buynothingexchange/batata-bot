@@ -1572,7 +1572,7 @@ export async function createForumPost(postData: {
       'trade': 'Trade'
     };
 
-    // Create location information string
+    // Create location information for the embed
     let locationInfo = '';
     if (postData.location) {
       locationInfo += `\n\n**Location:** ${postData.location}`;
@@ -1582,24 +1582,47 @@ export async function createForumPost(postData: {
       locationInfo += `\n[📍 View location on map](${mapsUrl})`;
     }
 
-    // Create embeds array - only add image embed if there's an image
-    const embeds = [];
-    if (postData.imageUrl) {
-      embeds.push({
-        color: postData.type === 'give' ? 0x57F287 : postData.type === 'request' ? 0x3498DB : 0xF39C12,
-        image: { 
-          url: postData.imageUrl
+    // Create the main content embed
+    const mainEmbed: any = {
+      color: postData.type === 'give' ? 0x57F287 : postData.type === 'request' ? 0x3498DB : 0xF39C12,
+      author: {
+        name: postData.username,
+        icon_url: `https://cdn.discordapp.com/embed/avatars/0.png` // Default Discord avatar for external forms
+      },
+      title: `${typeDisplayNames[postData.type as keyof typeof typeDisplayNames] || postData.type.charAt(0).toUpperCase() + postData.type.slice(1)} ${getArticle(postData.title)}${postData.title}`,
+      description: `${postData.username} is ${postData.type === 'give' ? 'offering to give away' : postData.type === 'request' ? 'looking for' : 'looking to trade'}:\n**${postData.title}**\n\n**Description:**\n${postData.description}${locationInfo}`,
+      fields: [
+        {
+          name: 'Category',
+          value: postData.category.charAt(0).toUpperCase() + postData.category.slice(1),
+          inline: true
         },
-        footer: { text: 'Submitted via external form' }
-      });
+        {
+          name: 'Type',
+          value: typeDisplayNames[postData.type as keyof typeof typeDisplayNames] || postData.type.charAt(0).toUpperCase() + postData.type.slice(1),
+          inline: true
+        },
+        {
+          name: 'Contact',
+          value: postData.username,
+          inline: true
+        }
+      ],
+      footer: {
+        text: `User ID: external-form • ${new Date().toLocaleString()}`
+      }
+    };
+
+    // Add image thumbnail if available
+    if (postData.imageUrl) {
+      mainEmbed.thumbnail = { url: postData.imageUrl };
     }
 
     // Create the forum post with proper tags
     const thread = await (forumChannel as any).threads.create({
-      name: `${typeEmojis[postData.type as keyof typeof typeEmojis] || '📦'} ${postData.title}`,
+      name: `${typeDisplayNames[postData.type as keyof typeof typeDisplayNames] === 'Offer' ? 'PIF' : typeDisplayNames[postData.type as keyof typeof typeDisplayNames] || postData.type.charAt(0).toUpperCase() + postData.type.slice(1)} ${typeDisplayNames[postData.type as keyof typeof typeDisplayNames] || postData.type.charAt(0).toUpperCase() + postData.type.slice(1)}: ${postData.title}`,
       message: {
-        content: `**${typeDisplayNames[postData.type as keyof typeof typeDisplayNames] || postData.type.charAt(0).toUpperCase() + postData.type.slice(1)}** • ${postData.category.charAt(0).toUpperCase() + postData.category.slice(1)}\n\n${postData.description}${locationInfo}`,
-        embeds: embeds
+        embeds: [mainEmbed]
       },
       appliedTags: appliedTags // Apply the category and type tags automatically
     });
