@@ -56,8 +56,8 @@ function parseItemNameFallback(messageContent: string): string {
 }
 
 /**
- * Extracts the item name from an ISO or PIF request
- * @param messageContent The raw message content (starting with "ISO" or "PIF")
+ * Extracts the item name from an ISO request
+ * @param messageContent The raw message content (starting with "ISO")
  * @returns The extracted item name
  */
 export async function extractItemName(messageContent: string): Promise<string> {
@@ -72,7 +72,7 @@ export async function extractItemName(messageContent: string): Promise<string> {
       messages: [
         {
           role: "system",
-          content: "Extract only the item name from this ISO/PIF request. Return just the item name, nothing else. Examples: 'ISO headphones' -> 'headphones', 'PIF hey guys i have this pair of shoes if anyone wants it' -> 'pair of shoes'"
+          content: "Extract only the item name from this ISO request. Return just the item name, nothing else. Examples: 'ISO headphones' -> 'headphones', 'ISO looking for a nice pair of shoes' -> 'pair of shoes'"
         },
         {
           role: "user",
