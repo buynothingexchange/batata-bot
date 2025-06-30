@@ -35,8 +35,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize the bot config first
   await initializeBotConfig();
   
-  // Then initialize the Discord bot
-  await initializeBot();
+  // Initialize the Discord bot asynchronously to not block server startup
+  initializeBot().catch(error => {
+    console.error('Discord bot initialization failed:', error);
+  });
 
   // API route to get server status and health
   app.get("/api/server/status", (req, res) => {
