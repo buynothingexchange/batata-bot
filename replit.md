@@ -33,6 +33,12 @@ A sophisticated Discord bot application designed to streamline cross-server item
 - ✅ **Fixed multiple progress tracker issue** - system now maintains single active goal per guild
 - ✅ **Added comprehensive debugging logs** for donation goal tracking
 
+### Ephemeral Responses in Donate Channels - June 30, 2025
+- ✅ **All donation command responses ephemeral in donate channels** - `/initgoal`, `/donate`, `/resetgoal`, `/testkofi`
+- ✅ **Automatic channel detection** - commands check if channel name contains "donat"
+- ✅ **Non-donate channels show public responses** - preserves normal behavior outside donate channels
+- ✅ **Enhanced user experience** - reduces clutter in donation channels while maintaining visibility elsewhere
+
 ### Avatar Format Updates - June 30, 2025
 - ✅ **Changed all user avatar URLs** from animated GIF to static PNG format
 - ✅ **Updated contact form submissions** to use PNG avatars
