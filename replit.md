@@ -13,6 +13,14 @@ A sophisticated Discord bot application designed to streamline cross-server item
 
 ## Recent Changes (Latest Updates)
 
+### Mandatory Image Upload for "Give" Exchange Type - June 30, 2025
+- ✅ **Added dynamic image validation** - images now required when exchange type is "Give"
+- ✅ **Real-time form validation** - image requirement updates immediately when exchange type changes
+- ✅ **Enhanced user feedback** - form label shows "(Required)" or "(Optional)" based on exchange type
+- ✅ **Informational text** - explains why image is required for giving items
+- ✅ **Manual validation override** - prevents form submission without image for "Give" type
+- ✅ **Fixed missing image upload endpoint** - added `/api/upload-image` with proper Imgur integration
+
 ### Ko-fi Donation Tracking Integration - June 30, 2025
 - ✅ **Added donation database schema** with `donationGoals` and `donations` tables
 - ✅ **Implemented Ko-fi webhook endpoint** at `/kofi` for real-time donation processing
