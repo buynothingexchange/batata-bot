@@ -14,6 +14,9 @@ import { storage } from './storage';
 import { analyzeISORequest } from './openai-service';
 import { Server } from 'http';
 import type { InsertDonation } from '@shared/schema';
+import { db } from './db';
+import { donationGoals } from '@shared/schema';
+import { eq } from 'drizzle-orm';
 
 // Bot instance
 let bot: Client | null = null;
@@ -1337,27 +1340,54 @@ async function handleInitGoal(interaction: ChatInputCommandInteraction): Promise
   const guildId = interaction.guildId || '';
   
   try {
-    // Create initial progress embed
-    const embed = new EmbedBuilder()
-      .setTitle('💰 Donation Progress')
-      .setDescription(`**Current Progress: $0.00 / $${(goalAmount / 100).toFixed(2)}**\n\n${createProgressBar(0)}\n\n0.0% Complete`)
-      .setColor(0x3b82f6)
-      .setTimestamp();
+    // Check if there's already an active donation goal for this guild
+    const existingGoals = await storage.getActiveDonationGoals(guildId);
     
-    // Send the initial message
-    const message = await interaction.reply({ embeds: [embed], fetchReply: true });
-    
-    // Create donation goal in database
-    await storage.createDonationGoal({
-      guildId,
-      channelId,
-      messageId: message.id,
-      goalAmount,
-      currentAmount: 0,
-      isActive: true
-    });
-    
-    log(`Created donation goal of $${goalAmount / 100} in channel ${channelId}`, "discord-bot");
+    if (existingGoals.length > 0) {
+      // Update the existing goal instead of creating a new one
+      const existingGoal = existingGoals[0];
+      const currentAmount = existingGoal.currentAmount;
+      
+      // Update the goal amount by updating the database directly
+      await db.update(donationGoals)
+        .set({ 
+          goalAmount: goalAmount,
+          updatedAt: new Date()
+        })
+        .where(eq(donationGoals.id, existingGoal.id));
+      
+      // Update the existing progress message
+      await updateDonationProgressMessage(existingGoal.channelId, existingGoal.messageId, currentAmount, goalAmount);
+      
+      await interaction.reply({ 
+        content: `Updated existing donation goal to $${(goalAmount / 100).toFixed(2)}. Current progress: $${(currentAmount / 100).toFixed(2)}`, 
+        ephemeral: true 
+      });
+      
+      log(`Updated donation goal to $${goalAmount / 100} in channel ${existingGoal.channelId}`, "discord-bot");
+    } else {
+      // Create new goal if none exists
+      const embed = new EmbedBuilder()
+        .setTitle('💰 Donation Progress')
+        .setDescription(`**Current Progress: $0.00 / $${(goalAmount / 100).toFixed(2)}**\n\n${createProgressBar(0)}\n\n0.0% Complete`)
+        .setColor(0x3b82f6)
+        .setTimestamp();
+      
+      // Send the initial message
+      const message = await interaction.reply({ embeds: [embed], fetchReply: true });
+      
+      // Create donation goal in database
+      await storage.createDonationGoal({
+        guildId,
+        channelId,
+        messageId: message.id,
+        goalAmount,
+        currentAmount: 0,
+        isActive: true
+      });
+      
+      log(`Created donation goal of $${goalAmount / 100} in channel ${channelId}`, "discord-bot");
+    }
   } catch (error) {
     log(`Error creating donation goal: ${error}`, "discord-bot");
     await interaction.reply({ content: 'Failed to create donation goal. Please try again.', ephemeral: true });
