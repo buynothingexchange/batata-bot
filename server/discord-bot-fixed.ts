@@ -20,6 +20,29 @@ let bot: Client | null = null;
 
 // Slash command definitions
 const commands = [
+  // Original exchange commands
+  new SlashCommandBuilder()
+    .setName('exchange')
+    .setDescription('Exchange items with the community (request, offer, or trade)'),
+  new SlashCommandBuilder()
+    .setName('help')
+    .setDescription('Get help with bot commands and features'),
+  new SlashCommandBuilder()
+    .setName('updatepost')
+    .setDescription('Update one of your active forum posts'),
+  new SlashCommandBuilder()
+    .setName('mystats')
+    .setDescription('View your exchange activity and statistics'),
+  new SlashCommandBuilder()
+    .setName('exchanges')
+    .setDescription('View all confirmed exchanges in the community (moderator only)'),
+  new SlashCommandBuilder()
+    .setName('contactus')
+    .setDescription('Submit comments, suggestions, or reports to the community moderators'),
+  new SlashCommandBuilder()
+    .setName('contactusanon')
+    .setDescription('Submit anonymous comments, suggestions, or reports to the community moderators'),
+  // Ko-fi donation commands
   new SlashCommandBuilder()
     .setName('initgoal')
     .setDescription('Create a new donation progress tracker in this channel')

@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { initializeBot, initializeBotConfig, getBotStatus, processCommand, restartBot, updateBotConfig, ensureCategoryChannels } from "./discord-bot";
+import { initializeBot, initializeBotConfig, getBotStatus, processCommand, restartBot, updateBotConfig, ensureCategoryChannels } from "./discord-bot-fixed";
 import { z } from "zod";
 import { insertLogSchema } from "@shared/schema";
 import OpenAI from "openai";
