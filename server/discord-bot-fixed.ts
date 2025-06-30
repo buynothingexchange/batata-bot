@@ -1343,28 +1343,54 @@ async function handleInitGoal(interaction: ChatInputCommandInteraction): Promise
     // Check if there's already an active donation goal for this guild
     const existingGoals = await storage.getActiveDonationGoals(guildId);
     
+    log(`[INITGOAL DEBUG] Found ${existingGoals.length} existing active goals for guild ${guildId}`, "discord-bot");
+    existingGoals.forEach((goal, index) => {
+      log(`[INITGOAL DEBUG] Goal ${index + 1}: ID=${goal.id}, Amount=$${goal.goalAmount/100}, Current=$${goal.currentAmount/100}, Channel=${goal.channelId}, Message=${goal.messageId}`, "discord-bot");
+    });
+    
     if (existingGoals.length > 0) {
-      // Update the existing goal instead of creating a new one
-      const existingGoal = existingGoals[0];
-      const currentAmount = existingGoal.currentAmount;
+      log(`[INITGOAL DEBUG] Multiple goals detected, deactivating ${existingGoals.length - 1} old goals`, "discord-bot");
       
-      // Update the goal amount by updating the database directly
+      // If there are multiple goals, deactivate all except the newest one
+      if (existingGoals.length > 1) {
+        // Sort by creation date, keep the newest
+        existingGoals.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const goalsToDeactivate = existingGoals.slice(1); // All except the first (newest)
+        
+        for (const goal of goalsToDeactivate) {
+          log(`[INITGOAL DEBUG] Deactivating old goal ID=${goal.id}`, "discord-bot");
+          await db.update(donationGoals)
+            .set({ 
+              isActive: false,
+              updatedAt: new Date()
+            })
+            .where(eq(donationGoals.id, goal.id));
+        }
+      }
+      
+      // Update the remaining active goal
+      const activeGoal = existingGoals[0];
+      const currentAmount = activeGoal.currentAmount;
+      
+      log(`[INITGOAL DEBUG] Updating active goal ID=${activeGoal.id} with new amount $${goalAmount/100}`, "discord-bot");
+      
+      // Update the goal amount
       await db.update(donationGoals)
         .set({ 
           goalAmount: goalAmount,
           updatedAt: new Date()
         })
-        .where(eq(donationGoals.id, existingGoal.id));
+        .where(eq(donationGoals.id, activeGoal.id));
       
       // Update the existing progress message
-      await updateDonationProgressMessage(existingGoal.channelId, existingGoal.messageId, currentAmount, goalAmount);
+      await updateDonationProgressMessage(activeGoal.channelId, activeGoal.messageId, currentAmount, goalAmount);
       
       await interaction.reply({ 
         content: `Updated existing donation goal to $${(goalAmount / 100).toFixed(2)}. Current progress: $${(currentAmount / 100).toFixed(2)}`, 
         ephemeral: true 
       });
       
-      log(`Updated donation goal to $${goalAmount / 100} in channel ${existingGoal.channelId}`, "discord-bot");
+      log(`[INITGOAL DEBUG] Successfully updated donation goal to $${goalAmount / 100} in channel ${activeGoal.channelId}`, "discord-bot");
     } else {
       // Create new goal if none exists
       const embed = new EmbedBuilder()
@@ -1427,24 +1453,29 @@ async function handleDonate(interaction: ChatInputCommandInteraction): Promise<v
     // Get active donation goals for this guild
     const activeGoals = await storage.getActiveDonationGoals(guildId);
     
+    log(`[DONATE DEBUG] Found ${activeGoals.length} active goals for guild ${guildId}`, "discord-bot");
+    activeGoals.forEach((goal, index) => {
+      log(`[DONATE DEBUG] Goal ${index + 1}: ID=${goal.id}, Amount=$${goal.goalAmount/100}, Current=$${goal.currentAmount/100}`, "discord-bot");
+    });
+    
     let description = 'Help support our community by making a donation! Every contribution helps us maintain and improve our services.';
     
     // Add progress information if there are active goals
     if (activeGoals.length > 0) {
-      description += '\n\n**Current Progress:**\n';
-      
-      for (const goal of activeGoals) {
-        const currentDollars = goal.currentAmount / 100;
-        const goalDollars = goal.goalAmount / 100;
-        const percent = goal.goalAmount > 0 ? (goal.currentAmount / goal.goalAmount) * 100 : 0;
-        const progressBar = createProgressBar(percent);
-        
-        description += `\n$${currentDollars.toFixed(2)} / $${goalDollars.toFixed(2)}\n${progressBar}\n${percent.toFixed(1)}% Complete`;
-        
-        if (activeGoals.length > 1) {
-          description += '\n';
-        }
+      // If there are multiple active goals, log a warning and use only the first
+      if (activeGoals.length > 1) {
+        log(`[DONATE WARNING] Multiple active goals detected (${activeGoals.length}), displaying only the first one`, "discord-bot");
       }
+      
+      // Use only the first active goal
+      const goal = activeGoals[0];
+      const currentDollars = goal.currentAmount / 100;
+      const goalDollars = goal.goalAmount / 100;
+      const percent = goal.goalAmount > 0 ? (goal.currentAmount / goal.goalAmount) * 100 : 0;
+      const progressBar = createProgressBar(percent);
+      
+      description += '\n\n**Current Progress:**\n';
+      description += `\n$${currentDollars.toFixed(2)} / $${goalDollars.toFixed(2)}\n${progressBar}\n${percent.toFixed(1)}% Complete`;
     } else {
       description += '\n\n*No active donation goals set.*';
     }
