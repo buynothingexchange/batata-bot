@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -17,6 +17,8 @@ const baseExchangeFormSchema = z.object({
   category: z.enum(["electronics", "clothing", "accessories", "home_furniture", "footwear", "misc"]),
   type: z.enum(["give", "request", "trade"]),
   location: z.string().optional(),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
   image: z.instanceof(File).optional(),
 });
 
@@ -32,8 +34,19 @@ const createExchangeFormSchema = (type?: string) => {
 
 type ExchangeFormData = z.infer<typeof baseExchangeFormSchema>;
 
+declare global {
+  interface Window {
+    L: any;
+  }
+}
+
 export default function ExchangeForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+  const circleRef = useRef<any>(null);
   const { toast } = useToast();
 
   const form = useForm<ExchangeFormData>({
@@ -42,12 +55,71 @@ export default function ExchangeForm() {
       title: "",
       description: "",
       location: "",
+      lat: 43.7,
+      lng: -79.4,
     },
     mode: "onChange", // Enable real-time validation
   });
 
   // Watch the exchange type to update validation
   const watchedType = form.watch("type");
+
+  // Load Leaflet dynamically and initialize map
+  useEffect(() => {
+    const loadLeaflet = async () => {
+      // Add Leaflet CSS
+      if (!document.querySelector('link[href*="leaflet.css"]')) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://unpkg.com/leaflet/dist/leaflet.css';
+        document.head.appendChild(link);
+      }
+
+      // Add Leaflet JS
+      if (!window.L) {
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/leaflet/dist/leaflet.js';
+        script.onload = () => {
+          setMapLoaded(true);
+        };
+        document.head.appendChild(script);
+      } else {
+        setMapLoaded(true);
+      }
+    };
+
+    loadLeaflet();
+  }, []);
+
+  // Initialize map when Leaflet is loaded
+  useEffect(() => {
+    if (mapLoaded && mapRef.current && !mapInstanceRef.current) {
+      const map = window.L.map(mapRef.current).setView([43.7, -79.4], 11);
+
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(map);
+
+      const circle = window.L.circle([43.7, -79.4], {
+        color: 'green',
+        fillColor: '#3f9e2f',
+        fillOpacity: 0.4,
+        radius: 2000
+      }).addTo(map);
+
+      const marker = window.L.marker([43.7, -79.4], { draggable: true }).addTo(map);
+
+      marker.on('drag', function(e: any) {
+        circle.setLatLng(e.latlng);
+        form.setValue('lat', parseFloat(e.latlng.lat.toFixed(4)));
+        form.setValue('lng', parseFloat(e.latlng.lng.toFixed(4)));
+      });
+
+      mapInstanceRef.current = map;
+      markerRef.current = marker;
+      circleRef.current = circle;
+    }
+  }, [mapLoaded, form]);
 
   // Update form validation when exchange type changes
   useEffect(() => {
@@ -106,6 +178,8 @@ export default function ExchangeForm() {
         type: data.type,
         image_url: imageUrl,
         location: data.location || "",
+        lat: data.lat || 43.7,
+        lng: data.lng || -79.4,
         userId: "web-form-user", // You might want to implement user auth
         username: "Web Form User",
       };
@@ -126,6 +200,14 @@ export default function ExchangeForm() {
           description: "Your exchange post has been created in Discord.",
         });
         form.reset();
+        // Reset map position
+        if (markerRef.current && circleRef.current) {
+          markerRef.current.setLatLng([43.7, -79.4]);
+          circleRef.current.setLatLng([43.7, -79.4]);
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.setView([43.7, -79.4], 11);
+          }
+        }
       } else {
         throw new Error(result.message || "Failed to create post");
       }
@@ -247,6 +329,26 @@ export default function ExchangeForm() {
                   </FormItem>
                 )}
               />
+
+              <div className="space-y-2">
+                <label className="text-gray-200 text-sm font-medium">
+                  Select approximate location on map:
+                </label>
+                <div 
+                  ref={mapRef}
+                  className="h-[300px] w-full rounded-lg border border-gray-700 bg-gray-800"
+                  style={{ minHeight: '300px' }}
+                >
+                  {!mapLoaded && (
+                    <div className="flex items-center justify-center h-full text-gray-400">
+                      Loading map...
+                    </div>
+                  )}
+                </div>
+                <p className="text-sm text-gray-400">
+                  Drag the marker to select your approximate location. The green circle shows a 2km radius area.
+                </p>
+              </div>
 
               <FormField
                 control={form.control}
