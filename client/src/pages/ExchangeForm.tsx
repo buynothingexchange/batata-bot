@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
-const exchangeFormSchema = z.object({
+const baseExchangeFormSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
   description: z.string().min(10, "Description must be at least 10 characters"),
   category: z.enum(["electronics", "clothing", "accessories", "home_furniture", "footwear", "misc"]),
@@ -20,33 +20,71 @@ const exchangeFormSchema = z.object({
   image: z.instanceof(File).optional(),
 });
 
-type ExchangeFormData = z.infer<typeof exchangeFormSchema>;
+// Dynamic schema that makes image required for "give" type
+const createExchangeFormSchema = (type?: string) => {
+  if (type === "give") {
+    return baseExchangeFormSchema.extend({
+      image: z.instanceof(File, { message: "Image is required when giving an item" }),
+    });
+  }
+  return baseExchangeFormSchema;
+};
+
+type ExchangeFormData = z.infer<typeof baseExchangeFormSchema>;
 
 export default function ExchangeForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<ExchangeFormData>({
-    resolver: zodResolver(exchangeFormSchema),
+    resolver: zodResolver(baseExchangeFormSchema),
     defaultValues: {
       title: "",
       description: "",
       location: "",
     },
+    mode: "onChange", // Enable real-time validation
   });
+
+  // Watch the exchange type to update validation
+  const watchedType = form.watch("type");
+
+  // Update form validation when exchange type changes
+  useEffect(() => {
+    if (watchedType) {
+      // Clear any existing image validation errors when switching types
+      form.clearErrors("image");
+      // Trigger validation for the image field with the new rules
+      form.trigger("image");
+    }
+  }, [watchedType, form]);
 
   const onSubmit = async (data: ExchangeFormData) => {
     setIsSubmitting(true);
     
     try {
+      // Manual validation for image requirement when giving
+      if (data.type === "give" && !data.image) {
+        form.setError("image", {
+          type: "required",
+          message: "Image is required when giving an item"
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Validate with the dynamic schema based on exchange type
+      const dynamicSchema = createExchangeFormSchema(data.type);
+      const validatedData = dynamicSchema.parse(data);
+      
       let imageUrl = "";
       
       // Upload image if provided
-      if (data.image) {
+      if (validatedData.image) {
         const formData = new FormData();
-        formData.append("image", data.image);
+        formData.append("image", validatedData.image);
         
-        // First upload to Imgur (you'll need to implement this endpoint)
+        // First upload to Imgur
         const uploadResponse = await fetch("/api/upload-image", {
           method: "POST",
           body: formData,
@@ -214,7 +252,9 @@ export default function ExchangeForm() {
                 name="image"
                 render={({ field: { onChange, value, ...field } }) => (
                   <FormItem>
-                    <FormLabel>Image (Optional)</FormLabel>
+                    <FormLabel>
+                      Image {watchedType === "give" ? "(Required)" : "(Optional)"}
+                    </FormLabel>
                     <FormControl>
                       <Input
                         type="file"
@@ -226,6 +266,11 @@ export default function ExchangeForm() {
                         {...field}
                       />
                     </FormControl>
+                    {watchedType === "give" && (
+                      <p className="text-sm text-muted-foreground">
+                        An image is required when giving an item to show its condition.
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
