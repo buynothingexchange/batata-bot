@@ -1394,7 +1394,7 @@ async function handleDonate(interaction: ChatInputCommandInteraction): Promise<v
     const donateButton = new ButtonBuilder()
       .setStyle(ButtonStyle.Link)
       .setLabel('Donate on Ko-fi')
-      .setURL('https://ko-fi.com/your-kofi-username'); // Replace with actual Ko-fi URL
+      .setURL('https://ko-fi.com/buynothingexchange');
     
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(donateButton);
     
