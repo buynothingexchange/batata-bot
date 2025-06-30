@@ -1571,6 +1571,80 @@ function isValidDiscordToken(token: string): boolean {
 }
 
 // Ko-fi donation processing function
+// Create forum post from external form submission
+export async function createForumPost(postData: {
+  title: string;
+  description: string;
+  category: string;
+  type: string;
+  imageUrl: string;
+  location?: string;
+  userId: string;
+  username: string;
+}): Promise<{ success: boolean; threadId?: string; error?: string }> {
+  try {
+    if (!bot) {
+      return { success: false, error: "Bot is not initialized" };
+    }
+
+    // Find the items-exchange forum channel
+    let forumChannel = null;
+    for (const guild of bot.guilds.cache.values()) {
+      const channel = guild.channels.cache.find((ch: any) => 
+        ch.name === "items-exchange" && ch.type === ChannelType.GuildForum
+      );
+      if (channel) {
+        forumChannel = channel;
+        break;
+      }
+    }
+
+    if (!forumChannel) {
+      return { success: false, error: "Items-exchange forum channel not found" };
+    }
+
+    // Map exchange type to emoji
+    const typeEmojis = {
+      'give': '🎁',
+      'request': '🔍', 
+      'trade': '🔄'
+    };
+
+    // Create the forum post
+    const thread = await (forumChannel as any).threads.create({
+      name: `${typeEmojis[postData.type as keyof typeof typeEmojis] || '📦'} ${postData.title}`,
+      message: {
+        content: `**${postData.type.charAt(0).toUpperCase() + postData.type.slice(1)}:** ${postData.description}\n\n**Category:** ${postData.category}${postData.location ? `\n**Location:** ${postData.location}` : ''}`,
+        embeds: [{
+          color: postData.type === 'give' ? 0x57F287 : postData.type === 'request' ? 0x3498DB : 0xF39C12,
+          image: { url: postData.imageUrl },
+          footer: { text: 'Submitted via external form' }
+        }]
+      },
+      appliedTags: [] // Forum tags would be applied here if configured
+    });
+
+    // Store in database
+    await storage.createForumPost({
+      threadId: thread.id,
+      title: postData.title,
+      authorId: postData.userId,
+      category: postData.category,
+      guildId: forumChannel.guild.id,
+      channelId: forumChannel.id,
+      isActive: true
+    });
+
+    log(`Created forum post via external form: ${postData.title} by ${postData.username}`, "discord-bot");
+    
+    return { success: true, threadId: thread.id };
+
+  } catch (error) {
+    log(`Error creating forum post: ${error}`, "discord-bot");
+    return { success: false, error: `${error}` };
+  }
+}
+
 export async function processKofiDonation(donationData: InsertDonation): Promise<void> {
   try {
     // Record the donation in the database

@@ -247,6 +247,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // API endpoint to handle new post submissions from external image upload server
+  app.post("/api/new-post", async (req, res) => {
+    try {
+      // Validate the incoming data
+      const postSchema = z.object({
+        title: z.string().min(1),
+        description: z.string().min(1),
+        category: z.string().min(1),
+        type: z.string().min(1), // give, request, trade
+        image_url: z.string().url(),
+        location: z.string().optional()
+      });
+
+      const validatedData = postSchema.parse(req.body);
+      
+      // Import the createForumPost function (we'll need to implement this)
+      const { createForumPost } = await import('./discord-bot-fixed');
+      
+      // Create forum post in Discord with the provided data
+      const result = await createForumPost({
+        title: validatedData.title,
+        description: validatedData.description,
+        category: validatedData.category,
+        type: validatedData.type,
+        imageUrl: validatedData.image_url,
+        location: validatedData.location,
+        userId: 'external-form', // Special identifier for external submissions
+        username: 'External Form'
+      });
+
+      if (result.success) {
+        res.json({ 
+          success: true, 
+          message: "Post created successfully in Discord forum",
+          threadId: result.threadId 
+        });
+      } else {
+        res.status(500).json({ 
+          success: false, 
+          message: result.error || "Failed to create forum post" 
+        });
+      }
+
+    } catch (error: any) {
+      console.error("Error processing new post submission:", error);
+      
+      if (error.name === 'ZodError') {
+        res.status(400).json({ 
+          success: false, 
+          message: "Invalid data format",
+          errors: error.errors 
+        });
+      } else {
+        res.status(500).json({ 
+          success: false, 
+          message: "Failed to process submission",
+          error: error?.message || 'Unknown error'
+        });
+      }
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
