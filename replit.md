@@ -21,6 +21,9 @@ A sophisticated Discord bot application designed to streamline cross-server item
 - ✅ **Enhanced location information** - forum posts now include both text location and clickable map links
 - ✅ **Form validation updates** - backend properly handles lat/lng coordinates from map selections
 - ✅ **User-friendly location display** - replaced coordinate numbers with "view location" clickable text
+- ✅ **Improved forum post formatting** - streamlined content layout to reduce crowding in thumbnails
+- ✅ **Enhanced image display** - removed size constraints to allow Discord's native image handling
+- ✅ **Cleaner location links** - simplified map links with map pin emoji for better readability
 
 ### Enhanced Forum Post Format and Image Size - June 30, 2025
 - ✅ **Restructured forum post content layout** - category now appears first in post content

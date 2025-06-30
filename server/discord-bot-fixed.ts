@@ -1579,23 +1579,27 @@ export async function createForumPost(postData: {
     }
     if (postData.lat && postData.lng) {
       const mapsUrl = `https://www.google.com/maps?q=${postData.lat},${postData.lng}`;
-      locationInfo += `\n**Location:** [view location](${mapsUrl}) 📍`;
+      locationInfo += `\n[📍 View location on map](${mapsUrl})`;
+    }
+
+    // Create embeds array - only add image embed if there's an image
+    const embeds = [];
+    if (postData.imageUrl) {
+      embeds.push({
+        color: postData.type === 'give' ? 0x57F287 : postData.type === 'request' ? 0x3498DB : 0xF39C12,
+        image: { 
+          url: postData.imageUrl
+        },
+        footer: { text: 'Submitted via external form' }
+      });
     }
 
     // Create the forum post with proper tags
     const thread = await (forumChannel as any).threads.create({
       name: `${typeEmojis[postData.type as keyof typeof typeEmojis] || '📦'} ${postData.title}`,
       message: {
-        content: `**Category:** ${postData.category.charAt(0).toUpperCase() + postData.category.slice(1)}\n\n**${typeDisplayNames[postData.type as keyof typeof typeDisplayNames] || postData.type.charAt(0).toUpperCase() + postData.type.slice(1)}**\n\n${postData.description}${locationInfo}`,
-        embeds: [{
-          color: postData.type === 'give' ? 0x57F287 : postData.type === 'request' ? 0x3498DB : 0xF39C12,
-          image: { 
-            url: postData.imageUrl,
-            width: 600,
-            height: 600
-          },
-          footer: { text: 'Submitted via external form' }
-        }]
+        content: `**${typeDisplayNames[postData.type as keyof typeof typeDisplayNames] || postData.type.charAt(0).toUpperCase() + postData.type.slice(1)}** • ${postData.category.charAt(0).toUpperCase() + postData.category.slice(1)}\n\n${postData.description}${locationInfo}`,
+        embeds: embeds
       },
       appliedTags: appliedTags // Apply the category and type tags automatically
     });
