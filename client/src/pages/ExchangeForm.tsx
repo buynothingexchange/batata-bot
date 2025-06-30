@@ -141,15 +141,16 @@ export default function ExchangeForm() {
   };
 
   return (
-    <div className="container max-w-2xl mx-auto p-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Create Exchange Post</CardTitle>
-          <CardDescription>
-            Fill out this form to create a new exchange post in the Discord community.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+    <div className="min-h-screen bg-gray-950 py-8">
+      <div className="container max-w-2xl mx-auto p-6">
+        <Card className="bg-gray-900 border-gray-800 shadow-2xl">
+          <CardHeader>
+            <CardTitle className="text-green-400 text-2xl">Create Exchange Post</CardTitle>
+            <CardDescription className="text-gray-300">
+              Fill out this form to create a new exchange post in the Discord community.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <FormField
@@ -157,7 +158,7 @@ export default function ExchangeForm() {
                 name="type"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Exchange Type</FormLabel>
+                    <FormLabel className="text-gray-200">Exchange Type</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
@@ -180,7 +181,7 @@ export default function ExchangeForm() {
                 name="category"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Category</FormLabel>
+                    <FormLabel className="text-gray-200">Category</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
@@ -252,8 +253,10 @@ export default function ExchangeForm() {
                 name="image"
                 render={({ field: { onChange, value, ...field } }) => (
                   <FormItem>
-                    <FormLabel>
-                      Image {watchedType === "give" ? "(Required)" : "(Optional)"}
+                    <FormLabel className="text-gray-200">
+                      Image <span className={watchedType === "give" ? "text-green-400" : "text-gray-400"}>
+                        {watchedType === "give" ? "(Required)" : "(Optional)"}
+                      </span>
                     </FormLabel>
                     <FormControl>
                       <Input
@@ -281,8 +284,9 @@ export default function ExchangeForm() {
               </Button>
             </form>
           </Form>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
