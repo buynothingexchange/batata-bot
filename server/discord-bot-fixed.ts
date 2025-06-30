@@ -1290,10 +1290,10 @@ function createProgressBar(percent: number): string {
   const filledLength = Math.round((percent / 100) * barLength);
   const emptyLength = barLength - filledLength;
   
-  const filled = '█'.repeat(filledLength);
-  const empty = '░'.repeat(emptyLength);
+  const filled = '🟩'.repeat(filledLength);
+  const empty = '⬜'.repeat(emptyLength);
   
-  return `[${filled}${empty}] ${percent.toFixed(1)}%`;
+  return `${filled}${empty} ${percent.toFixed(1)}%`;
 }
 
 // Handle donation-related slash commands
