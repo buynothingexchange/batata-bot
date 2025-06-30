@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { initializeBot, initializeBotConfig, getBotStatus, processCommand, restartBot, updateBotConfig, ensureCategoryChannels, createForumPost } from "./discord-bot-fixed";
@@ -6,9 +6,38 @@ import { z } from "zod";
 import { insertLogSchema } from "@shared/schema";
 import OpenAI from "openai";
 import multer from "multer";
+import axios from "axios";
+import FormData from "form-data";
 
 // Server start time - initialize when module is loaded
 const serverStartTime = new Date();
+
+// Image upload function
+async function uploadToImgur(imageBuffer: Buffer): Promise<string> {
+  try {
+    const formData = new FormData();
+    formData.append('image', imageBuffer, {
+      filename: 'upload.jpg',
+      contentType: 'image/jpeg'
+    });
+
+    const response = await axios.post('https://api.imgur.com/3/image', formData, {
+      headers: {
+        ...formData.getHeaders(),
+        'Authorization': `Client-ID ${process.env.IMGUR_CLIENT_ID || '546c25a59c58ad7'}`
+      }
+    });
+
+    if (response.data && response.data.success && response.data.data && response.data.data.link) {
+      return response.data.data.link;
+    } else {
+      throw new Error('Invalid response from Imgur');
+    }
+  } catch (error: any) {
+    console.error('Imgur upload error:', error.response?.data || error.message);
+    throw new Error(`Failed to upload image: ${error.message}`);
+  }
+}
 
 // Calculate server uptime in a human-readable format
 function getServerUptime(): string {
@@ -248,6 +277,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Setup multer for file uploads
+  const upload = multer({ storage: multer.memoryStorage() });
+
+  // API endpoint to upload images to Imgur
+  app.post("/api/upload-image", upload.single('image'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: "No image file provided" });
+      }
+
+      // Use the same uploadToImgur function from server.js
+      const { uploadToImgur } = await import('../server.js');
+      const imageUrl = await uploadToImgur(req.file.buffer);
+      
+      res.json({ 
+        success: true, 
+        imageUrl: imageUrl 
+      });
+    } catch (error: any) {
+      console.error("Error uploading image:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: "Failed to upload image",
+        error: error.message 
+      });
+    }
+  });
+
   // API endpoint to handle new post submissions from external image upload server
   app.post("/api/new-post", async (req, res) => {
     try {
@@ -257,7 +314,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description: z.string().min(1),
         category: z.string().min(1),
         type: z.string().min(1), // give, request, trade
-        image_url: z.string().url(),
+        image_url: z.string().url().optional().or(z.literal("")),
         location: z.string().optional()
       });
 
