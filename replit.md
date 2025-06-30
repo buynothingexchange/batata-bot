@@ -1,0 +1,79 @@
+# Batata Discord Bot Project
+
+## Overview
+A sophisticated Discord bot application designed to streamline cross-server item exchange through intelligent, multi-channel interaction workflows with advanced forum-based communication and user engagement features.
+
+**Core Technologies:**
+- TypeScript implementation  
+- Advanced Discord API integration
+- Dynamic forum post management
+- Ephemeral interaction handling
+- Flexible item exchange mechanisms with real-time tracking
+- Ko-fi donation tracking with webhook integration
+
+## Recent Changes (Latest Updates)
+
+### Ko-fi Donation Tracking Integration - June 30, 2025
+- ✅ **Added donation database schema** with `donationGoals` and `donations` tables
+- ✅ **Implemented Ko-fi webhook endpoint** at `/kofi` for real-time donation processing
+- ✅ **Added 4 new slash commands:**
+  - `/initgoal` - Create donation progress tracker with goal amount
+  - `/resetgoal` - Reset donation total to $0 (admin only)
+  - `/donate` - Show Ko-fi donation link with clickable button
+  - `/testkofi` - Test Ko-fi webhook functionality (admin only)
+- ✅ **Real-time progress updates** with visual progress bars
+- ✅ **Automatic goal tracking** across multiple Discord channels
+- ✅ **Admin permissions** for sensitive donation commands
+
+### Avatar Format Updates - June 30, 2025
+- ✅ **Changed all user avatar URLs** from animated GIF to static PNG format
+- ✅ **Updated contact form submissions** to use PNG avatars
+- ✅ **Updated stats display** to use PNG avatars  
+- ✅ **Updated forum post embeds** to use PNG avatars
+
+### Previous Updates
+- ✅ **Selective auto-deletion** of ephemeral messages (15 seconds for workflow commands, persistent for informational commands)
+- ✅ **Confirmed exchanges tracking** system with /exchanges command for moderators
+- ✅ **Exchange tracking** automatically records trades when users mark posts as fulfilled
+
+## Project Architecture
+
+### Database Schema
+- **Users, Logs, Bot Config** - Core bot management
+- **Allowed Channels** - Channel permission management
+- **ISO Requests** - Item request tracking
+- **Forum Posts** - Forum post management with auto-bumping
+- **Confirmed Exchanges** - Trade completion tracking
+- **Donation Goals** - Ko-fi donation progress tracking
+- **Donations** - Individual donation records
+
+### API Endpoints
+- **Discord Bot Commands** - Slash commands for user interactions
+- **Ko-fi Webhook** - `/kofi` endpoint for donation processing
+- **Management API** - Bot status, configuration, and logs
+
+### Key Features
+1. **Item Exchange System** - ISO request processing with OpenAI categorization
+2. **Forum Management** - Auto-bumping, post tracking, claim management
+3. **Donation Tracking** - Real-time Ko-fi integration with progress bars
+4. **Moderation Tools** - Exchange oversight, channel management
+5. **Statistics & Reporting** - User stats, exchange history, donation totals
+
+## User Preferences
+- **Communication Style:** Clear, technical explanations with step-by-step processes
+- **Code Style:** TypeScript with comprehensive error handling
+- **Priority:** Maintain existing exchange functionality while adding donation features
+- **Testing:** Use real webhook testing for Ko-fi integration
+
+## Technical Notes
+- Ko-fi webhook URL: `https://your-repl-domain.replit.dev/kofi`
+- Donation amounts stored in cents for precision
+- Progress bars use visual blocks (█) for clear representation
+- Admin permissions required for donation reset and testing commands
+- All avatar URLs converted to PNG format for consistency
+
+## Next Steps
+- Configure Ko-fi webhook URL in Ko-fi dashboard
+- Test donation tracking with real Ko-fi donations
+- Monitor donation goal progress and Discord message updates
+- Verify webhook payload processing matches Ko-fi's format

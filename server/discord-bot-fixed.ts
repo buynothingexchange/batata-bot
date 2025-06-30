@@ -18,6 +18,39 @@ import type { InsertDonation } from '@shared/schema';
 // Bot instance
 let bot: Client | null = null;
 
+// Slash command definitions
+const commands = [
+  new SlashCommandBuilder()
+    .setName('initgoal')
+    .setDescription('Create a new donation progress tracker in this channel')
+    .addIntegerOption(option =>
+      option.setName('amount')
+        .setDescription('Goal amount in dollars (e.g., 100 for $100)')
+        .setRequired(true)
+        .setMinValue(1)
+    ),
+  new SlashCommandBuilder()
+    .setName('resetgoal')
+    .setDescription('Reset donation total to $0 (admin only)'),
+  new SlashCommandBuilder()
+    .setName('donate')
+    .setDescription('Show Ko-fi donation link with clickable button'),
+  new SlashCommandBuilder()
+    .setName('testkofi')
+    .setDescription('Test Ko-fi webhook functionality (admin only)')
+    .addNumberOption(option =>
+      option.setName('amount')
+        .setDescription('Test donation amount in dollars')
+        .setRequired(true)
+        .setMinValue(0.01)
+    )
+    .addStringOption(option =>
+      option.setName('name')
+        .setDescription('Test donor name')
+        .setRequired(false)
+    ),
+];
+
 // Track when we last received messages (for heartbeat)
 let lastMessageTimestamp = Date.now();
 let lastSuccessfulActivity = Date.now(); // Track successful interactions with Discord
@@ -156,6 +189,9 @@ export async function initializeBot() {
     // Reset counters
     reconnectAttempts = 0;
     healthCheckFailures = 0;
+    
+    // Register slash commands
+    await registerSlashCommands();
     
     // Run a health check every minute
     setInterval(() => {
@@ -380,6 +416,17 @@ async function handleInteraction(interaction: Interaction) {
   lastSuccessfulActivity = Date.now();
   
   try {
+    // Handle slash command interactions
+    if (interaction.isChatInputCommand()) {
+      const commandName = interaction.commandName;
+      
+      if (['initgoal', 'resetgoal', 'donate', 'testkofi'].includes(commandName)) {
+        log(`Processing /${commandName} slash command`, "discord-bot");
+        await handleDonationCommand(interaction);
+      }
+      return;
+    }
+
     // Only handle button interactions
     if (!interaction.isButton()) return;
     
@@ -1220,4 +1267,207 @@ function createProgressBar(percent: number): string {
   const empty = '░'.repeat(emptyLength);
   
   return `[${filled}${empty}] ${percent.toFixed(1)}%`;
+}
+
+// Handle donation-related slash commands
+async function handleDonationCommand(interaction: ChatInputCommandInteraction): Promise<void> {
+  try {
+    const commandName = interaction.commandName;
+    const userId = interaction.user.id;
+    const username = interaction.user.username;
+    
+    switch (commandName) {
+      case 'initgoal':
+        await handleInitGoal(interaction);
+        break;
+      case 'resetgoal':
+        await handleResetGoal(interaction);
+        break;
+      case 'donate':
+        await handleDonate(interaction);
+        break;
+      case 'testkofi':
+        await handleTestKofi(interaction);
+        break;
+      default:
+        await interaction.reply({ content: 'Unknown donation command.', ephemeral: true });
+    }
+  } catch (error) {
+    log(`Error handling donation command: ${error}`, "discord-bot");
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({ content: 'An error occurred while processing your command.', ephemeral: true });
+    }
+  }
+}
+
+// Handle /initgoal command
+async function handleInitGoal(interaction: ChatInputCommandInteraction): Promise<void> {
+  const goalAmount = interaction.options.getInteger('amount', true) * 100; // Convert to cents
+  const channelId = interaction.channelId;
+  const guildId = interaction.guildId || '';
+  
+  try {
+    // Create initial progress embed
+    const embed = new EmbedBuilder()
+      .setTitle('💰 Donation Progress')
+      .setDescription(`**Current Progress: $0.00 / $${(goalAmount / 100).toFixed(2)}**\n\n${createProgressBar(0)}\n\n0.0% Complete`)
+      .setColor(0x3b82f6)
+      .setTimestamp();
+    
+    // Send the initial message
+    const message = await interaction.reply({ embeds: [embed], fetchReply: true });
+    
+    // Create donation goal in database
+    await storage.createDonationGoal({
+      guildId,
+      channelId,
+      messageId: message.id,
+      goalAmount,
+      currentAmount: 0,
+      isActive: true
+    });
+    
+    log(`Created donation goal of $${goalAmount / 100} in channel ${channelId}`, "discord-bot");
+  } catch (error) {
+    log(`Error creating donation goal: ${error}`, "discord-bot");
+    await interaction.reply({ content: 'Failed to create donation goal. Please try again.', ephemeral: true });
+  }
+}
+
+// Handle /resetgoal command
+async function handleResetGoal(interaction: ChatInputCommandInteraction): Promise<void> {
+  // Check if user has admin permissions
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+    await interaction.reply({ content: 'You need administrator permissions to reset donation goals.', ephemeral: true });
+    return;
+  }
+  
+  try {
+    const guildId = interaction.guildId || '';
+    const activeGoals = await storage.getActiveDonationGoals(guildId);
+    
+    for (const goal of activeGoals) {
+      await storage.updateDonationGoalAmount(goal.id, 0);
+      await updateDonationProgressMessage(goal.channelId, goal.messageId, 0, goal.goalAmount);
+    }
+    
+    await interaction.reply({ content: `Reset ${activeGoals.length} donation goal(s) to $0.00.`, ephemeral: true });
+    log(`Admin ${interaction.user.username} reset ${activeGoals.length} donation goals`, "discord-bot");
+  } catch (error) {
+    log(`Error resetting donation goals: ${error}`, "discord-bot");
+    await interaction.reply({ content: 'Failed to reset donation goals. Please try again.', ephemeral: true });
+  }
+}
+
+// Handle /donate command
+async function handleDonate(interaction: ChatInputCommandInteraction): Promise<void> {
+  try {
+    const embed = new EmbedBuilder()
+      .setTitle('☕ Support Us on Ko-fi')
+      .setDescription('Help support our community by making a donation! Every contribution helps us maintain and improve our services.')
+      .setColor(0x13C3FF)
+      .setTimestamp();
+    
+    const donateButton = new ButtonBuilder()
+      .setStyle(ButtonStyle.Link)
+      .setLabel('Donate on Ko-fi')
+      .setURL('https://ko-fi.com/your-kofi-username'); // Replace with actual Ko-fi URL
+    
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(donateButton);
+    
+    await interaction.reply({ embeds: [embed], components: [row] });
+    
+    log(`User ${interaction.user.username} viewed donation link`, "discord-bot");
+  } catch (error) {
+    log(`Error showing donation link: ${error}`, "discord-bot");
+    await interaction.reply({ content: 'Failed to show donation link. Please try again.', ephemeral: true });
+  }
+}
+
+// Handle /testkofi command
+async function handleTestKofi(interaction: ChatInputCommandInteraction): Promise<void> {
+  // Check if user has admin permissions
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+    await interaction.reply({ content: 'You need administrator permissions to test Ko-fi functionality.', ephemeral: true });
+    return;
+  }
+  
+  try {
+    const amount = interaction.options.getNumber('amount', true);
+    const donorName = interaction.options.getString('name') || 'Test Donor';
+    
+    // Create test donation data
+    const testDonation: InsertDonation = {
+      kofiTransactionId: `test_${Date.now()}`,
+      donorName,
+      amount: Math.round(amount * 100), // Convert to cents
+      message: 'This is a test donation',
+      email: null,
+      isPublic: true
+    };
+    
+    // Process the test donation
+    await processKofiDonation(testDonation);
+    
+    await interaction.reply({ 
+      content: `Test donation of $${amount} from "${donorName}" processed successfully!`, 
+      ephemeral: true 
+    });
+    
+    log(`Admin ${interaction.user.username} tested Ko-fi with $${amount} donation`, "discord-bot");
+  } catch (error) {
+    log(`Error testing Ko-fi: ${error}`, "discord-bot");
+    await interaction.reply({ content: 'Failed to test Ko-fi functionality. Please try again.', ephemeral: true });
+  }
+}
+
+// Register slash commands with Discord
+async function registerSlashCommands() {
+  const token = process.env.DISCORD_BOT_TOKEN;
+  if (!token || !bot?.user?.id) {
+    log("Cannot register slash commands: missing token or bot not ready", "discord-bot");
+    return;
+  }
+
+  const rest = new REST({ version: '10' }).setToken(token);
+
+  try {
+    log('Started refreshing application (/) commands.', "discord-bot");
+
+    // Get all guilds the bot is in
+    const guilds = bot.guilds.cache;
+    
+    // Iterate over guilds and register commands
+    for (const guild of guilds.values()) {
+      log(`Registering commands for guild: ${guild.name} (${guild.id})`, "discord-bot");
+      
+      try {
+        // Clear existing guild commands first
+        await rest.put(
+          Routes.applicationGuildCommands(bot.user.id, guild.id),
+          { body: [] }
+        );
+        
+        // Register new commands for this guild
+        await rest.put(
+          Routes.applicationGuildCommands(bot.user.id, guild.id),
+          { body: commands }
+        );
+        
+        log(`Successfully registered ${commands.length} commands for guild: ${guild.name}`, "discord-bot");
+      } catch (guildError) {
+        log(`Error registering commands for guild ${guild.name}: ${guildError}`, "discord-bot");
+      }
+    }
+
+    // Also clear global commands to avoid conflicts
+    await rest.put(
+      Routes.applicationCommands(bot.user.id),
+      { body: [] }
+    );
+
+    log('Successfully reloaded guild-specific commands.', "discord-bot");
+  } catch (error) {
+    log(`Error registering slash commands: ${error}`, "discord-bot");
+  }
 }
