@@ -207,7 +207,7 @@ export default function ExchangeForm() {
                 name="title"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Title</FormLabel>
+                    <FormLabel className="text-gray-200">Title</FormLabel>
                     <FormControl>
                       <Input placeholder="Brief title for your item" {...field} />
                     </FormControl>
@@ -221,7 +221,7 @@ export default function ExchangeForm() {
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Description</FormLabel>
+                    <FormLabel className="text-gray-200">Description</FormLabel>
                     <FormControl>
                       <Textarea 
                         placeholder="Describe your item, its condition, and any relevant details" 
@@ -239,7 +239,7 @@ export default function ExchangeForm() {
                 name="location"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Location (Optional)</FormLabel>
+                    <FormLabel className="text-gray-200">Location <span className="text-gray-400">(Optional)</span></FormLabel>
                     <FormControl>
                       <Input placeholder="Your general location or pickup area" {...field} />
                     </FormControl>
@@ -279,7 +279,11 @@ export default function ExchangeForm() {
                 )}
               />
 
-              <Button type="submit" disabled={isSubmitting} className="w-full">
+              <Button 
+                type="submit" 
+                disabled={isSubmitting} 
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-medium"
+              >
                 {isSubmitting ? "Creating Post..." : "Create Exchange Post"}
               </Button>
             </form>

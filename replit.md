@@ -13,6 +13,13 @@ A sophisticated Discord bot application designed to streamline cross-server item
 
 ## Recent Changes (Latest Updates)
 
+### Dark Theme with Green Accents - June 30, 2025
+- ✅ **Updated theme configuration** - changed from light to dark mode with green primary color
+- ✅ **Enhanced form styling** - black background with dark gray card container
+- ✅ **Green accent highlights** - title, required fields, and submit button use green color scheme
+- ✅ **Improved readability** - light gray text on dark backgrounds for better contrast
+- ✅ **Visual consistency** - cohesive dark theme across entire exchange form interface
+
 ### Mandatory Image Upload for "Give" Exchange Type - June 30, 2025
 - ✅ **Added dynamic image validation** - images now required when exchange type is "Give"
 - ✅ **Real-time form validation** - image requirement updates immediately when exchange type changes
