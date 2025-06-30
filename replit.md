@@ -13,6 +13,13 @@ A sophisticated Discord bot application designed to streamline cross-server item
 
 ## Recent Changes (Latest Updates)
 
+### Enhanced Forum Post Format and Image Size - June 30, 2025
+- ✅ **Restructured forum post content layout** - category now appears first in post content
+- ✅ **Separated item description from exchange type** - cleaner presentation of information
+- ✅ **Changed "Give" display to "Offer"** - more user-friendly terminology while preserving tags
+- ✅ **Made forum post images bigger** - increased image dimensions to 600x600 pixels for better visibility
+- ✅ **Maintained tag system integrity** - Discord tags remain unchanged for proper categorization
+
 ### Fixed "/exchange" Command Discord Integration - June 30, 2025
 - ✅ **Fixed "Unknown Integration" error** - corrected interaction reply format from flags to ephemeral property
 - ✅ **Added proper error handling** - enhanced error catching and fallback responses

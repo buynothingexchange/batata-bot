@@ -1563,11 +1563,18 @@ export async function createForumPost(postData: {
       'trade': '🔄'
     };
 
+    // Map exchange type display names
+    const typeDisplayNames = {
+      'give': 'Offer',
+      'request': 'Request', 
+      'trade': 'Trade'
+    };
+
     // Create the forum post with proper tags
     const thread = await (forumChannel as any).threads.create({
       name: `${typeEmojis[postData.type as keyof typeof typeEmojis] || '📦'} ${postData.title}`,
       message: {
-        content: `**${postData.type.charAt(0).toUpperCase() + postData.type.slice(1)}:** ${postData.description}\n\n**Category:** ${postData.category}${postData.location ? `\n**Location:** ${postData.location}` : ''}`,
+        content: `**Category:** ${postData.category.charAt(0).toUpperCase() + postData.category.slice(1)}\n\n**${typeDisplayNames[postData.type as keyof typeof typeDisplayNames] || postData.type.charAt(0).toUpperCase() + postData.type.slice(1)}**\n\n${postData.description}${postData.location ? `\n\n**Location:** ${postData.location}` : ''}`,
         embeds: [{
           color: postData.type === 'give' ? 0x57F287 : postData.type === 'request' ? 0x3498DB : 0xF39C12,
           image: { 
