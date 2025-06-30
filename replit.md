@@ -46,7 +46,8 @@ A sophisticated Discord bot application designed to streamline cross-server item
 - ✅ **Updated forum post embeds** to use PNG avatars
 
 ### External Form Integration - June 30, 2025
-- ✅ **Fixed critical `/exchange` command bug** - moved complete slash command logic to active bot file
+- ✅ **Updated `/exchange` command** - now provides direct link to external form instead of interactive workflow
+- ✅ **Ephemeral form URL responses** - `/exchange` command shows form link only to user who requested it
 - ✅ **Added `/api/new-post` endpoint** for external form submissions
 - ✅ **Created `createForumPost` function** to handle external data and create Discord forum posts
 - ✅ **Full integration with image upload server** - accepts title, description, category, type, image_url, location

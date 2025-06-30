@@ -451,43 +451,17 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
     if (commandName === 'exchange') {
       log(`Processing /${commandName} command from ${interaction.user.tag}`, "discord-bot");
       
-      // Create action selection dropdown
-      const actionRow = new ActionRowBuilder<StringSelectMenuBuilder>()
-        .addComponents(
-          new StringSelectMenuBuilder()
-            .setCustomId('action_select')
-            .setPlaceholder('What would you like to do?')
-            .addOptions([
-              {
-                label: 'Trade',
-                description: 'Exchange items with other members',
-                value: 'trade'
-              },
-              {
-                label: 'Give',
-                description: 'Offer items for free to the community',
-                value: 'give'
-              },
-              {
-                label: 'Request',
-                description: 'Request items from the community',
-                value: 'request'
-              }
-            ])
-        );
+      // Get the current domain from environment variables
+      const domain = process.env.REPLIT_DOMAINS || 'your-batata-domain.replit.dev';
+      const formUrl = `https://${domain.split(',')[0]}/`;
       
-      // Initialize temp user data
-      if (!global.tempUserData) global.tempUserData = new Map();
-      global.tempUserData.set(interaction.user.id, { timestamp: Date.now() });
-      
-      // Send ephemeral reply
+      // Send ephemeral reply with form URL
       await interaction.reply({
-        content: "What would you like to do?",
-        components: [actionRow],
+        content: `Please fill out the exchange form here: ${formUrl}`,
         ephemeral: true
       });
       
-      log(`Successfully sent action selection to ${interaction.user.tag}`, "discord-bot");
+      log(`Successfully sent form URL to ${interaction.user.tag}: ${formUrl}`, "discord-bot");
       
     } else if (commandName === 'help') {
       log(`Processing /help command from ${interaction.user.tag}`, "discord-bot");
@@ -501,13 +475,13 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
           {
             name: '📦 /exchange',
             value: '**Usage:** `/exchange`\n' +
-                   '**Description:** Create an exchange form that will be posted in the items-exchange forum channel.\n' +
+                   '**Description:** Get the link to the exchange submission form.\n' +
                    '**Process:**\n' +
-                   '• Choose your action: Trade, Give, or Request\n' +
-                   '• Select a category for your item\n' +
-                   '• Fill out item details in the form\n' +
+                   '• Type `/exchange` to get the form link\n' +
+                   '• Fill out the web form with your item details\n' +
+                   '• Submit the form to create a forum post automatically\n' +
                    '• Your post appears in the forum with proper tags\n' +
-                   '**Example:** Simply type `/exchange` to start',
+                   '**Example:** Simply type `/exchange` to get started',
             inline: false
           },
           {
