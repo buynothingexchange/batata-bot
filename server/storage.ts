@@ -5,7 +5,9 @@ import {
   allowedChannels, type AllowedChannel, type InsertAllowedChannel,
   isoRequests, type IsoRequest, type InsertIsoRequest,
   forumPosts, type ForumPost, type InsertForumPost,
-  confirmedExchanges, type ConfirmedExchange, type InsertConfirmedExchange
+  confirmedExchanges, type ConfirmedExchange, type InsertConfirmedExchange,
+  donationGoals, type DonationGoal, type InsertDonationGoal,
+  donations, type Donation, type InsertDonation
 } from "@shared/schema";
 
 // Storage interface for bot-related data
@@ -52,6 +54,19 @@ export interface IStorage {
   getConfirmedExchangesByUser(userId: string): Promise<ConfirmedExchange[]>;
   getConfirmedExchangesByCategory(category: string): Promise<ConfirmedExchange[]>;
   getConfirmedExchangesByDateRange(startDate: Date, endDate: Date): Promise<ConfirmedExchange[]>;
+  
+  // Donation tracking operations
+  createDonationGoal(goal: InsertDonationGoal): Promise<DonationGoal>;
+  getActiveDonationGoals(guildId: string): Promise<DonationGoal[]>;
+  getDonationGoalByMessage(messageId: string): Promise<DonationGoal | undefined>;
+  updateDonationGoalAmount(goalId: number, newAmount: number): Promise<DonationGoal | undefined>;
+  deactivateDonationGoal(goalId: number): Promise<DonationGoal | undefined>;
+  
+  // Donation records operations
+  createDonation(donation: InsertDonation): Promise<Donation>;
+  getAllDonations(limit?: number): Promise<Donation[]>;
+  getDonationsByDateRange(startDate: Date, endDate: Date): Promise<Donation[]>;
+  getTotalDonationAmount(): Promise<number>;
 }
 
 // In-memory storage implementation
@@ -366,6 +381,57 @@ export class MemStorage implements IStorage {
   async getConfirmedExchangesByDateRange(startDate: Date, endDate: Date): Promise<ConfirmedExchange[]> {
     return [];
   }
+
+  // Donation tracking operations for MemStorage
+  async createDonationGoal(goal: InsertDonationGoal): Promise<DonationGoal> {
+    const id = this.currentForumPostId++; // Reuse counter for simplicity
+    const donationGoal: DonationGoal = { 
+      ...goal, 
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    return donationGoal;
+  }
+
+  async getActiveDonationGoals(guildId: string): Promise<DonationGoal[]> {
+    return [];
+  }
+
+  async getDonationGoalByMessage(messageId: string): Promise<DonationGoal | undefined> {
+    return undefined;
+  }
+
+  async updateDonationGoalAmount(goalId: number, newAmount: number): Promise<DonationGoal | undefined> {
+    return undefined;
+  }
+
+  async deactivateDonationGoal(goalId: number): Promise<DonationGoal | undefined> {
+    return undefined;
+  }
+
+  // Donation records operations for MemStorage
+  async createDonation(donation: InsertDonation): Promise<Donation> {
+    const id = this.currentForumPostId++; // Reuse counter for simplicity
+    const donationRecord: Donation = { 
+      ...donation, 
+      id,
+      timestamp: new Date()
+    };
+    return donationRecord;
+  }
+
+  async getAllDonations(limit: number = 50): Promise<Donation[]> {
+    return [];
+  }
+
+  async getDonationsByDateRange(startDate: Date, endDate: Date): Promise<Donation[]> {
+    return [];
+  }
+
+  async getTotalDonationAmount(): Promise<number> {
+    return 0;
+  }
 }
 
 // Database storage implementation
@@ -575,6 +641,80 @@ export class DatabaseStorage implements IStorage {
         lte(confirmedExchanges.confirmedAt, endDate)
       ))
       .orderBy(desc(confirmedExchanges.confirmedAt));
+  }
+
+  // Donation tracking operations
+  async createDonationGoal(goal: InsertDonationGoal): Promise<DonationGoal> {
+    const [donationGoal] = await db.insert(donationGoals).values(goal).returning();
+    return donationGoal;
+  }
+
+  async getActiveDonationGoals(guildId: string): Promise<DonationGoal[]> {
+    return await db.select().from(donationGoals)
+      .where(and(
+        eq(donationGoals.guildId, guildId),
+        eq(donationGoals.isActive, true)
+      ))
+      .orderBy(desc(donationGoals.createdAt));
+  }
+
+  async getDonationGoalByMessage(messageId: string): Promise<DonationGoal | undefined> {
+    const [goal] = await db.select().from(donationGoals)
+      .where(eq(donationGoals.messageId, messageId))
+      .limit(1);
+    return goal || undefined;
+  }
+
+  async updateDonationGoalAmount(goalId: number, newAmount: number): Promise<DonationGoal | undefined> {
+    const [updatedGoal] = await db
+      .update(donationGoals)
+      .set({ 
+        currentAmount: newAmount,
+        updatedAt: new Date()
+      })
+      .where(eq(donationGoals.id, goalId))
+      .returning();
+    return updatedGoal || undefined;
+  }
+
+  async deactivateDonationGoal(goalId: number): Promise<DonationGoal | undefined> {
+    const [deactivatedGoal] = await db
+      .update(donationGoals)
+      .set({ 
+        isActive: false,
+        updatedAt: new Date()
+      })
+      .where(eq(donationGoals.id, goalId))
+      .returning();
+    return deactivatedGoal || undefined;
+  }
+
+  // Donation records operations
+  async createDonation(donation: InsertDonation): Promise<Donation> {
+    const [donationRecord] = await db.insert(donations).values(donation).returning();
+    return donationRecord;
+  }
+
+  async getAllDonations(limit: number = 50): Promise<Donation[]> {
+    return await db.select().from(donations)
+      .orderBy(desc(donations.timestamp))
+      .limit(limit);
+  }
+
+  async getDonationsByDateRange(startDate: Date, endDate: Date): Promise<Donation[]> {
+    return await db.select().from(donations)
+      .where(and(
+        gte(donations.timestamp, startDate),
+        lte(donations.timestamp, endDate)
+      ))
+      .orderBy(desc(donations.timestamp));
+  }
+
+  async getTotalDonationAmount(): Promise<number> {
+    const result = await db
+      .select({ total: sum(donations.amount) })
+      .from(donations);
+    return Number(result[0]?.total || 0);
   }
 }
 

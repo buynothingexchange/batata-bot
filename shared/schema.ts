@@ -138,3 +138,45 @@ export const insertConfirmedExchangeSchema = createInsertSchema(confirmedExchang
 
 export type InsertConfirmedExchange = z.infer<typeof insertConfirmedExchangeSchema>;
 export type ConfirmedExchange = typeof confirmedExchanges.$inferSelect;
+
+// Donation tracking schema
+export const donationGoals = pgTable("donation_goals", {
+  id: serial("id").primaryKey(),
+  guildId: text("guild_id").notNull(),
+  channelId: text("channel_id").notNull(),
+  messageId: text("message_id").notNull(),
+  goalAmount: integer("goal_amount").notNull(), // in cents
+  currentAmount: integer("current_amount").notNull().default(0), // in cents
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertDonationGoalSchema = createInsertSchema(donationGoals).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertDonationGoal = z.infer<typeof insertDonationGoalSchema>;
+export type DonationGoal = typeof donationGoals.$inferSelect;
+
+// Donation records schema
+export const donations = pgTable("donations", {
+  id: serial("id").primaryKey(),
+  kofiTransactionId: text("kofi_transaction_id").unique(),
+  donorName: text("donor_name"),
+  amount: integer("amount").notNull(), // in cents
+  message: text("message"),
+  email: text("email"),
+  isPublic: boolean("is_public").notNull().default(true),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+});
+
+export const insertDonationSchema = createInsertSchema(donations).omit({
+  id: true,
+  timestamp: true,
+});
+
+export type InsertDonation = z.infer<typeof insertDonationSchema>;
+export type Donation = typeof donations.$inferSelect;
