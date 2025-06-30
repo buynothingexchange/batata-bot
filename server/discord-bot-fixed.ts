@@ -1291,7 +1291,7 @@ function createProgressBar(percent: number): string {
   const emptyLength = barLength - filledLength;
   
   const filled = '🟩'.repeat(filledLength);
-  const empty = '░'.repeat(emptyLength);
+  const empty = '⬜'.repeat(emptyLength);
   
   return `[${filled}${empty}] ${percent.toFixed(1)}%`;
 }
