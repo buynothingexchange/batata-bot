@@ -314,7 +314,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         category: z.string().min(1),
         type: z.string().min(1), // give, request, trade
         image_url: z.string().url().optional().or(z.literal("")),
-        location: z.string().optional()
+        location: z.string().optional(),
+        lat: z.number().optional(),
+        lng: z.number().optional()
       });
 
       const validatedData = postSchema.parse(req.body);
@@ -330,6 +332,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         type: validatedData.type,
         imageUrl: validatedData.image_url || "",
         location: validatedData.location,
+        lat: validatedData.lat,
+        lng: validatedData.lng,
         userId: 'external-form', // Special identifier for external submissions
         username: 'External Form'
       });

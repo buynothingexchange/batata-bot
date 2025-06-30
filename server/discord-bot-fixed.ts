@@ -1494,6 +1494,8 @@ export async function createForumPost(postData: {
   type: string;
   imageUrl: string;
   location?: string;
+  lat?: number;
+  lng?: number;
   userId: string;
   username: string;
 }): Promise<{ success: boolean; threadId?: string; error?: string }> {
@@ -1570,11 +1572,21 @@ export async function createForumPost(postData: {
       'trade': 'Trade'
     };
 
+    // Create location information string
+    let locationInfo = '';
+    if (postData.location) {
+      locationInfo += `\n\n**Location:** ${postData.location}`;
+    }
+    if (postData.lat && postData.lng) {
+      const mapsUrl = `https://www.openstreetmap.org/?mlat=${postData.lat}&mlon=${postData.lng}&zoom=15`;
+      locationInfo += `\n**Coordinates:** [${postData.lat}, ${postData.lng}](${mapsUrl}) 📍`;
+    }
+
     // Create the forum post with proper tags
     const thread = await (forumChannel as any).threads.create({
       name: `${typeEmojis[postData.type as keyof typeof typeEmojis] || '📦'} ${postData.title}`,
       message: {
-        content: `**Category:** ${postData.category.charAt(0).toUpperCase() + postData.category.slice(1)}\n\n**${typeDisplayNames[postData.type as keyof typeof typeDisplayNames] || postData.type.charAt(0).toUpperCase() + postData.type.slice(1)}**\n\n${postData.description}${postData.location ? `\n\n**Location:** ${postData.location}` : ''}`,
+        content: `**Category:** ${postData.category.charAt(0).toUpperCase() + postData.category.slice(1)}\n\n**${typeDisplayNames[postData.type as keyof typeof typeDisplayNames] || postData.type.charAt(0).toUpperCase() + postData.type.slice(1)}**\n\n${postData.description}${locationInfo}`,
         embeds: [{
           color: postData.type === 'give' ? 0x57F287 : postData.type === 'request' ? 0x3498DB : 0xF39C12,
           image: { 
