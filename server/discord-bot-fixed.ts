@@ -451,9 +451,8 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
     if (commandName === 'exchange') {
       log(`Processing /${commandName} command from ${interaction.user.tag}`, "discord-bot");
       
-      // URL to your separate image upload form server
-      // This can be configured via environment variable or use default
-      const formUrl = process.env.EXCHANGE_FORM_URL || 'https://your-image-upload-form-server.replit.dev/';
+      // URL to the form page within this project
+      const formUrl = 'https://bfdf1125-76ec-481d-be0b-bc578a7396ba-00-3325314juelsm.worf.replit.dev/exchange';
       
       // Send ephemeral reply with form URL
       await interaction.reply({
