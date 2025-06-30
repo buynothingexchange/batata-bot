@@ -532,7 +532,7 @@ async function handleInteraction(interaction: Interaction) {
         
         if (bot) {
           // Process all guilds
-          for (const guild of bot.guilds.cache.values()) {
+          for (const [, guild] of bot.guilds.cache) {
             // Get all relevant channels (exchanges and categories)
             const exchangeChannels = guild.channels.cache.filter(
               (ch: any) => ch.type === ChannelType.GuildText && 
@@ -1438,7 +1438,7 @@ async function registerSlashCommands() {
     const guilds = bot.guilds.cache;
     
     // Iterate over guilds and register commands
-    for (const guild of guilds.values()) {
+    for (const [, guild] of guilds) {
       log(`Registering commands for guild: ${guild.name} (${guild.id})`, "discord-bot");
       
       try {
@@ -1451,7 +1451,7 @@ async function registerSlashCommands() {
         // Register new commands for this guild
         await rest.put(
           Routes.applicationGuildCommands(bot.user.id, guild.id),
-          { body: commands }
+          { body: commands.map(command => command.toJSON()) }
         );
         
         log(`Successfully registered ${commands.length} commands for guild: ${guild.name}`, "discord-bot");
