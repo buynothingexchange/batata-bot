@@ -309,6 +309,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Validate the incoming data
       const postSchema = z.object({
+        username: z.string().min(1),
         title: z.string().min(1),
         description: z.string().min(1),
         category: z.string().min(1),
@@ -335,7 +336,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lat: validatedData.lat,
         lng: validatedData.lng,
         userId: 'external-form', // Special identifier for external submissions
-        username: 'External Form'
+        username: validatedData.username
       });
 
       if (result.success) {

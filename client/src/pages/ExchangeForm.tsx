@@ -53,6 +53,7 @@ export default function ExchangeForm() {
   const form = useForm<ExchangeFormData>({
     resolver: zodResolver(baseExchangeFormSchema),
     defaultValues: {
+      username: "",
       title: "",
       description: "",
       location: "",
@@ -173,6 +174,7 @@ export default function ExchangeForm() {
 
       // Submit to Discord bot
       const postData = {
+        username: data.username,
         title: data.title,
         description: data.description,
         category: data.category,
@@ -181,8 +183,6 @@ export default function ExchangeForm() {
         location: data.location || "",
         lat: data.lat || 43.7,
         lng: data.lng || -79.4,
-        userId: "web-form-user", // You might want to implement user auth
-        username: "Web Form User",
       };
 
       const response = await fetch("/api/new-post", {

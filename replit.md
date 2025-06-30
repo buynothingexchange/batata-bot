@@ -24,6 +24,10 @@ A sophisticated Discord bot application designed to streamline cross-server item
 - ✅ **Improved forum post formatting** - streamlined content layout to reduce crowding in thumbnails
 - ✅ **Enhanced image display** - removed size constraints to allow Discord's native image handling
 - ✅ **Cleaner location links** - simplified map links with map pin emoji for better readability
+- ✅ **Added username field to form** - users can now specify their Discord username/display name
+- ✅ **Restored proper embed format** - forum posts now use Discord embeds with user attribution and organized fields
+- ✅ **Enhanced user identification** - forum posts clearly show who submitted the exchange request
+- ✅ **Improved visual organization** - embeds display category, type, and contact information in clean field layout
 
 ### Enhanced Forum Post Format and Image Size - June 30, 2025
 - ✅ **Restructured forum post content layout** - category now appears first in post content
