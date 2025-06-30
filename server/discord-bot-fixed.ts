@@ -547,67 +547,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
   }
 }
 
-// Handle action selection from exchange command
-async function handleActionSelection(interaction: any, selectedAction: string): Promise<void> {
-  try {
-    // Create category selection dropdown
-    const categoryRow = new ActionRowBuilder<StringSelectMenuBuilder>()
-      .addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId('category_select')
-          .setPlaceholder('Select a category for your item')
-          .addOptions([
-            {
-              label: 'Electronics',
-              description: 'Phones, computers, gadgets, etc.',
-              value: 'electronics'
-            },
-            {
-              label: 'Accessories',
-              description: 'Jewelry, bags, small items, etc.',
-              value: 'accessories'
-            },
-            {
-              label: 'Clothing',
-              description: 'Shirts, pants, dresses, etc.',
-              value: 'clothing'
-            },
-            {
-              label: 'Home & Furniture',
-              description: 'Household items, furniture, decor',
-              value: 'home_furniture'
-            },
-            {
-              label: 'Footwear',
-              description: 'Shoes, boots, sandals, etc.',
-              value: 'footwear'
-            },
-            {
-              label: 'Miscellaneous',
-              description: 'Other items not listed above',
-              value: 'misc'
-            }
-          ])
-      );
-
-    // Store the selected action in temp data
-    if (!global.tempUserData) global.tempUserData = new Map();
-    const userData = global.tempUserData.get(interaction.user.id) || {};
-    userData.action = selectedAction;
-    global.tempUserData.set(interaction.user.id, userData);
-
-    await interaction.update({
-      content: `You selected: **${selectedAction}**\nNow choose a category for your item:`,
-      components: [categoryRow]
-    });
-
-    log(`User ${interaction.user.tag} selected action: ${selectedAction}`, "discord-bot");
-  } catch (error) {
-    log(`Error handling action selection: ${error}`, "discord-bot");
-  }
-}
-
-// Handle category selection and show modal
+// Handle category selection and show modal (used by other commands, not exchange)
 async function handleCategoryModalSelection(interaction: any, selectedCategory: string): Promise<void> {
   try {
     // Store the category in temp data
@@ -734,15 +674,7 @@ async function handleInteraction(interaction: Interaction) {
     if (interaction.isStringSelectMenu()) {
       const customId = interaction.customId;
       
-      if (customId === 'action_select') {
-        const selectedAction = interaction.values[0];
-        log(`User ${interaction.user.tag} selected action: ${selectedAction}`, "discord-bot");
-        await handleActionSelection(interaction, selectedAction);
-      } else if (customId === 'category_select') {
-        const selectedCategory = interaction.values[0];
-        log(`User ${interaction.user.tag} selected category: ${selectedCategory}`, "discord-bot");
-        await handleCategoryModalSelection(interaction, selectedCategory);
-      } else if (customId === 'update_post_select') {
+      if (customId === 'update_post_select') {
         const selectedThreadId = interaction.values[0];
         log(`User ${interaction.user.tag} selected post to update: ${selectedThreadId}`, "discord-bot");
         await handleUpdatePostSelection(interaction, selectedThreadId);
