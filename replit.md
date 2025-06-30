@@ -17,9 +17,10 @@ A sophisticated Discord bot application designed to streamline cross-server item
 - ✅ **Added OpenStreetMap integration** - interactive map with draggable marker on exchange form
 - ✅ **2km radius visualization** - green circle shows approximate coverage area around selected location
 - ✅ **Dynamic coordinate capture** - latitude/longitude automatically saved as marker is moved
-- ✅ **Clickable map links in forum posts** - coordinates link to OpenStreetMap for precise location viewing
-- ✅ **Enhanced location information** - forum posts now include both text location and precise coordinates
+- ✅ **Clickable Google Maps links in forum posts** - "view location" text links to Google Maps for precise location viewing
+- ✅ **Enhanced location information** - forum posts now include both text location and clickable map links
 - ✅ **Form validation updates** - backend properly handles lat/lng coordinates from map selections
+- ✅ **User-friendly location display** - replaced coordinate numbers with "view location" clickable text
 
 ### Enhanced Forum Post Format and Image Size - June 30, 2025
 - ✅ **Restructured forum post content layout** - category now appears first in post content

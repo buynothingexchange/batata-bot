@@ -1578,8 +1578,8 @@ export async function createForumPost(postData: {
       locationInfo += `\n\n**Location:** ${postData.location}`;
     }
     if (postData.lat && postData.lng) {
-      const mapsUrl = `https://www.openstreetmap.org/?mlat=${postData.lat}&mlon=${postData.lng}&zoom=15`;
-      locationInfo += `\n**Coordinates:** [${postData.lat}, ${postData.lng}](${mapsUrl}) 📍`;
+      const mapsUrl = `https://www.google.com/maps?q=${postData.lat},${postData.lng}`;
+      locationInfo += `\n**Location:** [view location](${mapsUrl}) 📍`;
     }
 
     // Create the forum post with proper tags
