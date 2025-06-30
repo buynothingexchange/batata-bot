@@ -57,10 +57,8 @@ const commands = [
     .setDescription('Reset donation total to $0 (admin only)'),
   new SlashCommandBuilder()
     .setName('donate')
-    .setDescription('Show Ko-fi donation link with clickable button'),
-  new SlashCommandBuilder()
-    .setName('progress')
-    .setDescription('View current donation progress'),
+    .setDescription('Show Ko-fi donation link and current progress'),
+
   new SlashCommandBuilder()
     .setName('testkofi')
     .setDescription('Test Ko-fi webhook functionality (admin only)')
@@ -1394,9 +1392,36 @@ async function handleResetGoal(interaction: ChatInputCommandInteraction): Promis
 // Handle /donate command
 async function handleDonate(interaction: ChatInputCommandInteraction): Promise<void> {
   try {
+    const guildId = interaction.guildId || '';
+    
+    // Get active donation goals for this guild
+    const activeGoals = await storage.getActiveDonationGoals(guildId);
+    
+    let description = 'Help support our community by making a donation! Every contribution helps us maintain and improve our services.';
+    
+    // Add progress information if there are active goals
+    if (activeGoals.length > 0) {
+      description += '\n\n**Current Progress:**\n';
+      
+      for (const goal of activeGoals) {
+        const currentDollars = goal.currentAmount / 100;
+        const goalDollars = goal.goalAmount / 100;
+        const percent = goal.goalAmount > 0 ? (goal.currentAmount / goal.goalAmount) * 100 : 0;
+        const progressBar = createProgressBar(percent);
+        
+        description += `\n$${currentDollars.toFixed(2)} / $${goalDollars.toFixed(2)}\n${progressBar}\n${percent.toFixed(1)}% Complete`;
+        
+        if (activeGoals.length > 1) {
+          description += '\n';
+        }
+      }
+    } else {
+      description += '\n\n*No active donation goals set.*';
+    }
+    
     const embed = new EmbedBuilder()
       .setTitle('☕ Support Us on Ko-fi')
-      .setDescription('Help support our community by making a donation! Every contribution helps us maintain and improve our services.')
+      .setDescription(description)
       .setColor(0x13C3FF)
       .setTimestamp();
     
