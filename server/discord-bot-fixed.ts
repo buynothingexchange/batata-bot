@@ -451,14 +451,14 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
     if (commandName === 'exchange') {
       log(`Processing /${commandName} command from ${interaction.user.tag}`, "discord-bot");
       
-      // Get the current domain from environment variables
-      const domain = process.env.REPLIT_DOMAINS || 'your-batata-domain.replit.dev';
-      const formUrl = `https://${domain.split(',')[0]}/`;
+      // URL to your separate image upload form server
+      // This can be configured via environment variable or use default
+      const formUrl = process.env.EXCHANGE_FORM_URL || 'https://your-image-upload-form-server.replit.dev/';
       
       // Send ephemeral reply with form URL
       await interaction.reply({
         content: `Please fill out the exchange form here: ${formUrl}`,
-        ephemeral: true
+        flags: 64 // Use flags instead of ephemeral property
       });
       
       log(`Successfully sent form URL to ${interaction.user.tag}: ${formUrl}`, "discord-bot");
