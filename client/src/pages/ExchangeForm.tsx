@@ -213,6 +213,13 @@ export default function ExchangeForm() {
           form.setValue('lng', parseFloat(e.latlng.lng.toFixed(4)));
         });
 
+        // Add dragend event for reverse geocoding
+        marker.on('dragend', function(e: any) {
+          const lat = parseFloat(e.target.getLatLng().lat.toFixed(4));
+          const lng = parseFloat(e.target.getLatLng().lng.toFixed(4));
+          reverseGeocode(lat, lng);
+        });
+
         // Force map to render properly
         setTimeout(() => {
           map.invalidateSize();
@@ -223,6 +230,9 @@ export default function ExchangeForm() {
         markerRef.current = marker;
         circleRef.current = circle;
         setMapInitialized(true);
+        
+        // Reverse geocode the initial location
+        reverseGeocode(43.7, -79.4);
         
         console.log('✅ Map initialized successfully');
       } catch (error) {
@@ -611,6 +621,20 @@ export default function ExchangeForm() {
                 <p className="text-sm text-gray-400">
                   Drag the marker to select your approximate location. The green circle shows a 1km radius area.
                 </p>
+                
+                {/* Location name display */}
+                <div className="mt-3 p-3 bg-gray-800 border border-gray-700 rounded-md">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-300">📍 Detected Location:</span>
+                    {isLoadingLocation ? (
+                      <span className="text-sm text-blue-400">Loading location...</span>
+                    ) : locationName ? (
+                      <span className="text-sm text-green-400">{locationName}</span>
+                    ) : (
+                      <span className="text-sm text-gray-500">Drag marker to detect location</span>
+                    )}
+                  </div>
+                </div>
               </div>
 
               <FormField

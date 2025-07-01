@@ -13,6 +13,15 @@ A sophisticated Discord bot application designed to streamline cross-server item
 
 ## Recent Changes (Latest Updates)
 
+### Nominatim Reverse Geocoding Integration - July 1, 2025
+- ✅ **Added Nominatim reverse geocoding** - integrated free OpenStreetMap geocoding service
+- ✅ **Real-time location detection** - automatically displays human-readable location names when users drag map marker
+- ✅ **Custom User-Agent compliance** - follows Nominatim usage policy with proper headers
+- ✅ **Smart location parsing** - shows neighborhood/suburb and city for concise location display
+- ✅ **Visual feedback system** - loading states and error handling for geocoding requests
+- ✅ **Initial location display** - automatically shows Toronto location name when map first loads
+- ✅ **Enhanced user experience** - users see both coordinates and readable location names in real-time
+
 ### Auto-Follow Forum Posts - July 1, 2025
 - ✅ **Implemented auto-follow for external form posts** - users automatically follow forum posts created through the authenticated web form
 - ✅ **Enhanced Discord workflow auto-follow** - exchange posts created via Discord already had auto-follow, verified working correctly  
