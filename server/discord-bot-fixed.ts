@@ -45,6 +45,14 @@ const commands = [
     .setName('updatepost')
     .setDescription('Update one of your active forum posts'),
   new SlashCommandBuilder()
+    .setName('markfulfilled')
+    .setDescription('Mark your exchange post as fulfilled (private)')
+    .addUserOption(option =>
+      option.setName('tradedwith')
+        .setDescription('Who did you trade with?')
+        .setRequired(true)
+    ),
+  new SlashCommandBuilder()
     .setName('mystats')
     .setDescription('View your exchange activity and statistics'),
   new SlashCommandBuilder()
@@ -998,14 +1006,9 @@ async function handleUpdatePostSelection(interaction: any, threadId: string): Pr
       return;
     }
     
-    // Create buttons for post status
+    // Create buttons for post status (keeping only Still Available)
     const statusButtons = new ActionRowBuilder<ButtonBuilder>()
       .addComponents(
-        new ButtonBuilder()
-          .setCustomId(`mark_claimed:${threadId}`)
-          .setLabel('Mark as Claimed')
-          .setStyle(ButtonStyle.Success)
-          .setEmoji('✅'),
         new ButtonBuilder()
           .setCustomId(`still_available:${threadId}`)
           .setLabel('Still Available')
@@ -1017,7 +1020,7 @@ async function handleUpdatePostSelection(interaction: any, threadId: string): Pr
     const postLink = `[View Post](https://discord.com/channels/${post.guildId}/${threadId})`;
     
     await interaction.update({
-      content: `**${post.title}**\n\nHas this item been fulfilled?\n\n${postLink}`,
+      content: `**${post.title}**\n\nHas this item been fulfilled?\n\n**If fulfilled:** Use \`/markfulfilled\` command to mark as traded (private)\n**If still available:** Click the button below\n\n${postLink}`,
       components: [statusButtons],
       ephemeral: true
     });
@@ -1046,38 +1049,27 @@ async function handleMarkAsClaimed(interaction: any, threadId: string): Promise<
     // Verify ownership again
     const post = await storage.getForumPost(threadId);
     if (!post || post.authorId !== interaction.user.id) {
-      await interaction.update({
+      await sendEphemeralWithAutoDelete(interaction, {
         content: "You can only update your own posts.",
-        components: [],
-        ephemeral: true
+        components: []
       });
       return;
     }
     
-    // Update the interaction to remove buttons and show the prompt
+    // Update the interaction to show claim instructions
     await interaction.update({
-      content: `✅ Ready to mark "${post.title}" as fulfilled!\n\n**Who did you trade with?**\n\nPlease reply to this message and mention the user you traded with using @username. Discord will show user suggestions when you type @.\n\n*This message will disappear in 2 minutes.*`,
+      content: `✅ Ready to mark "${post.title}" as fulfilled!\n\n**Next step:** Use the slash command \`/markfulfilled\` and select who you traded with.\n\nThis keeps everything private and uses Discord's user selection feature.`,
       components: [],
       ephemeral: true
     });
     
-    // Store the thread ID temporarily so we can handle the follow-up message
-    // We'll listen for the next message from this user in this channel
-    await storage.createPendingClaim({
-      threadId: threadId,
-      authorId: interaction.user.id,
-      channelId: interaction.channelId,
-      expiresAt: new Date(Date.now() + 2 * 60 * 1000) // 2 minutes from now
-    });
-    
-    log(`Prompting user ${interaction.user.tag} to mention who they traded with for post: ${post.title}`, "discord-bot");
+    log(`User ${interaction.user.tag} initiated claim process for post: ${post.title}`, "discord-bot");
   } catch (error) {
     log(`Error handling mark as claimed: ${error}`, "discord-bot");
     try {
-      await interaction.update({
+      await sendEphemeralWithAutoDelete(interaction, {
         content: "There was an error processing your request. Please try again.",
-        components: [],
-        ephemeral: true
+        components: []
       });
     } catch (updateError) {
       log(`Error updating interaction: ${updateError}`, "discord-bot");
