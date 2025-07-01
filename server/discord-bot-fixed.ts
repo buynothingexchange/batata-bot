@@ -588,10 +588,258 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
       
       log(`Successfully sent help message to ${interaction.user.tag}`, "discord-bot");
       
+    } else if (commandName === 'updatepost') {
+      log(`Processing /updatepost command from ${interaction.user.tag}`, "discord-bot");
+      
+      // Get user's active forum posts from storage
+      const userPosts = await storage.getForumPostsByUser(interaction.user.id);
+      log(`Found ${userPosts.length} total posts for user ${interaction.user.id}`, "discord-bot");
+      userPosts.forEach((post, index) => {
+        log(`Post ${index}: threadId=${post.threadId}, title="${post.title}", isActive=${post.isActive}`, "discord-bot");
+      });
+      
+      const activePosts = userPosts.filter(post => post.isActive);
+      
+      if (activePosts.length === 0) {
+        await sendEphemeralWithAutoDelete(interaction,
+          "You don't have any active forum posts to update. Use `/exchange` to create a new post!"
+        );
+        return;
+      }
+      
+      // Create dropdown with user's posts (limit to 25 due to Discord API limits)
+      const postOptions = activePosts.slice(0, 25).map(post => ({
+        label: post.title.length > 100 ? post.title.substring(0, 97) + "..." : post.title,
+        description: "Click to manage this post",
+        value: post.threadId
+      }));
+      
+      const postSelectRow = new ActionRowBuilder<StringSelectMenuBuilder>()
+        .addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId('update_post_select')
+            .setPlaceholder('Select the post you want to update')
+            .addOptions(postOptions)
+        );
+      
+      await sendEphemeralWithAutoDelete(interaction, {
+        content: "Select the post you want to update.",
+        components: [postSelectRow]
+      });
+      
+      log(`Successfully sent post selection to ${interaction.user.tag} with ${activePosts.length} posts`, "discord-bot");
+    
+    } else if (commandName === 'contactus' || commandName === 'contactusanon') {
+      const isAnonymous = commandName === 'contactusanon';
+      log(`Processing /${commandName} command from ${interaction.user.tag}`, "discord-bot");
+      
+      // Create dropdown with contact options
+      const contactOptionsRow = new ActionRowBuilder<StringSelectMenuBuilder>()
+        .addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId(`contact_select:${isAnonymous}`)
+            .setPlaceholder('Select the type of feedback you want to submit')
+            .addOptions([
+              {
+                label: 'Comments',
+                description: 'General comments about the community',
+                value: 'comments'
+              },
+              {
+                label: 'Suggestions',
+                description: 'Ideas to improve the community',
+                value: 'suggestions'
+              },
+              {
+                label: 'Report',
+                description: 'Report concerns or issues',
+                value: 'report'
+              }
+            ])
+        );
+      
+      await sendEphemeralWithAutoDelete(interaction, {
+        content: `Please select the type of feedback you want to submit${isAnonymous ? ' (anonymously)' : ''}:`,
+        components: [contactOptionsRow]
+      });
+      
+      log(`Successfully sent contact options to ${interaction.user.tag}`, "discord-bot");
+    
+    } else if (commandName === 'mystats') {
+      log(`Processing /mystats command from ${interaction.user.tag}`, "discord-bot");
+      
+      try {
+        // Get user's ISO requests and forum posts
+        const userRequests = await storage.getIsoRequestsByUser(interaction.user.id);
+        const userPosts = await storage.getForumPostsByUser(interaction.user.id);
+        
+        // Calculate statistics
+        const totalRequests = userRequests.length;
+        const fulfilledRequests = userRequests.filter(req => req.fulfilled).length;
+        const activeRequests = userRequests.filter(req => !req.fulfilled).length;
+        
+        const totalPosts = userPosts.length;
+        const activePosts = userPosts.filter(post => post.isActive).length;
+        const inactivePosts = userPosts.filter(post => !post.isActive).length;
+        
+        // Group requests by category
+        const requestsByCategory = userRequests.reduce((acc: any, req) => {
+          if (req.category) {
+            acc[req.category] = (acc[req.category] || 0) + 1;
+          }
+          return acc;
+        }, {});
+        
+        // Create stats embed
+        const statsEmbed = new EmbedBuilder()
+          .setTitle(`📊 Exchange Statistics for ${interaction.user.displayName || interaction.user.username}`)
+          .setColor(0x5865F2) // Discord blurple
+          .setThumbnail(interaction.user.displayAvatarURL({ extension: 'png' }))
+          .addFields(
+            {
+              name: '🔄 ISO Requests',
+              value: `**Total:** ${totalRequests}\n**Active:** ${activeRequests}\n**Fulfilled:** ${fulfilledRequests}`,
+              inline: true
+            },
+            {
+              name: '📝 Forum Posts',
+              value: `**Total:** ${totalPosts}\n**Active:** ${activePosts}\n**Completed:** ${inactivePosts}`,
+              inline: true
+            },
+            {
+              name: '📈 Success Rate',
+              value: totalRequests > 0 ? `${Math.round((fulfilledRequests / totalRequests) * 100)}%` : 'No data yet',
+              inline: true
+            }
+          )
+          .setTimestamp()
+          .setFooter({ 
+            text: 'Use /exchange to create new posts • Use /updatepost to manage existing posts',
+            iconURL: interaction.client.user?.displayAvatarURL()
+          });
+        
+        // Add category breakdown if there are requests
+        if (Object.keys(requestsByCategory).length > 0) {
+          const categoryText = Object.entries(requestsByCategory)
+            .map(([category, count]) => `**${category.charAt(0).toUpperCase() + category.slice(1).replace('_', ' & ')}:** ${count}`)
+            .join('\n');
+          
+          statsEmbed.addFields({
+            name: '📂 Requests by Category',
+            value: categoryText,
+            inline: false
+          });
+        }
+        
+        // Add recent activity if there are any requests
+        if (userRequests.length > 0) {
+          const recentRequests = userRequests
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+            .slice(0, 3);
+          
+          const recentText = recentRequests
+            .map(req => `• ${req.content} ${req.fulfilled ? '✅' : '⏳'}`)
+            .join('\n');
+          
+          statsEmbed.addFields({
+            name: '🕐 Recent Activity',
+            value: recentText || 'No recent activity',
+            inline: false
+          });
+        }
+        
+        await interaction.reply({
+          embeds: [statsEmbed],
+          ephemeral: true
+        });
+        
+        log(`Successfully sent stats to ${interaction.user.tag}`, "discord-bot");
+        
+      } catch (statsError) {
+        log(`Error fetching user stats: ${statsError}`, "discord-bot");
+        await interaction.reply({
+          content: "Sorry, I couldn't retrieve your statistics right now. Please try again later.",
+          ephemeral: true
+        });
+      }
+    
+    } else if (commandName === 'exchanges') {
+      log(`Processing /exchanges command from ${interaction.user.tag}`, "discord-bot");
+      
+      // Check if user has moderator permissions and is in mod-chat channel
+      const member = interaction.guild?.members.cache.get(interaction.user.id);
+      const hasModPerms = member?.permissions.has(PermissionFlagsBits.ManageMessages) || 
+                         member?.permissions.has(PermissionFlagsBits.ModerateMembers) ||
+                         member?.permissions.has(PermissionFlagsBits.Administrator);
+      
+      const isModChannel = interaction.channel?.type === ChannelType.GuildText && 
+                          (interaction.channel as any).name?.toLowerCase().includes('mod');
+      
+      if (!hasModPerms || !isModChannel) {
+        await interaction.reply({
+          content: "This command is restricted to moderators and can only be used in mod channels.",
+          ephemeral: true
+        });
+        log(`${interaction.user.tag} attempted to use /exchanges without proper permissions or in wrong channel`, "discord-bot");
+        return;
+      }
+      
+      try {
+        // Get all confirmed exchanges
+        const exchanges = await storage.getAllConfirmedExchanges(20); // Last 20 exchanges
+        
+        if (exchanges.length === 0) {
+          await interaction.reply({
+            content: "No confirmed exchanges found in the database.",
+            ephemeral: true
+          });
+          return;
+        }
+        
+        // Create exchanges embed
+        const exchangesEmbed = new EmbedBuilder()
+          .setTitle('📊 Recent Confirmed Exchanges')
+          .setDescription(`Showing the ${exchanges.length} most recent confirmed exchanges:`)
+          .setColor(0x00ff00)
+          .setTimestamp()
+          .setFooter({ 
+            text: `Total exchanges tracked: ${exchanges.length}`,
+            iconURL: interaction.client.user?.displayAvatarURL()
+          });
+        
+        // Add fields for each exchange
+        exchanges.forEach((exchange, index) => {
+          const confirmedDate = new Date(exchange.confirmedAt).toLocaleDateString();
+          exchangesEmbed.addFields({
+            name: `${index + 1}. ${exchange.itemName || 'Item'}`,
+            value: `**Category:** ${exchange.category}\n**Type:** ${exchange.exchangeType}\n**Date:** ${confirmedDate}\n**Original Poster:** <@${exchange.originalPosterId}>\n**Trading Partner:** <@${exchange.tradingPartnerId}>`,
+            inline: true
+          });
+        });
+        
+        await interaction.reply({
+          embeds: [exchangesEmbed],
+          ephemeral: true
+        });
+        
+        log(`Successfully sent exchanges list to moderator ${interaction.user.tag}`, "discord-bot");
+        
+      } catch (exchangesError) {
+        log(`Error fetching exchanges: ${exchangesError}`, "discord-bot");
+        await interaction.reply({
+          content: "Sorry, I couldn't retrieve the exchanges data right now. Please try again later.",
+          ephemeral: true
+        });
+      }
+    
+    } else if (['initgoal', 'resetgoal', 'donate', 'testkofi', 'testautobump'].includes(commandName)) {
+      // Handle donation and test commands
+      await handleDonationCommand(interaction);
+      
     } else {
-      // Handle other commands (updatepost, mystats, exchanges, contactus, contactusanon)
+      // Unknown command
       await interaction.reply({
-        content: `Command /${commandName} is not yet implemented in this version.`,
+        content: `Command /${commandName} is not recognized.`,
         ephemeral: true
       });
     }
@@ -678,15 +926,259 @@ async function handleModalSubmission(interaction: any): Promise<void> {
 
 // Placeholder functions for missing handlers
 async function handleUpdatePostSelection(interaction: any, threadId: string): Promise<void> {
-  await interaction.reply({ content: "Update post feature coming soon!", ephemeral: true });
+  try {
+    log(`Looking for post with threadId: ${threadId}`, "discord-bot");
+    
+    // Debug: Get all posts for this user to see what's actually stored
+    const allUserPosts = await storage.getForumPostsByUser(interaction.user.id);
+    log(`All posts for user ${interaction.user.id}:`, "discord-bot");
+    allUserPosts.forEach(p => {
+      log(`  - threadId: ${p.threadId}, title: ${p.title}, isActive: ${p.isActive}`, "discord-bot");
+    });
+    
+    // Get the forum post from storage
+    const post = await storage.getForumPost(threadId);
+    
+    if (!post) {
+      log(`Post with threadId ${threadId} not found in storage`, "discord-bot");
+      await interaction.update({
+        content: "Post not found in our records. It may have been deleted.",
+        components: [],
+        ephemeral: true
+      });
+      return;
+    }
+    
+    // Verify the user owns this post
+    if (post.authorId !== interaction.user.id) {
+      await interaction.update({
+        content: "You can only update your own posts.",
+        components: [],
+        ephemeral: true
+      });
+      return;
+    }
+    
+    // Create buttons for post status
+    const statusButtons = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId(`mark_claimed:${threadId}`)
+          .setLabel('Mark as Claimed')
+          .setStyle(ButtonStyle.Success)
+          .setEmoji('✅'),
+        new ButtonBuilder()
+          .setCustomId(`still_available:${threadId}`)
+          .setLabel('Still Available')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('🔄')
+      );
+    
+    // Include clickable link to the original post
+    const postLink = `[View Post](https://discord.com/channels/${post.guildId}/${threadId})`;
+    
+    await interaction.update({
+      content: `**${post.title}**\n\nHas this item been fulfilled?\n\n${postLink}`,
+      components: [statusButtons],
+      ephemeral: true
+    });
+    
+    log(`User ${interaction.user.tag} selected post for update: ${post.title}`, "discord-bot");
+  } catch (error) {
+    log(`Error handling post selection: ${error}`, "discord-bot");
+    try {
+      await interaction.update({
+        content: "There was an error loading your post. Please try again.",
+        components: [],
+        ephemeral: true
+      });
+    } catch (updateError) {
+      log(`Error updating interaction: ${updateError}`, "discord-bot");
+    }
+  }
 }
 
 async function handleContactSelection(interaction: any, contactType: string, isAnonymous: boolean): Promise<void> {
   await interaction.reply({ content: "Contact feature coming soon!", ephemeral: true });
 }
 
+async function handleMarkAsClaimed(interaction: any, threadId: string): Promise<void> {
+  try {
+    // Verify ownership again
+    const post = await storage.getForumPost(threadId);
+    if (!post || post.authorId !== interaction.user.id) {
+      await interaction.update({
+        content: "You can only update your own posts.",
+        components: [],
+        ephemeral: true
+      });
+      return;
+    }
+    
+    // Create modal to ask who received the item
+    const claimModal = new ModalBuilder()
+      .setCustomId(`claim_modal:${threadId}`)
+      .setTitle('Mark Item as Claimed');
+    
+    const recipientInput = new TextInputBuilder()
+      .setCustomId('recipient')
+      .setLabel('Who received this item?')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('Enter the username or @ mention')
+      .setRequired(true)
+      .setMaxLength(100);
+    
+    const actionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(recipientInput);
+    claimModal.addComponents(actionRow);
+    
+    await interaction.showModal(claimModal);
+    
+    log(`Showing claim modal for thread: ${threadId}`, "discord-bot");
+  } catch (error) {
+    log(`Error handling mark as claimed: ${error}`, "discord-bot");
+    try {
+      await interaction.update({
+        content: "There was an error processing your request. Please try again.",
+        components: [],
+        ephemeral: true
+      });
+    } catch (updateError) {
+      log(`Error updating interaction: ${updateError}`, "discord-bot");
+    }
+  }
+}
+
+async function handleStillAvailable(interaction: any, threadId: string): Promise<void> {
+  try {
+    // Verify ownership
+    const post = await storage.getForumPost(threadId);
+    if (!post || post.authorId !== interaction.user.id) {
+      await interaction.update({
+        content: "You can only update your own posts.",
+        components: [],
+        ephemeral: true
+      });
+      return;
+    }
+    
+    // Update the post activity to bump it up
+    await storage.updateForumPostActivity(threadId);
+    
+    // Create a link to the post
+    const postLink = `[View Post](https://discord.com/channels/${post.guildId}/${threadId})`;
+    
+    await interaction.update({
+      content: `✅ Your post "${post.title}" has been marked as still available and activity updated.\n\n${postLink}`,
+      components: [],
+      ephemeral: true
+    });
+    
+    log(`User ${interaction.user.tag} marked post as still available: ${post.title}`, "discord-bot");
+  } catch (error) {
+    log(`Error handling still available: ${error}`, "discord-bot");
+    try {
+      await interaction.update({
+        content: "There was an error updating your post. Please try again.",
+        components: [],
+        ephemeral: true
+      });
+    } catch (updateError) {
+      log(`Error updating interaction: ${updateError}`, "discord-bot");
+    }
+  }
+}
+
 async function handleClaimModalSubmission(interaction: any): Promise<void> {
-  await interaction.reply({ content: "Claim submission coming soon!", ephemeral: true });
+  try {
+    const threadId = interaction.customId.split(':')[1];
+    const recipient = interaction.fields.getTextInputValue('recipient');
+    
+    // Verify ownership
+    const post = await storage.getForumPost(threadId);
+    if (!post || post.authorId !== interaction.user.id) {
+      await interaction.reply({
+        content: "You can only update your own posts.",
+        ephemeral: true
+      });
+      return;
+    }
+    
+    // Deactivate the forum post in storage
+    await storage.deactivateForumPost(threadId);
+    
+    // Try to archive the thread
+    try {
+      const thread = await bot?.channels.fetch(threadId);
+      if (thread && thread.isThread()) {
+        await thread.setArchived(true);
+        log(`Archived thread: ${threadId}`, "discord-bot");
+      }
+    } catch (archiveError) {
+      log(`Could not archive thread ${threadId}: ${archiveError}`, "discord-bot");
+    }
+    
+    // Create a link to the post
+    const postLink = `[View Post](https://discord.com/channels/${post.guildId}/${threadId})`;
+    
+    await sendEphemeralWithAutoDelete(interaction, 
+      `✅ Your post "${post.title}" has been marked as fulfilled and given to **${recipient}**.\n\nThe thread has been archived.\n\n${postLink}`
+    );
+    
+    // Log the fulfillment
+    await storage.createLog({
+      userId: interaction.user.id,
+      username: interaction.user.tag,
+      command: 'updatepost',
+      channel: 'items-exchange',
+      status: 'fulfilled',
+      message: `Post "${post.title}" marked as fulfilled by ${recipient}`,
+      messageId: threadId
+    });
+    
+    // Record the confirmed exchange for tracking
+    try {
+      // Determine exchange type based on post title/category
+      let exchangeType = 'give'; // Default to give
+      const titleLower = post.title.toLowerCase();
+      if (titleLower.includes('trade') || titleLower.includes('swap') || titleLower.includes('exchange')) {
+        exchangeType = 'trade';
+      } else if (titleLower.includes('iso') || titleLower.includes('looking for') || titleLower.includes('need')) {
+        exchangeType = 'request';
+      }
+      
+      // Clean up recipient name (remove @ mentions and extra whitespace)
+      const cleanRecipient = recipient.replace(/<@!?(\d+)>/g, '').trim();
+      
+      await storage.createConfirmedExchange({
+        guildId: post.guildId,
+        threadId: threadId,
+        category: post.category,
+        originalPosterId: interaction.user.id,
+        originalPosterUsername: interaction.user.displayName || interaction.user.username,
+        tradingPartnerId: cleanRecipient, // We don't have their Discord ID, just name
+        tradingPartnerUsername: cleanRecipient,
+        itemDescription: post.title,
+        exchangeType: exchangeType
+      });
+      
+      log(`Recorded confirmed exchange: ${interaction.user.tag} -> ${cleanRecipient} (${post.title})`, "discord-bot");
+    } catch (exchangeError) {
+      log(`Error recording confirmed exchange: ${exchangeError}`, "discord-bot");
+      // Don't fail the whole operation if exchange recording fails
+    }
+    
+    log(`User ${interaction.user.tag} marked post as fulfilled: ${post.title} -> ${recipient}`, "discord-bot");
+  } catch (error) {
+    log(`Error handling claim modal submission: ${error}`, "discord-bot");
+    try {
+      await interaction.reply({
+        content: "There was an error processing your request. Please try again.",
+        ephemeral: true
+      });
+    } catch (replyError) {
+      log(`Error replying to interaction: ${replyError}`, "discord-bot");
+    }
+  }
 }
 
 async function handleContactModalSubmission(interaction: any): Promise<void> {
@@ -948,6 +1440,16 @@ async function handleInteraction(interaction: Interaction) {
         log(`Error handling fulfill button: ${error}`, "discord-bot");
         await interaction.editReply("There was an error processing your request. Please try again later.");
       }
+    }
+    // Handle post update buttons
+    else if (customId.startsWith('mark_claimed:')) {
+      const threadId = customId.split(':')[1];
+      log(`Processing mark as claimed for thread: ${threadId}`, "discord-bot");
+      await handleMarkAsClaimed(interaction, threadId);
+    } else if (customId.startsWith('still_available:')) {
+      const threadId = customId.split(':')[1];
+      log(`Processing still available for thread: ${threadId}`, "discord-bot");
+      await handleStillAvailable(interaction, threadId);
     }
   } catch (error) {
     log(`Error handling interaction: ${error}`, "discord-bot");
