@@ -7,7 +7,8 @@ import {
   forumPosts, type ForumPost, type InsertForumPost,
   confirmedExchanges, type ConfirmedExchange, type InsertConfirmedExchange,
   donationGoals, type DonationGoal, type InsertDonationGoal,
-  donations, type Donation, type InsertDonation
+  donations, type Donation, type InsertDonation,
+  formTokens, type FormToken, type InsertFormToken
 } from "@shared/schema";
 
 // Storage interface for bot-related data
@@ -67,6 +68,12 @@ export interface IStorage {
   getAllDonations(limit?: number): Promise<Donation[]>;
   getDonationsByDateRange(startDate: Date, endDate: Date): Promise<Donation[]>;
   getTotalDonationAmount(): Promise<number>;
+
+  // Form Token operations
+  createFormToken(token: InsertFormToken): Promise<FormToken>;
+  getFormToken(token: string): Promise<FormToken | undefined>;
+  markFormTokenUsed(token: string): Promise<void>;
+  cleanupExpiredTokens(): Promise<void>;
 }
 
 // In-memory storage implementation
@@ -715,6 +722,36 @@ export class DatabaseStorage implements IStorage {
       .select({ total: sum(donations.amount) })
       .from(donations);
     return Number(result[0]?.total || 0);
+  }
+
+  // Form Token operations
+  async createFormToken(token: InsertFormToken): Promise<FormToken> {
+    const [formToken] = await db.insert(formTokens).values(token).returning();
+    return formToken;
+  }
+
+  async getFormToken(token: string): Promise<FormToken | undefined> {
+    const [formToken] = await db.select().from(formTokens)
+      .where(and(
+        eq(formTokens.token, token),
+        eq(formTokens.used, false),
+        gt(formTokens.expiresAt, new Date())
+      ));
+    return formToken || undefined;
+  }
+
+  async markFormTokenUsed(token: string): Promise<void> {
+    await db.update(formTokens)
+      .set({ used: true })
+      .where(eq(formTokens.token, token));
+  }
+
+  async cleanupExpiredTokens(): Promise<void> {
+    await db.delete(formTokens)
+      .where(or(
+        eq(formTokens.used, true),
+        lt(formTokens.expiresAt, new Date())
+      ));
   }
 }
 

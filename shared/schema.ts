@@ -180,3 +180,30 @@ export const insertDonationSchema = createInsertSchema(donations).omit({
 
 export type InsertDonation = z.infer<typeof insertDonationSchema>;
 export type Donation = typeof donations.$inferSelect;
+
+// Form Tokens schema - for linking Discord users to form submissions
+export const formTokens = pgTable("form_tokens", {
+  id: serial("id").primaryKey(),
+  token: text("token").notNull().unique(),
+  discordUserId: text("discord_user_id").notNull(),
+  discordUsername: text("discord_username").notNull(),
+  discordDisplayName: text("discord_display_name"),
+  discordAvatar: text("discord_avatar"),
+  guildId: text("guild_id").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  used: boolean("used").notNull().default(false),
+});
+
+export const insertFormTokenSchema = createInsertSchema(formTokens).pick({
+  token: true,
+  discordUserId: true,
+  discordUsername: true,
+  discordDisplayName: true,
+  discordAvatar: true,
+  guildId: true,
+  expiresAt: true,
+});
+
+export type InsertFormToken = z.infer<typeof insertFormTokenSchema>;
+export type FormToken = typeof formTokens.$inferSelect;
