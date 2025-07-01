@@ -832,9 +832,12 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
         });
       }
     
-    } else if (['initgoal', 'resetgoal', 'donate', 'testkofi', 'testautobump'].includes(commandName)) {
+    } else if (['initgoal', 'resetgoal', 'donate', 'testkofi'].includes(commandName)) {
       // Handle donation and test commands
       await handleDonationCommand(interaction);
+    } else if (commandName === 'testautobump') {
+      // Handle auto-bump testing command
+      await handleTestAutoBump(interaction);
       
     } else {
       // Unknown command
