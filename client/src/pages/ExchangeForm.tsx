@@ -791,7 +791,7 @@ export default function ExchangeForm() {
                 {/* Location name display */}
                 <div className="mt-3 p-3 bg-gray-800 border border-gray-700 rounded-md">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-300">📍 Detected Location:</span>
+                    <span className="text-sm font-medium text-gray-300">📍 Remembered Location:</span>
                     {isLoadingLocation ? (
                       <span className="text-sm text-blue-400">Loading location...</span>
                     ) : locationName ? (

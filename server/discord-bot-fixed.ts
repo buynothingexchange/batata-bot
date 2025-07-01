@@ -2066,9 +2066,9 @@ function isValidDiscordToken(token: string): boolean {
 // Function to get neighborhood name from coordinates using Nominatim
 async function getNeighborhoodFromCoordinates(lat: number, lng: number): Promise<string> {
   try {
-    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`, {
+    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, {
       headers: {
-        'User-Agent': 'BatataBot/1.0 (Exchange Form Location Service)'
+        'User-Agent': 'BatataExchangeBot/1.0 (Discord Exchange Platform)'
       }
     });
     
@@ -2079,17 +2079,21 @@ async function getNeighborhoodFromCoordinates(lat: number, lng: number): Promise
     const data = await response.json();
     
     if (data && data.address) {
-      // Try to get neighborhood, then suburb, then city_district, then city
-      const neighborhood = data.address.neighbourhood || 
-                          data.address.suburb || 
-                          data.address.city_district || 
-                          data.address.city || 
-                          data.address.town || 
-                          data.address.village || 
-                          'Unknown Location';
+      // Extract meaningful location components - match the form's logic exactly
+      const address = data.address || {};
+      const locationParts = [
+        address.suburb || address.neighbourhood || address.hamlet,
+        address.city || address.town || address.village,
+        address.state || address.province,
+        address.country
+      ].filter(Boolean);
       
-      log(`Reverse geocoding result for ${lat},${lng}: ${neighborhood}`, "discord-bot");
-      return neighborhood;
+      const locationString = locationParts.length > 0 
+        ? locationParts.slice(0, 2).join(', ') // Show first 2 components (e.g., "Junction Triangle, Toronto")
+        : 'Location detected';
+      
+      log(`Reverse geocoding result for ${lat},${lng}: ${locationString}`, "discord-bot");
+      return locationString;
     }
     
     return 'Unknown Location';

@@ -13,6 +13,12 @@ A sophisticated Discord bot application designed to streamline cross-server item
 
 ## Recent Changes (Latest Updates)
 
+### Location Memory and Privacy Enhancements - July 1, 2025
+- ✅ **Changed "detected location" to "remembered location"** - updated form UI to avoid privacy concerns about tracking
+- ✅ **Fixed location memory translation** - coordinated reverse geocoding between form and Discord bot to show same neighborhood
+- ✅ **Enhanced geocoding consistency** - both form and bot now use identical location parsing logic for reliable results
+- ✅ **Improved user experience** - location displayed in form now matches exactly what appears in forum posts
+
 ### Enhanced Ephemeral Message Management - July 1, 2025
 - ✅ **Extended auto-delete timing** - all ephemeral messages from Batata now disappear after 2 minutes instead of 15 seconds
 - ✅ **Improved user experience** - users have more time to read and act on bot responses before they auto-delete
