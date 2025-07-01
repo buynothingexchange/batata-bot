@@ -142,70 +142,53 @@ export default function ExchangeForm() {
   // Initialize map when Leaflet is loaded
   useEffect(() => {
     if (mapLoaded && mapRef.current && !mapInstanceRef.current) {
-      // Add a small delay to ensure DOM is ready
       const timeoutId = setTimeout(() => {
         if (!mapRef.current) return;
         
         try {
           console.log('Initializing Leaflet map...');
-          console.log('Map container:', mapRef.current);
-          console.log('Container dimensions:', mapRef.current.offsetWidth, 'x', mapRef.current.offsetHeight);
           
           // Clear any existing content
           mapRef.current.innerHTML = '';
           
-          const map = window.L.map(mapRef.current, {
-            preferCanvas: true,
-            attributionControl: true
-          }).setView([43.7, -79.4], 11);
+          const map = window.L.map(mapRef.current).setView([43.7, -79.4], 11);
 
-        // Add tile layer with error handling
-        const tileLayer = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap contributors',
-          maxZoom: 19,
-          tileSize: 256,
-          zoomOffset: 0
-        });
-        
-        tileLayer.on('tileerror', (e: any) => {
-          console.error('Tile loading error:', e);
-        });
-        
-        tileLayer.addTo(map);
+          window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+          }).addTo(map);
 
-        const circle = window.L.circle([43.7, -79.4], {
-          color: 'green',
-          fillColor: '#3f9e2f',
-          fillOpacity: 0.4,
-          radius: 2000
-        }).addTo(map);
+          const circle = window.L.circle([43.7, -79.4], {
+            color: 'green',
+            fillColor: '#3f9e2f',
+            fillOpacity: 0.4,
+            radius: 2000
+          }).addTo(map);
 
-        const marker = window.L.marker([43.7, -79.4], { draggable: true }).addTo(map);
+          const marker = window.L.marker([43.7, -79.4], { draggable: true }).addTo(map);
 
-        marker.on('drag', function(e: any) {
-          circle.setLatLng(e.latlng);
-          form.setValue('lat', parseFloat(e.latlng.lat.toFixed(4)));
-          form.setValue('lng', parseFloat(e.latlng.lng.toFixed(4)));
-        });
+          marker.on('drag', function(e: any) {
+            circle.setLatLng(e.latlng);
+            form.setValue('lat', parseFloat(e.latlng.lat.toFixed(4)));
+            form.setValue('lng', parseFloat(e.latlng.lng.toFixed(4)));
+          });
 
-        // Ensure map renders properly
-        setTimeout(() => {
-          map.invalidateSize();
-          console.log('Map invalidated and should be visible');
-        }, 100);
+          // Ensure map renders properly
+          setTimeout(() => {
+            map.invalidateSize();
+            console.log('Map invalidated and should be visible');
+          }, 100);
 
-        mapInstanceRef.current = map;
-        markerRef.current = marker;
-        circleRef.current = circle;
-        setMapInitialized(true);
-        
+          mapInstanceRef.current = map;
+          markerRef.current = marker;
+          circleRef.current = circle;
+          setMapInitialized(true);
+          
           console.log('Map initialized successfully');
         } catch (error) {
           console.error('Error initializing map:', error);
         }
-      }, 500); // 500ms delay
+      }, 1000); // 1 second delay
       
-      // Cleanup function
       return () => clearTimeout(timeoutId);
     }
   }, [mapLoaded, form]);
