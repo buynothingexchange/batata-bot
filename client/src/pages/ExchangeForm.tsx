@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
 
-import { HelpCircle } from "lucide-react";
+import { HelpCircle, CheckCircle, MessageSquare, Settings, ArrowLeft } from "lucide-react";
 
 const baseExchangeFormSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
@@ -61,11 +61,137 @@ if (typeof window !== 'undefined') {
   };
 }
 
+// Success Page Component
+function SuccessPage({ postData, onStartOver }: { postData: any; onStartOver: () => void }) {
+  const getExchangeTypeText = (type: string) => {
+    switch (type) {
+      case 'give': return 'offering';
+      case 'request': return 'requesting';
+      case 'trade': return 'trading';
+      default: return 'exchanging';
+    }
+  };
+
+  const getCategoryDisplayName = (category: string) => {
+    switch (category) {
+      case 'electronics': return 'Electronics';
+      case 'clothing': return 'Clothing';
+      case 'accessories': return 'Accessories';
+      case 'home_furniture': return 'Home & Furniture';
+      case 'footwear': return 'Footwear';
+      case 'misc': return 'Miscellaneous';
+      default: return category;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-950 py-8">
+      <div className="container max-w-2xl mx-auto p-6">
+        <Card className="bg-gray-900 border-gray-800 shadow-2xl">
+          <CardHeader className="text-center">
+            <div className="mx-auto w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mb-4">
+              <CheckCircle className="w-8 h-8 text-white" />
+            </div>
+            <CardTitle className="text-green-400 text-3xl">Success!</CardTitle>
+            <CardDescription className="text-gray-300 text-lg">
+              Your exchange post has been created in Discord
+            </CardDescription>
+          </CardHeader>
+          
+          <CardContent className="space-y-6">
+            {/* Post Summary */}
+            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+              <h3 className="text-green-400 font-semibold mb-2">Post Created:</h3>
+              <div className="flex items-center gap-3 mb-2">
+                <img 
+                  src={postData.discordUser.discordAvatar} 
+                  alt="Your avatar" 
+                  className="w-8 h-8 rounded-full"
+                />
+                <div>
+                  <p className="text-white font-medium">{postData.title}</p>
+                  <p className="text-gray-400 text-sm">
+                    {getExchangeTypeText(postData.type).charAt(0).toUpperCase() + getExchangeTypeText(postData.type).slice(1)} • {getCategoryDisplayName(postData.category)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Next Steps */}
+            <div className="space-y-4">
+              <h3 className="text-green-400 font-semibold text-lg">What happens next?</h3>
+              
+              <div className="space-y-3">
+                <div className="flex items-start gap-3 p-3 bg-gray-800 rounded-lg border border-gray-700">
+                  <MessageSquare className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-white font-medium">Auto-follow enabled</p>
+                    <p className="text-gray-300 text-sm">
+                      You're automatically following your post and will receive Discord notifications when people reply
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 bg-gray-800 rounded-lg border border-gray-700">
+                  <Settings className="w-5 h-5 text-purple-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-white font-medium">Manage your post</p>
+                    <p className="text-gray-300 text-sm">
+                      When your item is traded or claimed, use <code className="bg-gray-700 px-1 rounded text-green-400">/updatepost</code> command in Discord to mark it as completed
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 bg-gray-800 rounded-lg border border-gray-700">
+                  <CheckCircle className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-white font-medium">Auto-bump system</p>
+                    <p className="text-gray-300 text-sm">
+                      Your post will be automatically bumped every 6 days to keep it visible in the community
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-4 pt-4">
+              <Button 
+                onClick={onStartOver}
+                variant="outline" 
+                className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-800"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Create Another Post
+              </Button>
+              <Button 
+                onClick={() => window.close()}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+              >
+                Close Tab
+              </Button>
+            </div>
+
+            {/* Help Text */}
+            <div className="text-center pt-4 border-t border-gray-700">
+              <p className="text-gray-400 text-sm">
+                Need help? Contact a server administrator in Discord
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 export default function ExchangeForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapInitialized, setMapInitialized] = useState(false);
   const [token, setToken] = useState<string | null>(null);
+  const [submissionSuccess, setSubmissionSuccess] = useState(false);
+  const [submittedPostData, setSubmittedPostData] = useState<any>(null);
 
   const [locationName, setLocationName] = useState<string>('');
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
@@ -425,19 +551,16 @@ export default function ExchangeForm() {
       const result = await response.json();
 
       if (response.ok && result.success) {
-        toast({
-          title: "Success!",
-          description: "Your exchange post has been created in Discord.",
+        // Store the submitted data for the success page
+        setSubmittedPostData({
+          title: data.title,
+          type: data.type,
+          category: data.category,
+          discordUser: tokenData?.user || {}
         });
-        form.reset();
-        // Reset map position
-        if (markerRef.current && circleRef.current) {
-          markerRef.current.setLatLng([43.7, -79.4]);
-          circleRef.current.setLatLng([43.7, -79.4]);
-          if (mapInstanceRef.current) {
-            mapInstanceRef.current.setView([43.7, -79.4], 11);
-          }
-        }
+        
+        // Show success page instead of toast
+        setSubmissionSuccess(true);
       } else {
         throw new Error(result.message || "Failed to create post");
       }
