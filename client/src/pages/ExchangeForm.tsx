@@ -50,6 +50,8 @@ export default function ExchangeForm() {
   const [token, setToken] = useState<string | null>(null);
   const [showOnboardingTour, setShowOnboardingTour] = useState(false);
   const [hasSeenTour, setHasSeenTour] = useState(false);
+  const [locationName, setLocationName] = useState<string>('');
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -241,6 +243,47 @@ export default function ExchangeForm() {
       form.trigger("image");
     }
   }, [watchedType, form]);
+
+  // Reverse geocoding function using Nominatim
+  const reverseGeocode = async (lat: number, lng: number) => {
+    try {
+      setIsLoadingLocation(true);
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+        {
+          headers: {
+            'User-Agent': 'BatataExchangeBot/1.0 (Discord Exchange Platform)'
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error('Geocoding failed');
+      }
+      
+      const data = await response.json();
+      
+      // Extract meaningful location components
+      const address = data.address || {};
+      const locationParts = [
+        address.suburb || address.neighbourhood || address.hamlet,
+        address.city || address.town || address.village,
+        address.state || address.province,
+        address.country
+      ].filter(Boolean);
+      
+      const locationString = locationParts.length > 0 
+        ? locationParts.slice(0, 2).join(', ') // Show first 2 components (e.g., "Downtown, Toronto")
+        : 'Location detected';
+        
+      setLocationName(locationString);
+    } catch (error) {
+      console.error('Reverse geocoding error:', error);
+      setLocationName('Unable to detect location');
+    } finally {
+      setIsLoadingLocation(false);
+    }
+  };
 
   const onSubmit = async (data: ExchangeFormData) => {
     if (!token || !tokenData?.valid) {
