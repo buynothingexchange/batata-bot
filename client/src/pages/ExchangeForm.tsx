@@ -575,7 +575,25 @@ export default function ExchangeForm() {
     }
   };
 
+  // Function to reset state and start over
+  const handleStartOver = () => {
+    setSubmissionSuccess(false);
+    setSubmittedPostData(null);
+    form.reset();
+    // Reset map position
+    if (markerRef.current && circleRef.current) {
+      markerRef.current.setLatLng([43.7, -79.4]);
+      circleRef.current.setLatLng([43.7, -79.4]);
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.setView([43.7, -79.4], 11);
+      }
+    }
+  };
 
+  // Show success page if submission was successful
+  if (submissionSuccess && submittedPostData) {
+    return <SuccessPage postData={submittedPostData} onStartOver={handleStartOver} />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-950 py-8">
