@@ -13,6 +13,14 @@ A sophisticated Discord bot application designed to streamline cross-server item
 
 ## Recent Changes (Latest Updates)
 
+### Enhanced Location System with Neighborhood Detection - July 1, 2025
+- ✅ **Removed location text field** - form now uses only interactive map for location selection
+- ✅ **Added Nominatim reverse geocoding** - automatically detects neighborhood names from coordinates
+- ✅ **Enhanced Discord embeds** - location now displays as clickable neighborhood name linking to Google Maps
+- ✅ **Simplified location format** - replaced separate location text and map link with single clickable neighborhood link
+- ✅ **Improved user experience** - users see exact neighborhood names (e.g., "📍 Christie Pits") instead of raw coordinates
+- ✅ **Backend integration** - coordinates required for all form submissions, neighborhood detection happens server-side
+
 ### Form Success Page Implementation - July 1, 2025
 - ✅ **Post-submission success page** - form now displays a comprehensive success page after successful submission
 - ✅ **Automatic form closure** - form interface is replaced with success page instead of showing a toast notification
