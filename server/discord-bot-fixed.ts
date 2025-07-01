@@ -480,7 +480,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
         await storage.cleanupExpiredTokens();
         
         // Create authenticated form URL with token
-        const baseUrl = process.env.EXCHANGE_FORM_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.replit.dev`;
+        const baseUrl = process.env.EXCHANGE_FORM_URL || `https://${process.env.REPLIT_DOMAINS}`;
         const formUrl = `${baseUrl}/exchange?token=${token}`;
         
         // Send ephemeral reply with authenticated form URL
