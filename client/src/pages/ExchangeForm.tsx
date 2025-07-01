@@ -10,9 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
 
 const baseExchangeFormSchema = z.object({
-  username: z.string().min(2, "Username must be at least 2 characters"),
   title: z.string().min(3, "Title must be at least 3 characters"),
   description: z.string().min(10, "Description must be at least 10 characters"),
   category: z.enum(["electronics", "clothing", "accessories", "home_furniture", "footwear", "misc"]),
@@ -44,16 +44,38 @@ declare global {
 export default function ExchangeForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
   const circleRef = useRef<any>(null);
   const { toast } = useToast();
 
+  // Extract token from URL
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlToken = urlParams.get('token');
+    setToken(urlToken);
+  }, []);
+
+  // Validate token and get user information
+  const { data: tokenData, isLoading: isValidatingToken, error: tokenError } = useQuery({
+    queryKey: ['/api/validate-token', token],
+    queryFn: async () => {
+      if (!token) return null;
+      const response = await fetch(`/api/validate-token/${token}`);
+      if (!response.ok) {
+        throw new Error('Invalid or expired token');
+      }
+      return response.json();
+    },
+    enabled: !!token,
+    retry: false
+  });
+
   const form = useForm<ExchangeFormData>({
     resolver: zodResolver(baseExchangeFormSchema),
     defaultValues: {
-      username: "",
       title: "",
       description: "",
       location: "",
@@ -134,6 +156,15 @@ export default function ExchangeForm() {
   }, [watchedType, form]);
 
   const onSubmit = async (data: ExchangeFormData) => {
+    if (!token || !tokenData?.valid) {
+      toast({
+        title: "Authentication Error",
+        description: "Invalid or expired authentication token. Please get a new link from Discord.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     
     try {
@@ -172,9 +203,9 @@ export default function ExchangeForm() {
         imageUrl = uploadResult.imageUrl;
       }
 
-      // Submit to Discord bot
+      // Submit to Discord bot with token
       const postData = {
-        username: data.username,
+        token: token,
         title: data.title,
         description: data.description,
         category: data.category,
@@ -232,10 +263,53 @@ export default function ExchangeForm() {
             <CardDescription className="text-gray-300">
               Fill out this form to create a new exchange post in the Discord community.
             </CardDescription>
+            
+            {/* Authentication Status */}
+            {isValidatingToken && (
+              <div className="bg-blue-900/20 border border-blue-600 rounded-lg p-3 mt-4">
+                <p className="text-blue-400">🔄 Validating authentication...</p>
+              </div>
+            )}
+            
+            {tokenError && (
+              <div className="bg-red-900/20 border border-red-600 rounded-lg p-3 mt-4">
+                <p className="text-red-400">❌ Authentication failed. Please get a new link from Discord.</p>
+              </div>
+            )}
+            
+            {tokenData?.valid && (
+              <div className="bg-green-900/20 border border-green-600 rounded-lg p-3 mt-4 flex items-center gap-3">
+                <img 
+                  src={tokenData.user.discordAvatar} 
+                  alt="Your avatar" 
+                  className="w-8 h-8 rounded-full"
+                />
+                <div>
+                  <p className="text-green-400">✅ Authenticated as</p>
+                  <p className="text-white font-medium">
+                    {tokenData.user.discordDisplayName || tokenData.user.discordUsername}
+                  </p>
+                </div>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          {/* Show form only if authenticated */}
+          {!token ? (
+            <div className="text-center py-8">
+              <p className="text-yellow-400">⚠️ No authentication token found. Please use the link from Discord.</p>
+            </div>
+          ) : tokenError ? (
+            <div className="text-center py-8">
+              <p className="text-red-400">❌ Authentication failed. Please get a new link from Discord.</p>
+            </div>
+          ) : !tokenData?.valid ? (
+            <div className="text-center py-8">
+              <p className="text-blue-400">🔄 Validating authentication...</p>
+            </div>
+          ) : (
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <FormField
                 control={form.control}
                 name="type"
@@ -254,26 +328,6 @@ export default function ExchangeForm() {
                         <SelectItem value="trade">Trade - Exchange items</SelectItem>
                       </SelectContent>
                     </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="username"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-gray-200">
-                      Username <span className="text-green-400">*</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="Your Discord username or display name" 
-                        {...field} 
-                        className="bg-gray-800 border-gray-700 text-white"
-                      />
-                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -411,6 +465,7 @@ export default function ExchangeForm() {
               </Button>
             </form>
           </Form>
+          )}
           </CardContent>
         </Card>
       </div>
