@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
 
-import { HelpCircle, CheckCircle, MessageSquare, Settings, ArrowLeft } from "lucide-react";
+import { HelpCircle, CheckCircle, MessageSquare, Settings } from "lucide-react";
 
 const baseExchangeFormSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters"),
@@ -61,7 +61,7 @@ if (typeof window !== 'undefined') {
 }
 
 // Success Page Component
-function SuccessPage({ postData, onStartOver }: { postData: any; onStartOver: () => void }) {
+function SuccessPage({ postData }: { postData: any }) {
   const getExchangeTypeText = (type: string) => {
     switch (type) {
       case 'give': return 'offering';
@@ -153,19 +153,11 @@ function SuccessPage({ postData, onStartOver }: { postData: any; onStartOver: ()
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex gap-4 pt-4">
-              <Button 
-                onClick={onStartOver}
-                variant="outline" 
-                className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-800"
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Create Another Post
-              </Button>
+            {/* Action Button */}
+            <div className="flex justify-center pt-4">
               <Button 
                 onClick={() => window.close()}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                className="px-8 bg-green-600 hover:bg-green-700 text-white"
               >
                 Close Tab
               </Button>
@@ -601,24 +593,11 @@ export default function ExchangeForm() {
     }
   };
 
-  // Function to reset state and start over
-  const handleStartOver = () => {
-    setSubmissionSuccess(false);
-    setSubmittedPostData(null);
-    form.reset();
-    // Reset map position
-    if (markerRef.current && circleRef.current) {
-      markerRef.current.setLatLng([43.7, -79.4]);
-      circleRef.current.setLatLng([43.7, -79.4]);
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.setView([43.7, -79.4], 11);
-      }
-    }
-  };
+
 
   // Show success page if submission was successful
   if (submissionSuccess && submittedPostData) {
-    return <SuccessPage postData={submittedPostData} onStartOver={handleStartOver} />;
+    return <SuccessPage postData={submittedPostData} />;
   }
 
   return (
