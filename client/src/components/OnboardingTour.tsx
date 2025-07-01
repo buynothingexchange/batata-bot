@@ -119,17 +119,24 @@ export function OnboardingTour({ isVisible, onComplete, onSkip }: OnboardingTour
   }, [isVisible, currentStep]);
 
   const updateHighlight = () => {
-    if (!currentTourStep) return;
+    if (!currentTourStep || !isVisible) return;
     
-    const targetElement = document.querySelector(`[data-tour="${currentTourStep.target}"]`);
-    if (targetElement) {
-      const rect = targetElement.getBoundingClientRect();
-      setHighlightPosition({
-        top: rect.top,
-        left: rect.left,
-        width: rect.width,
-        height: rect.height
-      });
+    try {
+      const targetElement = document.querySelector(`[data-tour="${currentTourStep.target}"]`);
+      if (targetElement && document.body.contains(targetElement)) {
+        const rect = targetElement.getBoundingClientRect();
+        setHighlightPosition({
+          top: rect.top,
+          left: rect.left,
+          width: rect.width,
+          height: rect.height
+        });
+      } else {
+        setHighlightPosition(null);
+      }
+    } catch (error) {
+      console.warn('Tour highlight update failed:', error);
+      setHighlightPosition(null);
     }
   };
 

@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
-import { OnboardingTour } from "@/components/OnboardingTour";
+// import { OnboardingTour } from "@/components/OnboardingTour";
 import { HelpCircle } from "lucide-react";
 
 const baseExchangeFormSchema = z.object({
@@ -683,12 +683,12 @@ export default function ExchangeForm() {
         </Card>
       </div>
 
-      {/* Onboarding Tour */}
-      <OnboardingTour
+      {/* Onboarding Tour - Temporarily disabled for debugging */}
+      {/* <OnboardingTour
         isVisible={showOnboardingTour}
         onComplete={handleTourComplete}
         onSkip={handleTourSkip}
-      />
+      /> */}
     </div>
   );
 }
