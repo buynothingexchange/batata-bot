@@ -1210,7 +1210,7 @@ async function handleContactModalSubmission(interaction: any): Promise<void> {
 }
 
 // Helper function for ephemeral messages with auto-delete
-async function sendEphemeralWithAutoDelete(interaction: any, content: string | { content?: string; embeds?: any[]; components?: any[] }, deleteAfterSeconds: number = 15) {
+async function sendEphemeralWithAutoDelete(interaction: any, content: string | { content?: string; embeds?: any[]; components?: any[] }, deleteAfterSeconds: number = 120) {
   try {
     if (typeof content === 'string') {
       await interaction.reply({ content, ephemeral: true });
