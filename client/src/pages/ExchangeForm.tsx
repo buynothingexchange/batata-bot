@@ -44,6 +44,7 @@ declare global {
 export default function ExchangeForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapInitialized, setMapInitialized] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -141,15 +142,22 @@ export default function ExchangeForm() {
   // Initialize map when Leaflet is loaded
   useEffect(() => {
     if (mapLoaded && mapRef.current && !mapInstanceRef.current) {
-      try {
-        console.log('Initializing Leaflet map...');
+      // Add a small delay to ensure DOM is ready
+      const timeoutId = setTimeout(() => {
+        if (!mapRef.current) return;
         
-        // Clear any existing content
-        mapRef.current.innerHTML = '';
-        
-        const map = window.L.map(mapRef.current, {
-          preferCanvas: true
-        }).setView([43.7, -79.4], 11);
+        try {
+          console.log('Initializing Leaflet map...');
+          console.log('Map container:', mapRef.current);
+          console.log('Container dimensions:', mapRef.current.offsetWidth, 'x', mapRef.current.offsetHeight);
+          
+          // Clear any existing content
+          mapRef.current.innerHTML = '';
+          
+          const map = window.L.map(mapRef.current, {
+            preferCanvas: true,
+            attributionControl: true
+          }).setView([43.7, -79.4], 11);
 
         // Add tile layer with error handling
         const tileLayer = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -189,11 +197,16 @@ export default function ExchangeForm() {
         mapInstanceRef.current = map;
         markerRef.current = marker;
         circleRef.current = circle;
+        setMapInitialized(true);
         
-        console.log('Map initialized successfully');
-      } catch (error) {
-        console.error('Error initializing map:', error);
-      }
+          console.log('Map initialized successfully');
+        } catch (error) {
+          console.error('Error initializing map:', error);
+        }
+      }, 500); // 500ms delay
+      
+      // Cleanup function
+      return () => clearTimeout(timeoutId);
     }
   }, [mapLoaded, form]);
 
@@ -463,12 +476,28 @@ export default function ExchangeForm() {
                 </label>
                 <div 
                   ref={mapRef}
-                  className="h-[300px] w-full rounded-lg border border-gray-700 bg-gray-800"
-                  style={{ minHeight: '300px' }}
+                  className="h-[300px] w-full rounded-lg border border-gray-700"
+                  style={{ 
+                    minHeight: '300px', 
+                    height: '300px',
+                    position: 'relative',
+                    zIndex: 0,
+                    backgroundColor: '#f0f0f0' 
+                  }}
                 >
                   {!mapLoaded && (
-                    <div className="flex items-center justify-center h-full text-gray-400">
-                      Loading map...
+                    <div className="flex items-center justify-center h-full text-gray-400 absolute inset-0 z-10">
+                      Loading map libraries...
+                    </div>
+                  )}
+                  {mapLoaded && !mapInitialized && (
+                    <div className="flex items-center justify-center h-full text-blue-400 absolute inset-0 z-10">
+                      Initializing map...
+                    </div>
+                  )}
+                  {mapLoaded && mapInitialized && !mapInstanceRef.current && (
+                    <div className="flex items-center justify-center h-full text-red-400 absolute inset-0 z-10">
+                      Map initialization failed. Please refresh the page.
                     </div>
                   )}
                 </div>
