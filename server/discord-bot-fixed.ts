@@ -686,6 +686,9 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
     } else if (commandName === 'markfulfilled') {
       log(`Processing /markfulfilled command from ${interaction.user.tag}`, "discord-bot");
       
+      // Acknowledge the interaction immediately to prevent timeout
+      await interaction.deferReply({ ephemeral: true });
+      
       try {
         const tradedWithUser = interaction.options.getUser('tradedwith', true);
         log(`User selected to trade with: ${tradedWithUser.username} (${tradedWithUser.id})`, "discord-bot");
@@ -695,7 +698,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
         const activePosts = userPosts.filter(post => post.isActive);
         
         if (activePosts.length === 0) {
-          await sendEphemeralWithAutoDelete(interaction,
+          await interaction.editReply(
             "You don't have any active forum posts to mark as fulfilled. Use `/exchange` to create a new post!"
           );
           return;
@@ -723,7 +726,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
               .addOptions(postOptions)
           );
         
-        await sendEphemeralWithAutoDelete(interaction, {
+        await interaction.editReply({
           content: `Select which post you want to mark as fulfilled with **${tradedWithUser.username}**:`,
           components: [postSelectRow]
         });
@@ -732,7 +735,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
         
       } catch (error) {
         log(`Error in /markfulfilled command: ${error}`, "discord-bot");
-        await sendEphemeralWithAutoDelete(interaction, "There was an error processing your command. Please try again.");
+        await interaction.editReply("There was an error processing your command. Please try again.");
       }
     
     } else if (commandName === 'contactus' || commandName === 'contactusanon') {
