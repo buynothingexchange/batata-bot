@@ -13,6 +13,12 @@ A sophisticated Discord bot application designed to streamline cross-server item
 
 ## Recent Changes (Latest Updates)
 
+### Enhanced Ephemeral Message Management - July 1, 2025
+- ✅ **Extended auto-delete timing** - all ephemeral messages from Batata now disappear after 2 minutes instead of 15 seconds
+- ✅ **Improved user experience** - users have more time to read and act on bot responses before they auto-delete
+- ✅ **Cleaner Discord channels** - automatic cleanup prevents message accumulation while maintaining usability
+- ✅ **System-wide consistency** - all command responses, confirmations, and error messages use uniform 2-minute timeout
+
 ### Improved Google Maps Location Display - July 1, 2025
 - ✅ **Enhanced Google Maps URL format** - location links now search for neighborhood area instead of showing exact coordinates
 - ✅ **Better neighborhood context** - clicking location links shows broader neighborhood view with 15z zoom level
