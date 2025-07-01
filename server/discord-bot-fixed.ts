@@ -574,9 +574,19 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
                    '**Description:** Update or manage your existing forum posts.\n' +
                    '**Features:**\n' +
                    '• View all your active posts\n' +
-                   '• Mark items as claimed/fulfilled\n' +
                    '• Update post status to keep them active\n' +
-                   '• Archive completed exchanges',
+                   '• Use with /markfulfilled to complete exchanges',
+            inline: false
+          },
+          {
+            name: '✅ /markfulfilled',
+            value: '**Usage:** `/markfulfilled @username`\n' +
+                   '**Description:** Mark your exchange post as fulfilled (private).\n' +
+                   '**Features:**\n' +
+                   '• Select who you traded with using Discord user picker\n' +
+                   '• Automatically archives the thread with completion record\n' +
+                   '• Records the exchange in community statistics\n' +
+                   '• Completely private - only you see the process',
             inline: false
           },
           {
@@ -1372,7 +1382,7 @@ async function handleMarkFulfilledDirect(interaction: any, threadId: string, tra
     }
     
     // Verify user owns this post
-    if (post.originalPosterId !== interaction.user.id) {
+    if (post.authorId !== interaction.user.id) {
       await sendEphemeralWithAutoDelete(interaction, "You can only mark your own posts as fulfilled.");
       return;
     }

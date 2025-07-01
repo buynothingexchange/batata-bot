@@ -647,6 +647,19 @@ export class DatabaseStorage implements IStorage {
     return post || undefined;
   }
 
+  async getForumPostByThreadId(threadId: string): Promise<ForumPost | undefined> {
+    return this.getForumPost(threadId);
+  }
+
+  async updateForumPost(threadId: string, updates: Partial<ForumPost>): Promise<ForumPost | undefined> {
+    const [updatedPost] = await db
+      .update(forumPosts)
+      .set(updates)
+      .where(eq(forumPosts.threadId, threadId))
+      .returning();
+    return updatedPost || undefined;
+  }
+
   async updateForumPostActivity(threadId: string): Promise<ForumPost | undefined> {
     const [updatedPost] = await db
       .update(forumPosts)
