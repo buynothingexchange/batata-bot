@@ -91,24 +91,47 @@ export default function ExchangeForm() {
   // Load Leaflet dynamically and initialize map
   useEffect(() => {
     const loadLeaflet = async () => {
-      // Add Leaflet CSS
+      // Add Leaflet CSS first and wait for it to load
       if (!document.querySelector('link[href*="leaflet.css"]')) {
         const link = document.createElement('link');
         link.rel = 'stylesheet';
-        link.href = 'https://unpkg.com/leaflet/dist/leaflet.css';
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        link.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
+        link.crossOrigin = '';
         document.head.appendChild(link);
-      }
-
-      // Add Leaflet JS
-      if (!window.L) {
-        const script = document.createElement('script');
-        script.src = 'https://unpkg.com/leaflet/dist/leaflet.js';
-        script.onload = () => {
-          setMapLoaded(true);
+        
+        // Wait for CSS to load before loading JS
+        link.onload = () => {
+          console.log('Leaflet CSS loaded successfully');
+          loadLeafletJS();
         };
-        document.head.appendChild(script);
+        link.onerror = () => {
+          console.error('Failed to load Leaflet CSS');
+          loadLeafletJS(); // Try to continue anyway
+        };
       } else {
-        setMapLoaded(true);
+        loadLeafletJS();
+      }
+      
+      function loadLeafletJS() {
+        // Add Leaflet JS
+        if (!window.L) {
+          const script = document.createElement('script');
+          script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+          script.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
+          script.crossOrigin = '';
+          script.onload = () => {
+            console.log('Leaflet JS loaded successfully');
+            setMapLoaded(true);
+          };
+          script.onerror = () => {
+            console.error('Failed to load Leaflet JS');
+          };
+          document.head.appendChild(script);
+        } else {
+          console.log('Leaflet already available');
+          setMapLoaded(true);
+        }
       }
     };
 
@@ -118,30 +141,59 @@ export default function ExchangeForm() {
   // Initialize map when Leaflet is loaded
   useEffect(() => {
     if (mapLoaded && mapRef.current && !mapInstanceRef.current) {
-      const map = window.L.map(mapRef.current).setView([43.7, -79.4], 11);
+      try {
+        console.log('Initializing Leaflet map...');
+        
+        // Clear any existing content
+        mapRef.current.innerHTML = '';
+        
+        const map = window.L.map(mapRef.current, {
+          preferCanvas: true
+        }).setView([43.7, -79.4], 11);
 
-      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
-      }).addTo(map);
+        // Add tile layer with error handling
+        const tileLayer = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap contributors',
+          maxZoom: 19,
+          tileSize: 256,
+          zoomOffset: 0
+        });
+        
+        tileLayer.on('tileerror', (e: any) => {
+          console.error('Tile loading error:', e);
+        });
+        
+        tileLayer.addTo(map);
 
-      const circle = window.L.circle([43.7, -79.4], {
-        color: 'green',
-        fillColor: '#3f9e2f',
-        fillOpacity: 0.4,
-        radius: 2000
-      }).addTo(map);
+        const circle = window.L.circle([43.7, -79.4], {
+          color: 'green',
+          fillColor: '#3f9e2f',
+          fillOpacity: 0.4,
+          radius: 2000
+        }).addTo(map);
 
-      const marker = window.L.marker([43.7, -79.4], { draggable: true }).addTo(map);
+        const marker = window.L.marker([43.7, -79.4], { draggable: true }).addTo(map);
 
-      marker.on('drag', function(e: any) {
-        circle.setLatLng(e.latlng);
-        form.setValue('lat', parseFloat(e.latlng.lat.toFixed(4)));
-        form.setValue('lng', parseFloat(e.latlng.lng.toFixed(4)));
-      });
+        marker.on('drag', function(e: any) {
+          circle.setLatLng(e.latlng);
+          form.setValue('lat', parseFloat(e.latlng.lat.toFixed(4)));
+          form.setValue('lng', parseFloat(e.latlng.lng.toFixed(4)));
+        });
 
-      mapInstanceRef.current = map;
-      markerRef.current = marker;
-      circleRef.current = circle;
+        // Ensure map renders properly
+        setTimeout(() => {
+          map.invalidateSize();
+          console.log('Map invalidated and should be visible');
+        }, 100);
+
+        mapInstanceRef.current = map;
+        markerRef.current = marker;
+        circleRef.current = circle;
+        
+        console.log('Map initialized successfully');
+      } catch (error) {
+        console.error('Error initializing map:', error);
+      }
     }
   }, [mapLoaded, form]);
 
