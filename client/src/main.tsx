@@ -1,3 +1,6 @@
+// Import error suppression first before anything else
+import "./utils/errorSuppression";
+
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";

@@ -20,9 +20,9 @@ if (typeof window !== 'undefined' && import.meta.env.DEV) {
 
   // Monkey patch Node.removeChild to prevent the specific error
   const originalRemoveChild = Node.prototype.removeChild;
-  Node.prototype.removeChild = function(child) {
+  (Node.prototype as any).removeChild = function(child: any): any {
     try {
-      if (this.contains(child)) {
+      if (this.contains && this.contains(child)) {
         return originalRemoveChild.call(this, child);
       } else {
         console.warn('Attempted to remove non-child node - suppressed');
