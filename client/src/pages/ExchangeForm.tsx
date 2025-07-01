@@ -1,47 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-// Comprehensive error suppression for HMR and runtime error plugin conflicts
-if (typeof window !== 'undefined' && import.meta.env.DEV) {
-  // Suppress runtime error plugin
-  window.addEventListener('error', (event) => {
-    if (event.error?.message?.includes('removeChild') || 
-        event.error?.message?.includes('runtime-error-plugin') ||
-        event.error?.message?.includes('Node to be removed is not a child')) {
-      console.warn('Development error suppressed:', event.error.message);
-      event.preventDefault();
-      event.stopPropagation();
-      return false;
-    }
-  });
 
-  // Suppress unhandled promise rejections related to HMR
-  window.addEventListener('unhandledrejection', (event) => {
-    if (event.reason?.message?.includes('removeChild') || 
-        event.reason?.message?.includes('runtime-error-plugin')) {
-      console.warn('Development promise rejection suppressed:', event.reason.message);
-      event.preventDefault();
-      return false;
-    }
-  });
-
-  // Override the runtime error plugin's hot context if it exists
-  if ((window as any).__vite_plugin_runtime_error_modal__) {
-    (window as any).__vite_plugin_runtime_error_modal__.show = () => {};
-  }
-
-  // Override console.error to suppress runtime error plugin messages
-  const originalConsoleError = console.error;
-  console.error = (...args) => {
-    const message = args.join(' ');
-    if (message.includes('removeChild') || 
-        message.includes('runtime-error-plugin') ||
-        message.includes('Node to be removed is not a child')) {
-      console.warn('Console error suppressed:', message);
-      return;
-    }
-    originalConsoleError.apply(console, args);
-  };
-}
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -107,8 +66,7 @@ export default function ExchangeForm() {
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapInitialized, setMapInitialized] = useState(false);
   const [token, setToken] = useState<string | null>(null);
-  const [showOnboardingTour, setShowOnboardingTour] = useState(false);
-  const [hasSeenTour, setHasSeenTour] = useState(false);
+
   const [locationName, setLocationName] = useState<string>('');
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const mapRef = useRef<HTMLDivElement>(null);
@@ -793,12 +751,7 @@ export default function ExchangeForm() {
         </Card>
       </div>
 
-      {/* Onboarding Tour - Temporarily disabled for debugging */}
-      {/* <OnboardingTour
-        isVisible={showOnboardingTour}
-        onComplete={handleTourComplete}
-        onSkip={handleTourSkip}
-      /> */}
+
     </div>
   );
 }

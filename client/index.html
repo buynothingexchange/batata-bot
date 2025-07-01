@@ -7,31 +7,7 @@
   </head>
   <body>
     <div id="root"></div>
-    <script>
-      // Global error suppression for HMR removeChild errors - runs before React
-      window.addEventListener('error', function(event) {
-        if (event.error && event.error.message && 
-            (event.error.message.includes('removeChild') || 
-             event.error.message.includes('runtime-error-plugin') ||
-             event.error.message.includes('Node to be removed is not a child'))) {
-          console.warn('Development HMR error suppressed:', event.error.message);
-          event.preventDefault();
-          event.stopPropagation();
-          return false;
-        }
-      }, true); // Use capture phase to catch errors early
-      
-      // Suppress promise rejections
-      window.addEventListener('unhandledrejection', function(event) {
-        if (event.reason && event.reason.message && 
-            (event.reason.message.includes('removeChild') || 
-             event.reason.message.includes('runtime-error-plugin'))) {
-          console.warn('Development promise rejection suppressed:', event.reason.message);
-          event.preventDefault();
-          return false;
-        }
-      });
-    </script>
+
     <script type="module" src="/src/main.tsx"></script>
     <!-- This script injects a replit badge into the page, please feel free to remove this line -->
     <script type="text/javascript" src="https://replit.com/public/js/replit-badge-v3.js"></script>

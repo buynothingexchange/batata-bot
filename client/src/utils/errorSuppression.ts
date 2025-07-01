@@ -1,65 +1,37 @@
-// Comprehensive error suppression utilities for development HMR conflicts
-
-// Global error handler that runs immediately when imported
+// Single-source error suppression for HMR removeChild conflicts
 if (typeof window !== 'undefined' && import.meta.env.DEV) {
-  // Intercept runtime error plugin before it can initialize
+  // Block runtime error plugin and suppress removeChild errors
   Object.defineProperty(window, '__vite_plugin_runtime_error_modal__', {
-    get() {
-      return {
-        show: () => console.warn('Runtime error modal suppressed'),
-        hide: () => {},
-        clear: () => {}
-      };
-    },
-    set() {
-      // Prevent the plugin from setting itself
-      console.warn('Runtime error plugin initialization blocked');
-    },
+    get: () => ({ show: () => {}, hide: () => {}, clear: () => {} }),
+    set: () => {},
     configurable: false
   });
 
-  // Monkey patch Node.removeChild to prevent the specific error
+  // Patch removeChild to prevent HMR conflicts
   const originalRemoveChild = Node.prototype.removeChild;
-  (Node.prototype as any).removeChild = function(child: any): any {
+  (Node.prototype as any).removeChild = function(child: any) {
     try {
-      if (this.contains && this.contains(child)) {
-        return originalRemoveChild.call(this, child);
-      } else {
-        console.warn('Attempted to remove non-child node - suppressed');
-        return child;
-      }
+      return this.contains?.(child) ? originalRemoveChild.call(this, child) : child;
     } catch (error: any) {
-      if (error.message?.includes('removeChild') || 
-          error.message?.includes('Node to be removed is not a child')) {
-        console.warn('RemoveChild error suppressed:', error.message);
+      if (error.message?.includes('removeChild')) {
+        console.warn('HMR removeChild error suppressed');
         return child;
       }
       throw error;
     }
   };
 
-  // Comprehensive error event listeners
-  window.addEventListener('error', (event) => {
-    if (event.error?.message?.includes('removeChild') || 
-        event.error?.message?.includes('runtime-error-plugin') ||
-        event.error?.message?.includes('Node to be removed is not a child')) {
-      console.warn('Global error suppressed:', event.error.message);
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      return false;
-    }
-  }, { capture: true, passive: false });
-
-  window.addEventListener('unhandledrejection', (event) => {
-    if (event.reason?.message?.includes('removeChild') || 
-        event.reason?.message?.includes('runtime-error-plugin')) {
-      console.warn('Promise rejection suppressed:', event.reason.message);
-      event.preventDefault();
-      return false;
-    }
+  // Global error suppression
+  ['error', 'unhandledrejection'].forEach(type => {
+    window.addEventListener(type, (event: any) => {
+      const message = event.error?.message || event.reason?.message || '';
+      if (message.includes('removeChild') || message.includes('runtime-error-plugin')) {
+        console.warn(`HMR ${type} suppressed:`, message);
+        event.preventDefault();
+        return false;
+      }
+    }, { capture: true, passive: false });
   });
-
-  console.log('Development error suppression active');
 }
 
 export {};
