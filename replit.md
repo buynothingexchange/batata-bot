@@ -13,6 +13,14 @@ A sophisticated Discord bot application designed to streamline cross-server item
 
 ## Recent Changes (Latest Updates)
 
+### Auto-Follow Forum Posts - July 1, 2025
+- ✅ **Implemented auto-follow for external form posts** - users automatically follow forum posts created through the authenticated web form
+- ✅ **Enhanced Discord workflow auto-follow** - exchange posts created via Discord already had auto-follow, verified working correctly  
+- ✅ **Added auto-follow for contact posts** - users now automatically follow their contact-us forum posts (except anonymous posts)
+- ✅ **Fixed URL generation for external forms** - corrected domain generation to use proper REPLIT_DOMAINS environment variable
+- ✅ **Comprehensive notification system** - users receive Discord notifications when others respond to their posts regardless of creation method
+- ✅ **Consistent user experience** - auto-follow works for all forum post types: exchanges, contacts, and external form submissions
+
 ### Interactive Map Location Selection - June 30, 2025
 - ✅ **Added OpenStreetMap integration** - interactive map with draggable marker on exchange form
 - ✅ **2km radius visualization** - green circle shows approximate coverage area around selected location

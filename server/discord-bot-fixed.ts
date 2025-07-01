@@ -1672,6 +1672,16 @@ export async function createForumPost(postData: {
       isActive: true
     });
 
+    // Make the user automatically follow their own thread
+    try {
+      // Add the user as a thread member to enable notifications
+      await thread.members.add(postData.userId);
+      log(`Auto-follow enabled for ${postData.username} on thread ${thread.id}`, "discord-bot");
+    } catch (followError) {
+      log(`Warning: Could not enable auto-follow for user ${postData.username}: ${followError}`, "discord-bot");
+      // Don't fail the entire post creation if auto-follow fails
+    }
+
     log(`Created forum post via external form: ${postData.title} by ${postData.username}`, "discord-bot");
     
     return { success: true, threadId: thread.id };

@@ -1257,6 +1257,16 @@ async function handleContactModalSubmission(interaction: any): Promise<void> {
     
     log(`Contact forum post created with ID: ${forumPost.id}`, "discord-bot");
 
+    // Add the user as a follower to the contact post (if not anonymous)
+    if (!isAnonymous) {
+      try {
+        await forumPost.members.add(interaction.user.id);
+        log(`Added user ${interaction.user.tag} as follower to contact post ${forumPost.id}`, "discord-bot");
+      } catch (followError) {
+        log(`Could not add user ${interaction.user.tag} as follower to contact post: ${followError}`, "discord-bot");
+      }
+    }
+
     // Confirm to user
     const tagText = contactTypeTag ? ` with ${contactType} tag` : ' (tag not found)';
     await interaction.editReply({
