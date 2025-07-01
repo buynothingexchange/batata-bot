@@ -13,6 +13,14 @@ A sophisticated Discord bot application designed to streamline cross-server item
 
 ## Recent Changes (Latest Updates)
 
+### Deleted Post Filtering for Update Command - July 1, 2025
+- ✅ **Enhanced `/updatepost` command** - now verifies thread existence before displaying in selection list
+- ✅ **Automatic deletion detection** - filters out posts deleted by moderators or users from Discord
+- ✅ **Thread verification system** - attempts to fetch each thread ID to confirm it still exists
+- ✅ **Clean selection interface** - users only see posts they can actually interact with
+- ✅ **Error handling** - gracefully handles inaccessible or deleted threads without breaking functionality
+- ✅ **Real-time validation** - verification happens each time `/updatepost` is used for current status
+
 ### Auto-Bump Testing Command Implementation - July 1, 2025
 - ✅ **Implemented `/testautobump` command** - comprehensive testing tool for auto-bump system verification
 - ✅ **Added auto-bump status monitoring** - displays system status, check intervals, and bump statistics

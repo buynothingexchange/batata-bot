@@ -598,17 +598,36 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
         log(`Post ${index}: threadId=${post.threadId}, title="${post.title}", isActive=${post.isActive}`, "discord-bot");
       });
       
+      // Filter for active posts only
       const activePosts = userPosts.filter(post => post.isActive);
       
-      if (activePosts.length === 0) {
+      // Verify each thread still exists in Discord before showing in list
+      const existingPosts = [];
+      for (const post of activePosts) {
+        try {
+          // Try to fetch the thread to see if it still exists
+          const channel = await bot?.channels.fetch(post.threadId);
+          if (channel) {
+            existingPosts.push(post);
+            log(`✅ Thread ${post.threadId} exists: ${post.title}`, "discord-bot");
+          } else {
+            log(`❌ Thread ${post.threadId} not found, excluding from list: ${post.title}`, "discord-bot");
+          }
+        } catch (error) {
+          // Thread doesn't exist or we can't access it
+          log(`❌ Thread ${post.threadId} deleted or inaccessible, excluding from list: ${post.title}`, "discord-bot");
+        }
+      }
+      
+      if (existingPosts.length === 0) {
         await sendEphemeralWithAutoDelete(interaction,
           "You don't have any active forum posts to update. Use `/exchange` to create a new post!"
         );
         return;
       }
       
-      // Create dropdown with user's posts (limit to 25 due to Discord API limits)
-      const postOptions = activePosts.slice(0, 25).map(post => ({
+      // Create dropdown with only existing posts (limit to 25 due to Discord API limits)
+      const postOptions = existingPosts.slice(0, 25).map(post => ({
         label: post.title.length > 100 ? post.title.substring(0, 97) + "..." : post.title,
         description: "Click to manage this post",
         value: post.threadId
@@ -627,7 +646,7 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
         components: [postSelectRow]
       });
       
-      log(`Successfully sent post selection to ${interaction.user.tag} with ${activePosts.length} posts`, "discord-bot");
+      log(`Successfully sent post selection to ${interaction.user.tag} with ${existingPosts.length} posts`, "discord-bot");
     
     } else if (commandName === 'contactus' || commandName === 'contactusanon') {
       const isAnonymous = commandName === 'contactusanon';
