@@ -503,24 +503,22 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
         log(`REPLIT_DOMAINS: ${process.env.REPLIT_DOMAINS}`, "discord-bot");
         
         // Send ephemeral reply with authenticated form URL
-        await interaction.reply({
-          content: `🔗 **Personalized Exchange Form**\n\n` +
-                   `Your secure form link: ${formUrl}\n\n` +
-                   `✅ This link is personalized to your Discord account\n` +
-                   `⏰ Link expires in 30 minutes\n` +
-                   `🔒 For security, this link only works once\n\n` +
-                   `Fill out the form to create your exchange post!`,
-          ephemeral: true
-        });
+        await sendEphemeralWithAutoDelete(interaction, 
+          `🔗 **Personalized Exchange Form**\n\n` +
+          `Your secure form link: ${formUrl}\n\n` +
+          `✅ This link is personalized to your Discord account\n` +
+          `⏰ Link expires in 30 minutes\n` +
+          `🔒 For security, this link only works once\n\n` +
+          `Fill out the form to create your exchange post!`
+        );
         
         log(`Successfully created authenticated form token for ${interaction.user.tag}`, "discord-bot");
       } catch (error) {
         log(`Error handling exchange command: ${error}`, "discord-bot");
         if (!interaction.replied) {
-          await interaction.reply({
-            content: 'Sorry, there was an error processing your request. Please try again.',
-            ephemeral: true
-          });
+          await sendEphemeralWithAutoDelete(interaction,
+            'Sorry, there was an error processing your request. Please try again.'
+          );
         }
       }
       
@@ -1206,16 +1204,16 @@ async function handleClaimModalSubmission(interaction: any): Promise<void> {
 }
 
 async function handleContactModalSubmission(interaction: any): Promise<void> {
-  await interaction.reply({ content: "Contact submission coming soon!", ephemeral: true });
+  await sendEphemeralWithAutoDelete(interaction, "Contact submission coming soon!");
 }
 
 // Helper function for ephemeral messages with auto-delete
 async function sendEphemeralWithAutoDelete(interaction: any, content: string | { content?: string; embeds?: any[]; components?: any[] }, deleteAfterSeconds: number = 120) {
   try {
     if (typeof content === 'string') {
-      await interaction.reply({ content, flags: ['Ephemeral'] });
+      await interaction.reply({ content, ephemeral: true });
     } else {
-      await interaction.reply({ ...content, flags: ['Ephemeral'] });
+      await interaction.reply({ ...content, ephemeral: true });
     }
 
     // Auto-delete after specified time
@@ -1224,6 +1222,7 @@ async function sendEphemeralWithAutoDelete(interaction: any, content: string | {
         await interaction.deleteReply();
       } catch (error) {
         // Ignore errors when deleting ephemeral messages (they might already be gone)
+        log(`Failed to delete ephemeral message (this is normal): ${error}`, "discord-bot");
       }
     }, deleteAfterSeconds * 1000);
   } catch (error) {

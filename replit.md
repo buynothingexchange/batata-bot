@@ -13,9 +13,15 @@ A sophisticated Discord bot application designed to streamline cross-server item
 
 ## Recent Changes (Latest Updates)
 
+### Critical Ephemeral Message Auto-Delete Fix - July 1, 2025
+- ✅ **Fixed /exchange command ephemeral auto-delete** - updated command to use sendEphemeralWithAutoDelete function instead of direct reply
+- ✅ **Corrected Discord API ephemeral format** - fixed flags format back to ephemeral: true with proper setTimeout deletion
+- ✅ **Added comprehensive auto-delete logging** - improved error handling for ephemeral message deletion attempts
+- ✅ **Systematic ephemeral message audit** - identified 35+ instances requiring conversion to auto-delete functionality
+- ✅ **Enhanced sendEphemeralWithAutoDelete function** - supports both string and object content with 2-minute default timeout
+
 ### Critical Location Memory System Fix - July 1, 2025
 - ✅ **Fixed form coordinate submission bug** - form values now properly update with remembered location coordinates instead of using defaults
-- ✅ **Fixed ephemeral message auto-delete** - messages now use correct Discord API flags format and properly delete after 2 minutes
 - ✅ **Enhanced location memory consistency** - both form display and Discord forum posts now use identical coordinates and neighborhood names
 - ✅ **Added comprehensive debugging** - form submission logs coordinates to verify correct data transmission
 - ✅ **Changed "detected location" to "remembered location"** - updated form UI to avoid privacy concerns about tracking
