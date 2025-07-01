@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
-// import { OnboardingTour } from "@/components/OnboardingTour";
+
 import { HelpCircle } from "lucide-react";
 
 const baseExchangeFormSchema = z.object({
@@ -75,20 +75,10 @@ export default function ExchangeForm() {
   const circleRef = useRef<any>(null);
   const { toast } = useToast();
 
-  // Extract token from URL and check if user has seen tour
+  // Extract token from URL
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const urlToken = urlParams.get('token');
-    setToken(urlToken);
-    
-    // Check if user has seen the onboarding tour
-    const tourCompleted = localStorage.getItem('exchange-form-tour-completed');
-    setHasSeenTour(!!tourCompleted);
-    
-    // Auto-show tour for first-time users after token validation completes
-    if (!tourCompleted) {
-      setTimeout(() => setShowOnboardingTour(true), 2000);
-    }
+    setToken(urlParams.get('token'));
   }, []);
 
   // Validate token and get user information
@@ -462,22 +452,7 @@ export default function ExchangeForm() {
     }
   };
 
-  // Onboarding tour handlers
-  const handleTourComplete = () => {
-    localStorage.setItem('exchange-form-tour-completed', 'true');
-    setHasSeenTour(true);
-    setShowOnboardingTour(false);
-    toast({
-      title: "Tour Complete!",
-      description: "You can access this tour anytime by clicking the Help Tour button.",
-    });
-  };
 
-  const handleTourSkip = () => {
-    localStorage.setItem('exchange-form-tour-completed', 'true');
-    setHasSeenTour(true);
-    setShowOnboardingTour(false);
-  };
 
   return (
     <div className="min-h-screen bg-gray-950 py-8">
@@ -518,16 +493,7 @@ export default function ExchangeForm() {
                   </div>
                 </div>
                 
-                {/* Tour Button */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowOnboardingTour(true)}
-                  className="border-green-500 text-green-400 hover:bg-green-500/10 flex items-center gap-2"
-                >
-                  <HelpCircle className="w-4 h-4" />
-                  {hasSeenTour ? 'Help Tour' : 'Take Tour'}
-                </Button>
+
               </div>
             )}
           </CardHeader>
