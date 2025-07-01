@@ -359,8 +359,28 @@ export default function ExchangeForm() {
         // Clear any existing content
         mapRef.current.innerHTML = '';
         
+        // Get stored location or use default (Toronto)
+        const getStoredLocation = () => {
+          try {
+            const stored = localStorage.getItem('exchangeForm_lastLocation');
+            if (stored) {
+              const { lat, lng } = JSON.parse(stored);
+              if (typeof lat === 'number' && typeof lng === 'number') {
+                console.log('Using stored location:', lat, lng);
+                return { lat, lng };
+              }
+            }
+          } catch (error) {
+            console.warn('Failed to parse stored location:', error);
+          }
+          console.log('Using default location: Toronto');
+          return { lat: 43.7, lng: -79.4 };
+        };
+
+        const savedLocation = getStoredLocation();
+        
         const map = window.L.map(mapRef.current, {
-          center: [43.7, -79.4],
+          center: [savedLocation.lat, savedLocation.lng],
           zoom: 11,
           zoomControl: true,
           attributionControl: true
@@ -373,14 +393,14 @@ export default function ExchangeForm() {
         }).addTo(map);
 
         console.log('Adding circle and marker...');
-        const circle = window.L.circle([43.7, -79.4], {
+        const circle = window.L.circle([savedLocation.lat, savedLocation.lng], {
           color: 'green',
           fillColor: '#3f9e2f',
           fillOpacity: 0.4,
           radius: 1000
         }).addTo(map);
 
-        const marker = window.L.marker([43.7, -79.4], { draggable: true }).addTo(map);
+        const marker = window.L.marker([savedLocation.lat, savedLocation.lng], { draggable: true }).addTo(map);
 
         marker.on('drag', function(e: any) {
           circle.setLatLng(e.latlng);
@@ -388,10 +408,19 @@ export default function ExchangeForm() {
           form.setValue('lng', parseFloat(e.latlng.lng.toFixed(4)));
         });
 
-        // Add dragend event for reverse geocoding
+        // Add dragend event for reverse geocoding and location saving
         marker.on('dragend', function(e: any) {
           const lat = parseFloat(e.target.getLatLng().lat.toFixed(4));
           const lng = parseFloat(e.target.getLatLng().lng.toFixed(4));
+          
+          // Save location to localStorage for future visits
+          try {
+            localStorage.setItem('exchangeForm_lastLocation', JSON.stringify({ lat, lng }));
+            console.log('Saved location to localStorage:', lat, lng);
+          } catch (error) {
+            console.warn('Failed to save location to localStorage:', error);
+          }
+          
           reverseGeocode(lat, lng);
         });
 
@@ -407,7 +436,7 @@ export default function ExchangeForm() {
         setMapInitialized(true);
         
         // Reverse geocode the initial location
-        reverseGeocode(43.7, -79.4);
+        reverseGeocode(savedLocation.lat, savedLocation.lng);
         
         console.log('✅ Map initialized successfully');
       } catch (error) {
