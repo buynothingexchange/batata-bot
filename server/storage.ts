@@ -44,6 +44,8 @@ export interface IStorage {
   // Forum post tracking operations
   createForumPost(post: InsertForumPost): Promise<ForumPost>;
   getForumPost(threadId: string): Promise<ForumPost | undefined>;
+  getForumPostByThreadId(threadId: string): Promise<ForumPost | undefined>;
+  updateForumPost(threadId: string, updates: Partial<ForumPost>): Promise<ForumPost | undefined>;
   updateForumPostActivity(threadId: string): Promise<ForumPost | undefined>;
   getInactiveForumPosts(daysInactive: number): Promise<ForumPost[]>;
   incrementBumpCount(threadId: string): Promise<ForumPost | undefined>;
@@ -314,6 +316,23 @@ export class MemStorage implements IStorage {
 
   async getForumPost(threadId: string): Promise<ForumPost | undefined> {
     return this.forumPostsMap.get(threadId);
+  }
+
+  async getForumPostByThreadId(threadId: string): Promise<ForumPost | undefined> {
+    return this.getForumPost(threadId);
+  }
+
+  async updateForumPost(threadId: string, updates: Partial<ForumPost>): Promise<ForumPost | undefined> {
+    const post = this.forumPostsMap.get(threadId);
+    if (!post) return undefined;
+    
+    const updatedPost = {
+      ...post,
+      ...updates
+    };
+    
+    this.forumPostsMap.set(threadId, updatedPost);
+    return updatedPost;
   }
 
   async updateForumPostActivity(threadId: string): Promise<ForumPost | undefined> {

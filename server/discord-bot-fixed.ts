@@ -673,6 +673,51 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
       
       log(`Successfully sent post selection to ${interaction.user.tag} with ${existingPosts.length} posts`, "discord-bot");
     
+    } else if (commandName === 'markfulfilled') {
+      log(`Processing /markfulfilled command from ${interaction.user.tag}`, "discord-bot");
+      
+      const tradedWithUser = interaction.options.getUser('tradedwith', true);
+      
+      // Get user's active forum posts from storage
+      const userPosts = await storage.getForumPostsByUser(interaction.user.id);
+      const activePosts = userPosts.filter(post => post.isActive);
+      
+      if (activePosts.length === 0) {
+        await sendEphemeralWithAutoDelete(interaction,
+          "You don't have any active forum posts to mark as fulfilled. Use `/exchange` to create a new post!"
+        );
+        return;
+      }
+      
+      // If user has only one active post, mark it directly
+      if (activePosts.length === 1) {
+        const post = activePosts[0];
+        await handleMarkFulfilledDirect(interaction, post.threadId, tradedWithUser);
+        return;
+      }
+      
+      // If user has multiple posts, show selection dropdown
+      const postOptions = activePosts.slice(0, 25).map(post => ({
+        label: post.title.length > 100 ? post.title.substring(0, 97) + "..." : post.title,
+        description: `Mark as traded with ${tradedWithUser.username}`,
+        value: `fulfill:${post.threadId}:${tradedWithUser.id}`
+      }));
+      
+      const postSelectRow = new ActionRowBuilder<StringSelectMenuBuilder>()
+        .addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId('mark_fulfilled_select')
+            .setPlaceholder('Select which post to mark as fulfilled')
+            .addOptions(postOptions)
+        );
+      
+      await sendEphemeralWithAutoDelete(interaction, {
+        content: `Select which post you want to mark as fulfilled with **${tradedWithUser.username}**:`,
+        components: [postSelectRow]
+      });
+      
+      log(`Successfully sent post selection for fulfillment to ${interaction.user.tag}`, "discord-bot");
+    
     } else if (commandName === 'contactus' || commandName === 'contactusanon') {
       const isAnonymous = commandName === 'contactusanon';
       log(`Processing /${commandName} command from ${interaction.user.tag}`, "discord-bot");
@@ -1316,6 +1361,117 @@ async function processPendingClaimCompletion(pendingClaim: any, originalPoster: 
   }
 }
 
+// Handle direct mark as fulfilled for posts (no dropdown needed)
+async function handleMarkFulfilledDirect(interaction: any, threadId: string, tradedWithUser: User): Promise<void> {
+  try {
+    // Get the forum post from storage
+    const post = await storage.getForumPostByThreadId(threadId);
+    if (!post) {
+      await sendEphemeralWithAutoDelete(interaction, "Could not find that forum post. It may have been deleted.");
+      return;
+    }
+    
+    // Verify user owns this post
+    if (post.originalPosterId !== interaction.user.id) {
+      await sendEphemeralWithAutoDelete(interaction, "You can only mark your own posts as fulfilled.");
+      return;
+    }
+    
+    // Check if post is already marked as inactive
+    if (!post.isActive) {
+      await sendEphemeralWithAutoDelete(interaction, "This post has already been marked as fulfilled.");
+      return;
+    }
+    
+    // Mark post as inactive
+    await storage.updateForumPost(threadId, { isActive: false });
+    
+    // Get the thread channel to post completion message
+    try {
+      const thread = await bot?.channels.fetch(threadId);
+      if (thread && thread.isThread()) {
+        // Create completion embed
+        const completionEmbed = new EmbedBuilder()
+          .setTitle('🎉 Exchange Completed!')
+          .setDescription(`This exchange has been completed successfully!`)
+          .addFields(
+            {
+              name: '👤 Original Poster',
+              value: `<@${interaction.user.id}>`,
+              inline: true
+            },
+            {
+              name: '🤝 Traded With',
+              value: `<@${tradedWithUser.id}>`,
+              inline: true
+            },
+            {
+              name: '📦 Item',
+              value: post.title,
+              inline: false
+            }
+          )
+          .setColor(0x00ff00)
+          .setTimestamp()
+          .setFooter({ 
+            text: 'Thank you for using our exchange system!',
+            iconURL: interaction.client.user?.displayAvatarURL()
+          });
+        
+        // Post completion message to the thread
+        await thread.send({ embeds: [completionEmbed] });
+        log(`Posted completion embed to thread: ${threadId}`, "discord-bot");
+        
+        // Archive the thread
+        await thread.setArchived(true);
+        log(`Archived thread: ${threadId}`, "discord-bot");
+      }
+    } catch (threadError) {
+      log(`Could not post to or archive thread ${threadId}: ${threadError}`, "discord-bot");
+    }
+    
+    // Record the confirmed exchange
+    try {
+      await storage.createConfirmedExchange({
+        originalPosterId: interaction.user.id,
+        originalPosterUsername: interaction.user.username,
+        tradingPartnerId: tradedWithUser.id,
+        tradingPartnerUsername: tradedWithUser.username,
+        itemDescription: post.title,
+        exchangeType: post.category,
+        category: post.category,
+        threadId: threadId,
+        guildId: post.guildId
+      });
+      
+      log(`Recorded confirmed exchange: ${post.title} from ${interaction.user.username} to ${tradedWithUser.username}`, "discord-bot");
+    } catch (exchangeError) {
+      log(`Error recording confirmed exchange: ${exchangeError}`, "discord-bot");
+    }
+    
+    // Log the completion
+    await storage.createLog({
+      userId: interaction.user.id,
+      username: interaction.user.username,
+      command: "mark_fulfilled",
+      channel: interaction.channel?.name || "unknown",
+      status: "success",
+      message: `Marked post "${post.title}" as fulfilled with ${tradedWithUser.username}`,
+      guildId: interaction.guildId
+    });
+    
+    // Send success message to user
+    const postLink = `[View Post](https://discord.com/channels/${post.guildId}/${threadId})`;
+    await sendEphemeralWithAutoDelete(interaction, 
+      `✅ **Exchange completed successfully!**\n\nYour post "${post.title}" has been marked as fulfilled and traded with **${tradedWithUser.username}**.\n\nThe thread has been archived with a completion record.\n\n${postLink}`
+    );
+    
+  } catch (error) {
+    log(`Error in handleMarkFulfilledDirect: ${error}`, "discord-bot");
+    await sendEphemeralWithAutoDelete(interaction, "There was an error marking your post as fulfilled. Please try again.");
+  }
+}
+
 // Helper function for ephemeral messages with auto-delete
 async function sendEphemeralWithAutoDelete(interaction: any, content: string | { content?: string; embeds?: any[]; components?: any[] }, deleteAfterSeconds: number = 120) {
   try {
@@ -1370,6 +1526,24 @@ async function handleInteraction(interaction: Interaction) {
         const selectedThreadId = interaction.values[0];
         log(`User ${interaction.user.tag} selected post to update: ${selectedThreadId}`, "discord-bot");
         await handleUpdatePostSelection(interaction, selectedThreadId);
+      } else if (customId === 'mark_fulfilled_select') {
+        const selectedValue = interaction.values[0];
+        const [action, threadId, tradedWithUserId] = selectedValue.split(':');
+        
+        if (action === 'fulfill') {
+          log(`User ${interaction.user.tag} selected post ${threadId} to mark as fulfilled with user ${tradedWithUserId}`, "discord-bot");
+          try {
+            const tradedWithUser = await bot?.users.fetch(tradedWithUserId);
+            if (tradedWithUser) {
+              await handleMarkFulfilledDirect(interaction, threadId, tradedWithUser);
+            } else {
+              await sendEphemeralWithAutoDelete(interaction, "Could not find the user you selected to trade with.");
+            }
+          } catch (error) {
+            log(`Error fetching traded with user: ${error}`, "discord-bot");
+            await sendEphemeralWithAutoDelete(interaction, "There was an error processing your selection. Please try again.");
+          }
+        }
       } else if (customId.startsWith('contact_select:')) {
         const isAnonymous = customId.split(':')[1] === 'true';
         const selectedType = interaction.values[0];
