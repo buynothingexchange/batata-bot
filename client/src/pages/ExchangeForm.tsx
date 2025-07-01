@@ -431,7 +431,7 @@ export default function ExchangeForm() {
                 control={form.control}
                 name="type"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem data-tour="exchange-type-field">
                     <FormLabel className="text-gray-200">Exchange Type</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
@@ -454,7 +454,7 @@ export default function ExchangeForm() {
                 control={form.control}
                 name="category"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem data-tour="category-field">
                     <FormLabel className="text-gray-200">Category</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
@@ -480,7 +480,7 @@ export default function ExchangeForm() {
                 control={form.control}
                 name="title"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem data-tour="title-field">
                     <FormLabel className="text-gray-200">Title</FormLabel>
                     <FormControl>
                       <Input placeholder="Brief title for your item" {...field} />
@@ -494,7 +494,7 @@ export default function ExchangeForm() {
                 control={form.control}
                 name="description"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem data-tour="description-field">
                     <FormLabel className="text-gray-200">Description</FormLabel>
                     <FormControl>
                       <Textarea 
@@ -512,7 +512,7 @@ export default function ExchangeForm() {
                 control={form.control}
                 name="location"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem data-tour="location-field">
                     <FormLabel className="text-gray-200">Location <span className="text-gray-400">(Optional)</span></FormLabel>
                     <FormControl>
                       <Input placeholder="Your general location or pickup area" {...field} />
@@ -522,7 +522,7 @@ export default function ExchangeForm() {
                 )}
               />
 
-              <div className="space-y-2">
+              <div className="space-y-2" data-tour="map-container">
                 <label className="text-gray-200 text-sm font-medium">
                   Select approximate location on map:
                 </label>
@@ -562,7 +562,7 @@ export default function ExchangeForm() {
                 control={form.control}
                 name="image"
                 render={({ field: { onChange, value, ...field } }) => (
-                  <FormItem>
+                  <FormItem data-tour="image-field">
                     <FormLabel className="text-gray-200">
                       Image <span className={watchedType === "give" ? "text-green-400" : "text-gray-400"}>
                         {watchedType === "give" ? "(Required)" : "(Optional)"}
@@ -593,6 +593,7 @@ export default function ExchangeForm() {
                 type="submit" 
                 disabled={isSubmitting} 
                 className="w-full bg-green-600 hover:bg-green-700 text-white font-medium"
+                data-tour="submit-button"
               >
                 {isSubmitting ? "Creating Post..." : "Create Exchange Post"}
               </Button>
