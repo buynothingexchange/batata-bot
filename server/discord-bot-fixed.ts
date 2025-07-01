@@ -3106,29 +3106,39 @@ async function registerSlashCommands() {
     log(`Total commands to register: ${commands.length}`, "discord-bot");
     log(`Commands: ${commands.map(cmd => cmd.name).join(', ')}`, "discord-bot");
 
-    // Register global commands (more reliable)
-    await rest.put(
-      Routes.applicationCommands(bot.user.id),
-      { body: commands }
-    );
-
-    log(`Successfully registered ${commands.length} global commands.`, "discord-bot");
-    
-    // Also clear guild-specific commands to avoid conflicts
+    // Get all guilds the bot is in
     const guilds = bot.guilds.cache;
-    guilds.forEach(async (guild) => {
+    
+    // Iterate over guilds and register commands
+    for (const guild of guilds.values()) {
+      log(`Registering commands for guild: ${guild.name} (${guild.id})`, "discord-bot");
+      
       try {
+        // Clear existing guild commands first
         await rest.put(
           Routes.applicationGuildCommands(bot.user.id, guild.id),
           { body: [] }
         );
-        log(`Cleared guild commands for: ${guild.name || guild.id}`, "discord-bot");
+        
+        // Register new commands for this guild
+        await rest.put(
+          Routes.applicationGuildCommands(bot.user.id, guild.id),
+          { body: commands }
+        );
+        
+        log(`Successfully registered ${commands.length} commands for guild: ${guild.name}`, "discord-bot");
       } catch (guildError) {
-        log(`Error clearing guild commands for ${guild.name || guild.id}: ${guildError}`, "discord-bot");
+        log(`Error registering commands for guild ${guild.name}: ${guildError}`, "discord-bot");
       }
-    });
+    }
 
-    log('Successfully registered global commands. Commands may take up to 1 hour to appear in Discord.', "discord-bot");
+    // Also clear global commands to avoid conflicts
+    await rest.put(
+      Routes.applicationCommands(bot.user.id),
+      { body: [] }
+    );
+
+    log('Successfully reloaded guild-specific commands. Commands should appear immediately in Discord.', "discord-bot");
   } catch (error) {
     log(`Error registering slash commands: ${error}`, "discord-bot");
   }

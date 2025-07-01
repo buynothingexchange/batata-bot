@@ -22,6 +22,7 @@ A sophisticated Discord bot application designed to streamline cross-server item
 - ✅ **Updated help documentation** - added `/markfulfilled` command explanation and usage instructions
 - ✅ **Simplified exchange completion** - single command handles the entire fulfillment process without follow-up steps
 - ✅ **Smart post selection** - automatically handles single post or shows dropdown for multiple active posts
+- ✅ **Fixed command registration issue** - switched from global to guild-specific registration for immediate command availability
 
 ### Critical Ephemeral Message Auto-Delete Fix - July 1, 2025
 - ✅ **Fixed /exchange command ephemeral auto-delete** - updated command to use sendEphemeralWithAutoDelete function instead of direct reply
@@ -249,6 +250,12 @@ A sophisticated Discord bot application designed to streamline cross-server item
 - Progress bars use visual blocks (█) for clear representation
 - Admin permissions required for donation reset and testing commands
 - All avatar URLs converted to PNG format for consistency
+
+### Discord Command Registration Pattern
+- **Guild-specific commands**: Appear immediately in Discord (recommended for development)
+- **Global commands**: Take up to 1 hour to appear in Discord (better for production)
+- Current implementation uses guild-specific registration for immediate availability
+- If commands don't appear, check registration method in `registerSlashCommands()` function
 
 ## Next Steps
 - Configure Ko-fi webhook URL in Ko-fi dashboard
