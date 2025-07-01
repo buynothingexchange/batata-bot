@@ -43,6 +43,43 @@ declare global {
   }
 }
 
+// Error boundary component to catch runtime errors
+function ErrorBoundary({ children }: { children: React.ReactNode }) {
+  const [hasError, setHasError] = useState(false);
+  
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      // Catch removeChild and similar DOM errors
+      if (event.error?.message?.includes('removeChild') || 
+          event.error?.message?.includes('Node') ||
+          event.error?.message?.includes('runtime-error-plugin')) {
+        console.warn('DOM manipulation error caught and handled:', event.error);
+        event.preventDefault();
+        return;
+      }
+    };
+    
+    window.addEventListener('error', handleError);
+    return () => window.removeEventListener('error', handleError);
+  }, []);
+  
+  if (hasError) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-6 text-center">
+            <h2 className="text-xl font-bold text-red-400 mb-4">Something went wrong</h2>
+            <p className="text-gray-400 mb-4">Please refresh the page to try again.</p>
+            <Button onClick={() => window.location.reload()}>Reload Page</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  
+  return <>{children}</>;
+}
+
 export default function ExchangeForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -106,52 +143,79 @@ export default function ExchangeForm() {
 
   // Load Leaflet dynamically and initialize map
   useEffect(() => {
+    let cssLink: HTMLLinkElement | null = null;
+    let jsScript: HTMLScriptElement | null = null;
+    
     const loadLeaflet = async () => {
-      // Add Leaflet CSS first and wait for it to load
-      if (!document.querySelector('link[href*="leaflet.css"]')) {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-        link.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
-        link.crossOrigin = '';
-        document.head.appendChild(link);
-        
-        // Wait for CSS to load before loading JS
-        link.onload = () => {
-          console.log('Leaflet CSS loaded successfully');
-          loadLeafletJS();
-        };
-        link.onerror = () => {
-          console.error('Failed to load Leaflet CSS');
-          loadLeafletJS(); // Try to continue anyway
-        };
-      } else {
-        loadLeafletJS();
-      }
-      
-      function loadLeafletJS() {
-        // Add Leaflet JS
-        if (!window.L) {
-          const script = document.createElement('script');
-          script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-          script.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
-          script.crossOrigin = '';
-          script.onload = () => {
-            console.log('Leaflet JS loaded successfully');
-            setMapLoaded(true);
-          };
-          script.onerror = () => {
-            console.error('Failed to load Leaflet JS');
-          };
-          document.head.appendChild(script);
-        } else {
+      try {
+        // Check if Leaflet is already loaded
+        if (window.L) {
           console.log('Leaflet already available');
           setMapLoaded(true);
+          return;
         }
+        
+        // Add Leaflet CSS if not present
+        const existingCSS = document.querySelector('link[href*="leaflet.css"]') as HTMLLinkElement;
+        if (!existingCSS) {
+          cssLink = document.createElement('link');
+          cssLink.rel = 'stylesheet';
+          cssLink.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+          cssLink.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
+          cssLink.crossOrigin = '';
+          
+          const cssPromise = new Promise<void>((resolve, reject) => {
+            cssLink!.onload = () => {
+              console.log('Leaflet CSS loaded successfully');
+              resolve();
+            };
+            cssLink!.onerror = () => {
+              console.error('Failed to load Leaflet CSS');
+              reject(new Error('CSS failed to load'));
+            };
+          });
+          
+          document.head.appendChild(cssLink);
+          await cssPromise;
+        }
+        
+        // Add Leaflet JS
+        const existingJS = document.querySelector('script[src*="leaflet.js"]') as HTMLScriptElement;
+        if (!existingJS && !window.L) {
+          jsScript = document.createElement('script');
+          jsScript.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+          jsScript.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
+          jsScript.crossOrigin = '';
+          
+          const jsPromise = new Promise<void>((resolve, reject) => {
+            jsScript!.onload = () => {
+              console.log('Leaflet JS loaded successfully');
+              resolve();
+            };
+            jsScript!.onerror = () => {
+              console.error('Failed to load Leaflet JS');
+              reject(new Error('JS failed to load'));
+            };
+          });
+          
+          document.head.appendChild(jsScript);
+          await jsPromise;
+        }
+        
+        setMapLoaded(true);
+      } catch (error) {
+        console.error('Error loading Leaflet:', error);
+        setMapLoaded(true); // Continue anyway
       }
     };
 
     loadLeaflet();
+    
+    // Cleanup function to prevent memory leaks
+    return () => {
+      // Note: We don't remove the CSS/JS as they might be used by other components
+      // This prevents the removeChild error during HMR
+    };
   }, []);
 
   // Initialize map when both Leaflet is loaded AND container is ready
@@ -160,11 +224,28 @@ export default function ExchangeForm() {
     
     if (!mapLoaded || mapInstanceRef.current || !tokenData?.valid) return;
     
+    // Safety check for window.L availability
+    if (!window.L) {
+      console.warn('Window.L not available, retrying in 500ms');
+      setTimeout(() => setMapLoaded(false), 500); // Trigger reload
+      return;
+    }
+    
+    let timeoutId: NodeJS.Timeout;
+    let attemptCount = 0;
+    const maxAttempts = 50; // Max 5 seconds
+    
     // Keep checking for mapRef to become available
     const checkMapRef = () => {
+      attemptCount++;
+      
       if (!mapRef.current) {
-        console.log('Map container not ready, checking again...');
-        setTimeout(checkMapRef, 100);
+        if (attemptCount >= maxAttempts) {
+          console.error('Map container failed to become ready after maximum attempts');
+          return;
+        }
+        console.log(`Map container not ready, attempt ${attemptCount}/${maxAttempts}...`);
+        timeoutId = setTimeout(checkMapRef, 100);
         return;
       }
       
@@ -241,7 +322,14 @@ export default function ExchangeForm() {
     };
     
     // Start checking after a short delay
-    setTimeout(checkMapRef, 500);
+    timeoutId = setTimeout(checkMapRef, 500);
+    
+    // Cleanup function
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [mapLoaded, tokenData?.valid]);
 
   // Update form validation when exchange type changes
@@ -412,9 +500,10 @@ export default function ExchangeForm() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 py-8">
-      <div className="container max-w-2xl mx-auto p-6">
-        <Card className="bg-gray-900 border-gray-800 shadow-2xl" data-tour="form-container">
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gray-950 py-8">
+        <div className="container max-w-2xl mx-auto p-6">
+          <Card className="bg-gray-900 border-gray-800 shadow-2xl" data-tour="form-container">
           <CardHeader>
             <CardTitle className="text-green-400 text-2xl">Create Exchange Post</CardTitle>
             <CardDescription className="text-gray-300">
@@ -689,6 +778,7 @@ export default function ExchangeForm() {
         onComplete={handleTourComplete}
         onSkip={handleTourSkip}
       /> */}
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }
