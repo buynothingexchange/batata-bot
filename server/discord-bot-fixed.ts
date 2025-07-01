@@ -95,7 +95,9 @@ const commands = [
       option.setName('force')
         .setDescription('Force check all posts regardless of age')
         .setRequired(false)
-    )
+    ),
+    
+
 ];
 
 // Track when we last received messages (for heartbeat)
@@ -1046,7 +1048,7 @@ async function handleMarkAsClaimed(interaction: any, threadId: string): Promise<
       .setCustomId('recipient')
       .setLabel('Who received this item?')
       .setStyle(TextInputStyle.Short)
-      .setPlaceholder('Enter the username or @ mention')
+      .setPlaceholder('Type @username (Discord will show suggestions)')
       .setRequired(true)
       .setMaxLength(100);
     
@@ -2598,6 +2600,7 @@ async function handleTestKofi(interaction: ChatInputCommandInteraction): Promise
     await interaction.reply({ content: 'Failed to test Ko-fi functionality. Please try again.', ephemeral: true });
   }
 }
+
 
 // Handle /testautobump command
 async function handleTestAutoBump(interaction: ChatInputCommandInteraction): Promise<void> {
