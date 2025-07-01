@@ -8,7 +8,8 @@ import {
   confirmedExchanges, type ConfirmedExchange, type InsertConfirmedExchange,
   donationGoals, type DonationGoal, type InsertDonationGoal,
   donations, type Donation, type InsertDonation,
-  formTokens, type FormToken, type InsertFormToken
+  formTokens, type FormToken, type InsertFormToken,
+  pendingClaims, type PendingClaim, type InsertPendingClaim
 } from "@shared/schema";
 
 // Storage interface for bot-related data
@@ -75,6 +76,12 @@ export interface IStorage {
   getFormToken(token: string): Promise<FormToken | undefined>;
   markFormTokenUsed(token: string): Promise<void>;
   cleanupExpiredTokens(): Promise<void>;
+
+  // Pending Claims operations
+  createPendingClaim(claim: InsertPendingClaim): Promise<PendingClaim>;
+  getPendingClaimByUser(authorId: string, channelId: string): Promise<PendingClaim | undefined>;
+  markPendingClaimProcessed(id: number): Promise<void>;
+  cleanupExpiredClaims(): Promise<void>;
 }
 
 // In-memory storage implementation
@@ -471,6 +478,31 @@ export class MemStorage implements IStorage {
   async cleanupExpiredTokens(): Promise<void> {
     // Stub implementation for MemStorage
   }
+
+  // Pending Claims operations for MemStorage (stub implementations)
+  async createPendingClaim(claim: InsertPendingClaim): Promise<PendingClaim> {
+    const id = this.currentForumPostId++; // Reuse counter for simplicity
+    const pendingClaim: PendingClaim = { 
+      ...claim, 
+      id,
+      createdAt: new Date(),
+      processed: false
+    };
+    return pendingClaim;
+  }
+
+  async getPendingClaimByUser(authorId: string, channelId: string): Promise<PendingClaim | undefined> {
+    // Stub implementation for MemStorage
+    return undefined;
+  }
+
+  async markPendingClaimProcessed(id: number): Promise<void> {
+    // Stub implementation for MemStorage
+  }
+
+  async cleanupExpiredClaims(): Promise<void> {
+    // Stub implementation for MemStorage
+  }
 }
 
 // Database storage implementation
@@ -789,6 +821,38 @@ export class DatabaseStorage implements IStorage {
       .where(or(
         eq(formTokens.used, true),
         lt(formTokens.expiresAt, new Date())
+      ));
+  }
+
+  // Pending Claims operations
+  async createPendingClaim(claim: InsertPendingClaim): Promise<PendingClaim> {
+    const [newClaim] = await db.insert(pendingClaims).values(claim).returning();
+    return newClaim;
+  }
+
+  async getPendingClaimByUser(authorId: string, channelId: string): Promise<PendingClaim | undefined> {
+    const [claim] = await db.select().from(pendingClaims)
+      .where(and(
+        eq(pendingClaims.authorId, authorId),
+        eq(pendingClaims.channelId, channelId),
+        eq(pendingClaims.processed, false),
+        gt(pendingClaims.expiresAt, new Date())
+      ))
+      .limit(1);
+    return claim || undefined;
+  }
+
+  async markPendingClaimProcessed(id: number): Promise<void> {
+    await db.update(pendingClaims)
+      .set({ processed: true })
+      .where(eq(pendingClaims.id, id));
+  }
+
+  async cleanupExpiredClaims(): Promise<void> {
+    await db.delete(pendingClaims)
+      .where(or(
+        eq(pendingClaims.processed, true),
+        lt(pendingClaims.expiresAt, new Date())
       ));
   }
 }

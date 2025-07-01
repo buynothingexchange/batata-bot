@@ -1037,25 +1037,23 @@ async function handleMarkAsClaimed(interaction: any, threadId: string): Promise<
       return;
     }
     
-    // Create modal to ask who received the item
-    const claimModal = new ModalBuilder()
-      .setCustomId(`claim_modal:${threadId}`)
-      .setTitle('Mark Item as Claimed');
+    // Update the interaction to remove buttons and show the prompt
+    await interaction.update({
+      content: `✅ Ready to mark "${post.title}" as fulfilled!\n\n**Who did you trade with?**\n\nPlease reply to this message and mention the user you traded with using @username. Discord will show user suggestions when you type @.\n\n*This message will disappear in 2 minutes.*`,
+      components: [],
+      ephemeral: true
+    });
     
-    const recipientInput = new TextInputBuilder()
-      .setCustomId('recipient')
-      .setLabel('Who received this item?')
-      .setStyle(TextInputStyle.Short)
-      .setPlaceholder('Type @username (Discord will show suggestions)')
-      .setRequired(true)
-      .setMaxLength(100);
+    // Store the thread ID temporarily so we can handle the follow-up message
+    // We'll listen for the next message from this user in this channel
+    await storage.createPendingClaim({
+      threadId: threadId,
+      authorId: interaction.user.id,
+      channelId: interaction.channelId,
+      expiresAt: new Date(Date.now() + 2 * 60 * 1000) // 2 minutes from now
+    });
     
-    const actionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(recipientInput);
-    claimModal.addComponents(actionRow);
-    
-    await interaction.showModal(claimModal);
-    
-    log(`Showing claim modal for thread: ${threadId}`, "discord-bot");
+    log(`Prompting user ${interaction.user.tag} to mention who they traded with for post: ${post.title}`, "discord-bot");
   } catch (error) {
     log(`Error handling mark as claimed: ${error}`, "discord-bot");
     try {

@@ -207,3 +207,24 @@ export const insertFormTokenSchema = createInsertSchema(formTokens).pick({
 
 export type InsertFormToken = z.infer<typeof insertFormTokenSchema>;
 export type FormToken = typeof formTokens.$inferSelect;
+
+// Pending Claims schema - for tracking claim workflows that need follow-up messages
+export const pendingClaims = pgTable("pending_claims", {
+  id: serial("id").primaryKey(),
+  threadId: text("thread_id").notNull(),
+  authorId: text("author_id").notNull(),
+  channelId: text("channel_id").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  processed: boolean("processed").notNull().default(false),
+});
+
+export const insertPendingClaimSchema = createInsertSchema(pendingClaims).pick({
+  threadId: true,
+  authorId: true,
+  channelId: true,
+  expiresAt: true,
+});
+
+export type InsertPendingClaim = z.infer<typeof insertPendingClaimSchema>;
+export type PendingClaim = typeof pendingClaims.$inferSelect;
