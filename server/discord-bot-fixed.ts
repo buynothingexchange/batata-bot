@@ -571,16 +571,6 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
             value: '**Usage:** `/markfulfilled tradedwith:@username`\n' +
                    '**Description:** Mark one of your posts as fulfilled after completing a trade.\n' +
                    '**Features:**\n' +
-                   '• Select the person you traded with\n' +
-                   '• Choose which post was fulfilled\n' +
-                   '• Automatically archives the post and records the exchange',
-            inline: false
-          },
-          {
-            name: '✅ /markfulfilled',
-            value: '**Usage:** `/markfulfilled tradedwith:@username`\n' +
-                   '**Description:** Mark one of your posts as fulfilled after completing a trade.\n' +
-                   '**Features:**\n' +
                    '• Specify who you traded with using Discord user picker\n' +
                    '• Select which post was fulfilled from a dropdown\n' +
                    '• Automatically archives the post and records the exchange\n' +
