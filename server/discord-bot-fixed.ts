@@ -2061,13 +2061,48 @@ function isValidDiscordToken(token: string): boolean {
 
 // Ko-fi donation processing function
 // Create forum post from external form submission
+// Function to get neighborhood name from coordinates using Nominatim
+async function getNeighborhoodFromCoordinates(lat: number, lng: number): Promise<string> {
+  try {
+    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`, {
+      headers: {
+        'User-Agent': 'BatataBot/1.0 (Exchange Form Location Service)'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Nominatim request failed: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    if (data && data.address) {
+      // Try to get neighborhood, then suburb, then city_district, then city
+      const neighborhood = data.address.neighbourhood || 
+                          data.address.suburb || 
+                          data.address.city_district || 
+                          data.address.city || 
+                          data.address.town || 
+                          data.address.village || 
+                          'Unknown Location';
+      
+      log(`Reverse geocoding result for ${lat},${lng}: ${neighborhood}`, "discord-bot");
+      return neighborhood;
+    }
+    
+    return 'Unknown Location';
+  } catch (error) {
+    log(`Error reverse geocoding coordinates ${lat},${lng}: ${error}`, "discord-bot");
+    return 'Unknown Location';
+  }
+}
+
 export async function createForumPost(postData: {
   title: string;
   description: string;
   category: string;
   type: string;
   imageUrl: string;
-  location?: string;
   lat?: number;
   lng?: number;
   userId: string;
@@ -2147,14 +2182,12 @@ export async function createForumPost(postData: {
       'trade': 'Trade'
     };
 
-    // Create location information for the embed
+    // Get neighborhood name from coordinates and create location information
     let locationInfo = '';
-    if (postData.location) {
-      locationInfo += `\n\n**Location:** ${postData.location}`;
-    }
     if (postData.lat && postData.lng) {
+      const neighborhood = await getNeighborhoodFromCoordinates(postData.lat, postData.lng);
       const mapsUrl = `https://www.google.com/maps?q=${postData.lat},${postData.lng}`;
-      locationInfo += `\n[📍 View location on map](${mapsUrl})`;
+      locationInfo = `\n\n**Location:** [📍 ${neighborhood}](${mapsUrl})`;
     }
 
     // Create the main content embed

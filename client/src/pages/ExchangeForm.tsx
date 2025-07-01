@@ -21,9 +21,8 @@ const baseExchangeFormSchema = z.object({
   description: z.string().min(10, "Description must be at least 10 characters"),
   category: z.enum(["electronics", "clothing", "accessories", "home_furniture", "footwear", "misc"]),
   type: z.enum(["give", "request", "trade"]),
-  location: z.string().optional(),
-  lat: z.number().optional(),
-  lng: z.number().optional(),
+  lat: z.number(),
+  lng: z.number(),
   image: z.instanceof(File).optional(),
 });
 
@@ -227,7 +226,6 @@ export default function ExchangeForm() {
     defaultValues: {
       title: "",
       description: "",
-      location: "",
       lat: 43.7,
       lng: -79.4,
     },
@@ -535,9 +533,8 @@ export default function ExchangeForm() {
         category: data.category,
         type: data.type,
         image_url: imageUrl,
-        location: data.location || "",
-        lat: data.lat || 43.7,
-        lng: data.lng || -79.4,
+        lat: data.lat,
+        lng: data.lng,
       };
 
       const response = await fetch("/api/new-post", {
@@ -742,20 +739,6 @@ export default function ExchangeForm() {
                         className="min-h-[100px]"
                         {...field} 
                       />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="location"
-                render={({ field }) => (
-                  <FormItem data-tour="location-field">
-                    <FormLabel className="text-gray-200">Location <span className="text-gray-400">(Optional)</span></FormLabel>
-                    <FormControl>
-                      <Input placeholder="Your general location or pickup area" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
