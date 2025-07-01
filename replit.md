@@ -13,6 +13,13 @@ A sophisticated Discord bot application designed to streamline cross-server item
 
 ## Recent Changes (Latest Updates)
 
+### Fixed `/markfulfilled` Command Issues and Added Workflow Restrictions - July 1, 2025
+- ✅ **Fixed "application did not respond" timeout** - added `/markfulfilled` to the command processing list where it was missing
+- ✅ **Implemented workflow restrictions** - `/markfulfilled` now redirects users to proper `/updatepost` workflow instead of allowing direct usage
+- ✅ **Added user guidance** - command shows clear instructions on how to properly mark posts as fulfilled through the intended workflow
+- ✅ **Enhanced security** - prevents potential forum disruptions by ensuring users follow the proper post management process
+- ✅ **Immediate interaction acknowledgment** - uses `deferReply()` to prevent Discord timeout errors on all commands
+
 ### Replaced "Mark as Claimed" Button with `/markfulfilled` Command - July 1, 2025
 - ✅ **Added new `/markfulfilled` slash command** - private alternative to the "Mark as Claimed" button workflow
 - ✅ **Discord native user selection** - command uses Discord's built-in user picker for selecting trading partner

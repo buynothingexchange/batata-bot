@@ -689,54 +689,16 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
       // Acknowledge the interaction immediately to prevent timeout
       await interaction.deferReply({ ephemeral: true });
       
-      try {
-        const tradedWithUser = interaction.options.getUser('tradedwith', true);
-        log(`User selected to trade with: ${tradedWithUser.username} (${tradedWithUser.id})`, "discord-bot");
-        
-        // Get user's active forum posts from storage
-        const userPosts = await storage.getForumPostsByUser(interaction.user.id);
-        const activePosts = userPosts.filter(post => post.isActive);
-        
-        if (activePosts.length === 0) {
-          await interaction.editReply(
-            "You don't have any active forum posts to mark as fulfilled. Use `/exchange` to create a new post!"
-          );
-          return;
-        }
-        
-        // If user has only one active post, mark it directly
-        if (activePosts.length === 1) {
-          const post = activePosts[0];
-          await handleMarkFulfilledDirect(interaction, post.threadId, tradedWithUser);
-          return;
-        }
-        
-        // If user has multiple posts, show selection dropdown
-        const postOptions = activePosts.slice(0, 25).map(post => ({
-          label: post.title.length > 100 ? post.title.substring(0, 97) + "..." : post.title,
-          description: `Mark as traded with ${tradedWithUser.username}`,
-          value: `fulfill:${post.threadId}:${tradedWithUser.id}`
-        }));
-        
-        const postSelectRow = new ActionRowBuilder<StringSelectMenuBuilder>()
-          .addComponents(
-            new StringSelectMenuBuilder()
-              .setCustomId('mark_fulfilled_select')
-              .setPlaceholder('Select which post to mark as fulfilled')
-              .addOptions(postOptions)
-          );
-        
-        await interaction.editReply({
-          content: `Select which post you want to mark as fulfilled with **${tradedWithUser.username}**:`,
-          components: [postSelectRow]
-        });
-        
-        log(`Successfully sent post selection for fulfillment to ${interaction.user.tag}`, "discord-bot");
-        
-      } catch (error) {
-        log(`Error in /markfulfilled command: ${error}`, "discord-bot");
-        await interaction.editReply("There was an error processing your command. Please try again.");
-      }
+      // Restrict direct usage - users should go through /updatepost workflow
+      await interaction.editReply({
+        content: "⚠️ **Please use the proper workflow for marking posts as fulfilled:**\n\n" +
+                "1. Use `/updatepost` command\n" +
+                "2. Select the post you want to update\n" +
+                "3. Choose if the item has been fulfilled\n" +
+                "4. Follow the guided process\n\n" +
+                "This ensures proper tracking and prevents disruptions to your forum posts."
+      });
+      return;
     
     } else if (commandName === 'contactus' || commandName === 'contactusanon') {
       const isAnonymous = commandName === 'contactusanon';
@@ -1531,7 +1493,7 @@ async function handleInteraction(interaction: Interaction) {
       if (['initgoal', 'resetgoal', 'donate', 'testkofi'].includes(commandName)) {
         log(`Processing /${commandName} slash command`, "discord-bot");
         await handleDonationCommand(interaction);
-      } else if (commandName === 'exchange' || commandName === 'help' || commandName === 'updatepost' || commandName === 'mystats' || commandName === 'exchanges' || commandName === 'contactus' || commandName === 'contactusanon') {
+      } else if (commandName === 'exchange' || commandName === 'help' || commandName === 'updatepost' || commandName === 'markfulfilled' || commandName === 'mystats' || commandName === 'exchanges' || commandName === 'contactus' || commandName === 'contactusanon') {
         log(`Processing /${commandName} slash command`, "discord-bot");
         await handleSlashCommand(interaction);
       }
