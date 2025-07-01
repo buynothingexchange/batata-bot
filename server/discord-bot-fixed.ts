@@ -1213,10 +1213,19 @@ async function handleContactModalSubmission(interaction: any): Promise<void> {
 async function sendEphemeralWithAutoDelete(interaction: any, content: string | { content?: string; embeds?: any[]; components?: any[] }, deleteAfterSeconds: number = 120) {
   try {
     if (typeof content === 'string') {
-      await interaction.reply({ content, ephemeral: true });
+      await interaction.reply({ content, flags: ['Ephemeral'] });
     } else {
-      await interaction.reply({ ...content, ephemeral: true });
+      await interaction.reply({ ...content, flags: ['Ephemeral'] });
     }
+
+    // Auto-delete after specified time
+    setTimeout(async () => {
+      try {
+        await interaction.deleteReply();
+      } catch (error) {
+        // Ignore errors when deleting ephemeral messages (they might already be gone)
+      }
+    }, deleteAfterSeconds * 1000);
   } catch (error) {
     log(`Error sending ephemeral message: ${error}`, "discord-bot");
   }

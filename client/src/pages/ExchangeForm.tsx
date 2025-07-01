@@ -371,6 +371,11 @@ export default function ExchangeForm() {
 
         const savedLocation = getStoredLocation();
         
+        // CRITICAL FIX: Update form values with saved location
+        form.setValue('lat', savedLocation.lat);
+        form.setValue('lng', savedLocation.lng);
+        console.log('Updated form values with saved location:', savedLocation.lat, savedLocation.lng);
+        
         const map = window.L.map(mapRef.current, {
           center: [savedLocation.lat, savedLocation.lng],
           zoom: 11,
@@ -557,6 +562,10 @@ export default function ExchangeForm() {
         lat: data.lat,
         lng: data.lng,
       };
+
+      // DEBUG: Log coordinates being submitted
+      console.log('Form submission coordinates:', { lat: data.lat, lng: data.lng });
+      console.log('Full form data being submitted:', data);
 
       const response = await fetch("/api/new-post", {
         method: "POST",
