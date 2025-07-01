@@ -2189,7 +2189,8 @@ export async function createForumPost(postData: {
     let locationText = '';
     if (postData.lat && postData.lng) {
       const neighborhood = await getNeighborhoodFromCoordinates(postData.lat, postData.lng);
-      const mapsUrl = `https://www.google.com/maps?q=${postData.lat},${postData.lng}`;
+      // Create a Google Maps search URL for the neighborhood area instead of exact coordinates
+      const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(neighborhood + ', Toronto, ON')}/@${postData.lat},${postData.lng},15z`;
       locationInfo = `\n\n**Location:** [📍 ${neighborhood}](${mapsUrl})`;
       locationText = `📍 **${neighborhood}**\n\n`;
     }

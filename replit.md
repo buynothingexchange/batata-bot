@@ -13,6 +13,12 @@ A sophisticated Discord bot application designed to streamline cross-server item
 
 ## Recent Changes (Latest Updates)
 
+### Improved Google Maps Location Display - July 1, 2025
+- ✅ **Enhanced Google Maps URL format** - location links now search for neighborhood area instead of showing exact coordinates
+- ✅ **Better neighborhood context** - clicking location links shows broader neighborhood view with 15z zoom level
+- ✅ **Improved user experience** - users see neighborhood boundaries and surrounding areas instead of precise pin points
+- ✅ **Search-based mapping** - URLs use `/search/` format with neighborhood name for better geographic context
+
 ### Enhanced Location System with Neighborhood Detection - July 1, 2025
 - ✅ **Removed location text field** - form now uses only interactive map for location selection
 - ✅ **Added Nominatim reverse geocoding** - automatically detects neighborhood names from coordinates
