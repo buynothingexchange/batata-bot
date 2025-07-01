@@ -41,7 +41,10 @@ const commands = [
     .setDescription('Submit comments, suggestions, or reports to the community moderators'),
   new SlashCommandBuilder()
     .setName('contactusanon')
-    .setDescription('Submit anonymous comments, suggestions, or reports to the community moderators')
+    .setDescription('Submit anonymous comments, suggestions, or reports to the community moderators'),
+  new SlashCommandBuilder()
+    .setName('testautobump')
+    .setDescription('Test the auto-bump system (admin only)')
 ];
 
 // Track when we last received messages (for heartbeat)

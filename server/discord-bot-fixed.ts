@@ -83,6 +83,15 @@ const commands = [
         .setDescription('Test donor name')
         .setRequired(false)
     ),
+
+  new SlashCommandBuilder()
+    .setName('testautobump')
+    .setDescription('Test the auto-bump system and show status (admin only)')
+    .addBooleanOption(option =>
+      option.setName('force')
+        .setDescription('Force check all posts regardless of age')
+        .setRequired(false)
+    )
 ];
 
 // Track when we last received messages (for heartbeat)
