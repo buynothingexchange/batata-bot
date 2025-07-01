@@ -578,12 +578,12 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
           },
           {
             name: '✅ /markfulfilled',
-            value: '**Usage:** `/markfulfilled @username`\n' +
-                   '**Description:** Mark your exchange post as fulfilled (private).\n' +
+            value: '**Usage:** `/markfulfilled tradedwith:@username`\n' +
+                   '**Description:** Mark one of your posts as fulfilled after completing a trade.\n' +
                    '**Features:**\n' +
-                   '• Select who you traded with using Discord user picker\n' +
-                   '• Automatically archives the thread with completion record\n' +
-                   '• Records the exchange in community statistics\n' +
+                   '• Specify who you traded with using Discord user picker\n' +
+                   '• Select which post was fulfilled from a dropdown\n' +
+                   '• Automatically archives the post and records the exchange\n' +
                    '• Completely private - only you see the process',
             inline: false
           },

@@ -134,9 +134,9 @@ function SuccessPage({ postData }: { postData: any }) {
                 <div className="flex items-start gap-3 p-3 bg-gray-800 rounded-lg border border-gray-700">
                   <Settings className="w-5 h-5 text-purple-400 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="text-white font-medium">Manage your post</p>
+                    <p className="text-white font-medium">Complete your exchange</p>
                     <p className="text-gray-300 text-sm">
-                      When your item is traded or claimed, use <code className="bg-gray-700 px-1 rounded text-green-400">/updatepost</code> command in Discord to mark it as completed
+                      When your item is traded, use <code className="bg-gray-700 px-1 rounded text-green-400">/markfulfilled tradedwith:@username</code> command in Discord to record the completed exchange
                     </p>
                   </div>
                 </div>

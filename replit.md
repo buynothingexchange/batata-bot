@@ -21,6 +21,8 @@ A sophisticated Discord bot application designed to streamline cross-server item
 - ✅ **Updated help documentation** - replaced `/updatepost` references with new `/markfulfilled` usage instructions
 - ✅ **Improved user experience** - simplified workflow reduces confusion and steps needed to complete exchanges
 - ✅ **Fixed timeout issues** - proper command registration and immediate interaction acknowledgment prevent Discord errors
+- ✅ **Updated all help text** - corrected `/help` command descriptions to reflect new `/markfulfilled tradedwith:@username` usage
+- ✅ **Updated form success page** - changed post-submission guidance from `/updatepost` to `/markfulfilled` workflow instructions
 
 ### Replaced "Mark as Claimed" Button with `/markfulfilled` Command - July 1, 2025
 - ✅ **Added new `/markfulfilled` slash command** - private alternative to the "Mark as Claimed" button workflow
