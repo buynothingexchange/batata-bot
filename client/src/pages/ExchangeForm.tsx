@@ -427,6 +427,18 @@ export default function ExchangeForm() {
           ) : (
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              
+              {/* Username Display */}
+              <div data-tour="username-field" className="space-y-2">
+                <label className="text-gray-200 text-sm font-medium">Discord Username</label>
+                <div className="p-3 bg-gray-800 border border-gray-700 rounded-md">
+                  <p className="text-gray-300">
+                    {tokenData?.user?.discordDisplayName || tokenData?.user?.discordUsername || 'Loading...'}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">This will be shown as the author of your exchange post</p>
+                </div>
+              </div>
+
               <FormField
                 control={form.control}
                 name="type"
@@ -603,6 +615,13 @@ export default function ExchangeForm() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Onboarding Tour */}
+      <OnboardingTour
+        isVisible={showOnboardingTour}
+        onComplete={handleTourComplete}
+        onSkip={handleTourSkip}
+      />
     </div>
   );
 }
