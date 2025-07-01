@@ -21,6 +21,7 @@ A sophisticated Discord bot application designed to streamline cross-server item
 - ✅ **Improved user experience** - users see exact neighborhood names (e.g., "📍 Christie Pits") instead of raw coordinates
 - ✅ **Backend integration** - coordinates required for all form submissions, neighborhood detection happens server-side
 - ✅ **Location memory functionality** - localStorage remembers user's last selected map position for future form visits
+- ✅ **Dual location display** - neighborhood appears both in plain text above embed and as clickable link within embed
 
 ### Form Success Page Implementation - July 1, 2025
 - ✅ **Post-submission success page** - form now displays a comprehensive success page after successful submission

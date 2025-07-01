@@ -2184,10 +2184,12 @@ export async function createForumPost(postData: {
 
     // Get neighborhood name from coordinates and create location information
     let locationInfo = '';
+    let locationText = '';
     if (postData.lat && postData.lng) {
       const neighborhood = await getNeighborhoodFromCoordinates(postData.lat, postData.lng);
       const mapsUrl = `https://www.google.com/maps?q=${postData.lat},${postData.lng}`;
       locationInfo = `\n\n**Location:** [📍 ${neighborhood}](${mapsUrl})`;
+      locationText = `📍 **${neighborhood}**\n\n`;
     }
 
     // Create the main content embed
@@ -2226,10 +2228,11 @@ export async function createForumPost(postData: {
       mainEmbed.thumbnail = { url: postData.imageUrl };
     }
 
-    // Create the forum post with proper tags
+    // Create the forum post with proper tags - include location text above embed
     const thread = await (forumChannel as any).threads.create({
       name: `${typeDisplayNames[postData.type as keyof typeof typeDisplayNames] || postData.type.charAt(0).toUpperCase() + postData.type.slice(1)}: ${postData.title}`,
       message: {
+        content: locationText, // Display neighborhood in plain text above embed
         embeds: [mainEmbed]
       },
       appliedTags: appliedTags // Apply the category and type tags automatically
