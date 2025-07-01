@@ -299,13 +299,30 @@ async function handleMessage(message: Message) {
       }
     }
     
+    // Check for pending claim responses - user mentioning who they traded with
+    if (message.mentions.users.size > 0) {
+      try {
+        const pendingClaim = await storage.getPendingClaimByUser(message.author.id, message.channelId!);
+        if (pendingClaim) {
+          log(`Found pending claim for user ${message.author.username}, processing trade completion`, "discord-bot");
+          
+          // Get the mentioned user (first one if multiple)
+          const mentionedUser = message.mentions.users.first();
+          if (mentionedUser) {
+            await processPendingClaimCompletion(pendingClaim, message.author, mentionedUser, message);
+            return; // Early return to prevent further processing
+          }
+        }
+      } catch (claimError) {
+        log(`Error checking pending claims: ${claimError}`, "discord-bot");
+      }
+    }
+    
     // Get the bot configuration
     if (!config) {
       await storage.createBotConfig({
-        commandTrigger: "!claimed",
-        reactionEmoji: "✅",
-        createdAt: new Date(),
-        updatedAt: new Date()
+        webhookUrl: null,
+        token: null
       });
     }
     
@@ -372,7 +389,7 @@ async function handleMessage(message: Message) {
       }
       
       // Check for claimed command that references another message
-      if (message.reference && message.content.toLowerCase().includes(config.commandTrigger)) {
+      if (message.reference && message.content.toLowerCase().includes("!claimed")) {
         try {
           // Fetch the message being replied to
           const referencedMessage = await message.channel.messages.fetch(message.reference.messageId as string);
@@ -380,7 +397,7 @@ async function handleMessage(message: Message) {
           // Check if the referenced message contains an image/attachment
           if (referencedMessage.attachments.size > 0 || 
               referencedMessage.embeds.some(embed => embed.image || embed.thumbnail)) {
-            log(`${config.commandTrigger} command used by ${message.author.username} on a message with image/attachment`, "discord-bot");
+            log(`claim command used by ${message.author.username} on a message with image/attachment`, "discord-bot");
             
             // Add the claimed emoji reaction
             try {
@@ -410,7 +427,7 @@ async function handleMessage(message: Message) {
             commandsProcessed++;
           }
         } catch (replyError) {
-          log(`Error processing ${config.commandTrigger} command: ${replyError}`, "discord-bot");
+          log(`Error processing claim command: ${replyError}`, "discord-bot");
         }
       }
       
@@ -1203,6 +1220,108 @@ async function handleClaimModalSubmission(interaction: any): Promise<void> {
 
 async function handleContactModalSubmission(interaction: any): Promise<void> {
   await sendEphemeralWithAutoDelete(interaction, "Contact submission coming soon!");
+}
+
+// Process pending claim completion when user mentions someone
+async function processPendingClaimCompletion(pendingClaim: any, originalPoster: any, tradingPartner: any, message: any): Promise<void> {
+  try {
+    // Mark the pending claim as processed
+    await storage.markPendingClaimProcessed(pendingClaim.id);
+    
+    // Get the forum post details
+    const post = await storage.getForumPost(pendingClaim.threadId);
+    if (!post) {
+      log(`Post not found for pending claim: ${pendingClaim.threadId}`, "discord-bot");
+      return;
+    }
+    
+    // Deactivate the forum post in storage
+    await storage.deactivateForumPost(pendingClaim.threadId);
+    
+    // Try to archive the thread and add completion embed
+    try {
+      const thread = await bot?.channels.fetch(pendingClaim.threadId);
+      if (thread && thread.isThread()) {
+        
+        // Create completion embed to post in the thread
+        const completionEmbed = new EmbedBuilder()
+          .setTitle('🎉 Exchange Completed!')
+          .setDescription(`This item has been successfully exchanged!`)
+          .addFields(
+            {
+              name: '👤 Original Poster',
+              value: `<@${originalPoster.id}>`,
+              inline: true
+            },
+            {
+              name: '🤝 Traded With',
+              value: `<@${tradingPartner.id}>`,
+              inline: true
+            },
+            {
+              name: '📦 Item',
+              value: post.title,
+              inline: false
+            }
+          )
+          .setColor(0x00FF00)
+          .setTimestamp()
+          .setFooter({ text: 'Exchange completed via Batata Bot' });
+        
+        // Send the completion embed to the thread
+        await thread.send({ embeds: [completionEmbed] });
+        log(`Posted completion embed to thread: ${pendingClaim.threadId}`, "discord-bot");
+        
+        // Archive the thread
+        await thread.setArchived(true);
+        log(`Archived thread: ${pendingClaim.threadId}`, "discord-bot");
+      }
+    } catch (archiveError) {
+      log(`Could not archive thread ${pendingClaim.threadId}: ${archiveError}`, "discord-bot");
+    }
+    
+    // Send success message to the user who initiated the trade completion
+    const postLink = `[View Post](https://discord.com/channels/${post.guildId}/${pendingClaim.threadId})`;
+    
+    await message.reply(`✅ **Exchange completed successfully!**\n\nYour post "${post.title}" has been marked as fulfilled and given to ${tradingPartner.username}.\n\nThe thread has been archived with a completion record.\n\n${postLink}`);
+    
+    // Record the confirmed exchange
+    try {
+      await storage.createConfirmedExchange({
+        originalPosterId: originalPoster.id,
+        originalPosterUsername: originalPoster.username,
+        tradingPartnerId: tradingPartner.id,
+        tradingPartnerUsername: tradingPartner.username,
+        itemDescription: post.title,
+        exchangeType: post.category, // Using category as exchange type
+        category: post.category,
+        threadId: pendingClaim.threadId,
+        guildId: post.guildId
+      });
+      
+      log(`Recorded confirmed exchange: ${post.title} from ${originalPoster.username} to ${tradingPartner.username}`, "discord-bot");
+    } catch (exchangeError) {
+      log(`Error recording confirmed exchange: ${exchangeError}`, "discord-bot");
+    }
+    
+    // Log the completion
+    await storage.createLog({
+      userId: originalPoster.id,
+      username: originalPoster.username,
+      command: "claim_completed",
+      channel: message.channel.name || "unknown",
+      status: "success",
+      message: `Marked ${post.title} as exchanged with ${tradingPartner.username}`,
+      guildId: post.guildId,
+      messageId: message.id
+    });
+    
+    log(`User ${originalPoster.username} completed exchange: ${post.title} -> ${tradingPartner.username}`, "discord-bot");
+    
+  } catch (error) {
+    log(`Error processing pending claim completion: ${error}`, "discord-bot");
+    await message.reply("There was an error completing the exchange. Please try using `/updatepost` instead.");
+  }
 }
 
 // Helper function for ephemeral messages with auto-delete
