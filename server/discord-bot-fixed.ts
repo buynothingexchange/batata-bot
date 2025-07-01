@@ -483,6 +483,10 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
         const baseUrl = process.env.EXCHANGE_FORM_URL || `https://${process.env.REPLIT_DOMAINS}`;
         const formUrl = `${baseUrl}/exchange?token=${token}`;
         
+        log(`Generated form URL: ${formUrl}`, "discord-bot");
+        log(`Base URL used: ${baseUrl}`, "discord-bot");
+        log(`REPLIT_DOMAINS: ${process.env.REPLIT_DOMAINS}`, "discord-bot");
+        
         // Send ephemeral reply with authenticated form URL
         await interaction.reply({
           content: `🔗 **Personalized Exchange Form**\n\n` +
