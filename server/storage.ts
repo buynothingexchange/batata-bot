@@ -48,6 +48,7 @@ export interface IStorage {
   incrementBumpCount(threadId: string): Promise<ForumPost | undefined>;
   deactivateForumPost(threadId: string): Promise<ForumPost | undefined>;
   getForumPostsByUser(userId: string): Promise<ForumPost[]>;
+  getAllActiveForumPosts(): Promise<ForumPost[]>;
   
   // Confirmed exchange operations
   createConfirmedExchange(exchange: InsertConfirmedExchange): Promise<ConfirmedExchange>;
@@ -362,6 +363,12 @@ export class MemStorage implements IStorage {
       .sort((a, b) => b.lastActivity.getTime() - a.lastActivity.getTime()); // Most recent first
   }
 
+  async getAllActiveForumPosts(): Promise<ForumPost[]> {
+    return Array.from(this.forumPostsMap.values())
+      .filter(post => post.isActive)
+      .sort((a, b) => b.lastActivity.getTime() - a.lastActivity.getTime());
+  }
+
   // Confirmed exchange operations for MemStorage
   async createConfirmedExchange(exchange: InsertConfirmedExchange): Promise<ConfirmedExchange> {
     const id = this.currentForumPostId++; // Reuse counter for simplicity
@@ -636,6 +643,12 @@ export class DatabaseStorage implements IStorage {
   async getForumPostsByUser(userId: string): Promise<ForumPost[]> {
     return await db.select().from(forumPosts)
       .where(eq(forumPosts.authorId, userId))
+      .orderBy(desc(forumPosts.lastActivity));
+  }
+
+  async getAllActiveForumPosts(): Promise<ForumPost[]> {
+    return await db.select().from(forumPosts)
+      .where(eq(forumPosts.isActive, true))
       .orderBy(desc(forumPosts.lastActivity));
   }
 

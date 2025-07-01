@@ -23,6 +23,10 @@ import { eq } from 'drizzle-orm';
 // Bot instance
 let bot: Client | null = null;
 
+// Auto-bump functionality
+let autoBumpInterval: NodeJS.Timeout | null = null;
+const AUTO_BUMP_CHECK_INTERVAL = 60 * 60 * 1000; // Check every hour
+
 // Global temp user data for multi-step interactions
 declare global {
   var tempUserData: Map<string, any>;
@@ -1794,6 +1798,9 @@ async function handleDonationCommand(interaction: ChatInputCommandInteraction): 
       case 'testkofi':
         await handleTestKofi(interaction);
         break;
+      case 'testautobump':
+        await handleTestAutoBump(interaction);
+        break;
       default:
         await interaction.reply({ content: 'Unknown donation command.', ephemeral: true });
     }
@@ -2031,6 +2038,182 @@ async function handleTestKofi(interaction: ChatInputCommandInteraction): Promise
     await interaction.reply({ content: 'Failed to test Ko-fi functionality. Please try again.', ephemeral: true });
   }
 }
+
+// Handle /testautobump command
+async function handleTestAutoBump(interaction: ChatInputCommandInteraction): Promise<void> {
+  // Check if user has admin permissions
+  const member = interaction.guild?.members.cache.get(interaction.user.id);
+  const hasAdminPerms = member?.permissions.has(PermissionFlagsBits.Administrator) || 
+                       member?.permissions.has(PermissionFlagsBits.ManageGuild);
+  
+  if (!hasAdminPerms) {
+    await interaction.reply({ 
+      content: 'This command requires administrator permissions.', 
+      ephemeral: true 
+    });
+    return;
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+
+  try {
+    const forceCheck = interaction.options.getBoolean('force') || false;
+    
+    // Get auto-bump system status
+    const systemStatus = getAutoBumpStatus();
+    
+    // Get posts based on force option
+    let postsToCheck;
+    if (forceCheck) {
+      // Force check: Get ALL active posts
+      postsToCheck = await storage.getAllActiveForumPosts();
+      log(`Force mode: Checking all ${postsToCheck.length} active posts`, "discord-bot");
+    } else {
+      // Normal check: Get posts inactive for 6+ days
+      postsToCheck = await storage.getInactiveForumPosts(6);
+      log(`Normal mode: Found ${postsToCheck.length} posts inactive for 6+ days`, "discord-bot");
+    }
+
+    // Create status embed
+    const statusEmbed = new EmbedBuilder()
+      .setTitle('🔄 Auto-Bump System Status')
+      .setColor(systemStatus.isRunning ? 0x00ff00 : 0xff0000)
+      .addFields(
+        { name: 'System Status', value: systemStatus.isRunning ? '✅ Running' : '❌ Stopped', inline: true },
+        { name: 'Check Interval', value: '60 minutes', inline: true },
+        { name: 'Bump Threshold', value: '6 days inactive', inline: true },
+        { name: 'Last Check', value: systemStatus.lastCheck || 'Never', inline: true },
+        { name: 'Total Checks', value: systemStatus.totalChecks.toString(), inline: true },
+        { name: 'Total Bumps', value: systemStatus.totalBumps.toString(), inline: true }
+      )
+      .setTimestamp();
+
+    // Add posts information
+    if (postsToCheck.length > 0) {
+      statusEmbed.addFields({
+        name: `📋 Posts ${forceCheck ? 'Active' : 'Eligible for Bump'}`,
+        value: `Found ${postsToCheck.length} posts`,
+        inline: false
+      });
+
+      // Show first 5 posts as examples
+      const samplePosts = postsToCheck.slice(0, 5).map(post => {
+        const daysSinceActivity = Math.floor((Date.now() - post.lastActivity.getTime()) / (1000 * 60 * 60 * 24));
+        return `• **${post.title}** (${daysSinceActivity} days, ${post.bumpCount} bumps)`;
+      }).join('\n');
+
+      statusEmbed.addFields({
+        name: '📝 Sample Posts',
+        value: samplePosts + (postsToCheck.length > 5 ? `\n...and ${postsToCheck.length - 5} more` : ''),
+        inline: false
+      });
+    } else {
+      statusEmbed.addFields({
+        name: '📋 Posts Status',
+        value: forceCheck ? 'No active posts found' : 'No posts need bumping right now',
+        inline: false
+      });
+    }
+
+    // If force mode, actually run a test bump check
+    if (forceCheck && postsToCheck.length > 0) {
+      statusEmbed.addFields({
+        name: '🧪 Test Mode Active',
+        value: 'Running test bump check...',
+        inline: false
+      });
+
+      await interaction.editReply({ embeds: [statusEmbed] });
+
+      // Run the actual bump check function
+      const bumpResults = await testBumpPosts(postsToCheck);
+      
+      // Update embed with results
+      statusEmbed.spliceFields(-1, 1, {
+        name: '✅ Test Results',
+        value: `• Checked: ${bumpResults.checked}\n• Bumped: ${bumpResults.bumped}\n• Errors: ${bumpResults.errors}\n• Archived: ${bumpResults.archived}`,
+        inline: false
+      });
+    }
+
+    await interaction.editReply({ embeds: [statusEmbed] });
+    
+    log(`Admin ${interaction.user.username} tested auto-bump system (force: ${forceCheck})`, "discord-bot");
+  } catch (error) {
+    log(`Error testing auto-bump: ${error}`, "discord-bot");
+    await interaction.editReply({ content: 'Failed to test auto-bump system. Please check the logs.' });
+  }
+}
+
+// Helper function to get auto-bump system status
+function getAutoBumpStatus() {
+  return {
+    isRunning: autoBumpInterval !== null,
+    lastCheck: lastBumpCheck || 'Never',
+    totalChecks: bumpCheckCount || 0,
+    totalBumps: totalBumpsPerformed || 0
+  };
+}
+
+// Helper function to test bump functionality without waiting
+async function testBumpPosts(posts: any[]): Promise<{checked: number, bumped: number, errors: number, archived: number}> {
+  let bumped = 0, errors = 0, archived = 0;
+  
+  for (const post of posts.slice(0, 3)) { // Limit to 3 for testing
+    try {
+      if (!bot) continue;
+      
+      const thread = await bot.channels.fetch(post.threadId);
+      
+      if (!thread || !thread.isThread()) {
+        await storage.deactivateForumPost(post.threadId);
+        archived++;
+        continue;
+      }
+      
+      if (thread.archived) {
+        await storage.deactivateForumPost(post.threadId);
+        archived++;
+        continue;
+      }
+      
+      // Send test bump message
+      const bumpMessage = await thread.send({
+        content: "🧪 **Test bump** - This post was bumped during auto-bump testing",
+        flags: ['SuppressNotifications']
+      });
+      
+      // Delete after 3 seconds for testing
+      setTimeout(async () => {
+        try {
+          await bumpMessage.delete();
+        } catch (deleteError) {
+          log(`Could not delete test bump message: ${deleteError}`, "discord-bot");
+        }
+      }, 3000);
+      
+      // Update post activity
+      await storage.incrementBumpCount(post.threadId);
+      bumped++;
+      
+      log(`Test bumped: ${post.title}`, "discord-bot");
+      
+      // Small delay between bumps
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+    } catch (error) {
+      log(`Error test bumping post ${post.title}: ${error}`, "discord-bot");
+      errors++;
+    }
+  }
+  
+  return { checked: posts.length, bumped, errors, archived };
+}
+
+// Track auto-bump statistics
+let lastBumpCheck: string | null = null;
+let bumpCheckCount = 0;
+let totalBumpsPerformed = 0;
 
 // Register slash commands with Discord
 async function registerSlashCommands() {
