@@ -452,16 +452,49 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
       log(`Processing /${commandName} command from ${interaction.user.tag}`, "discord-bot");
       
       try {
-        // URL to the form page within this project
-        const formUrl = process.env.EXCHANGE_FORM_URL || 'https://bfdf1125-76ec-481d-be0b-bc578a7396ba-00-3325314juelsm.worf.replit.dev/exchange';
+        // Import token utility functions
+        const { generateSecureToken, createTokenExpiration } = await import('./utils');
         
-        // Send ephemeral reply with form URL
+        // Generate a secure token for this user
+        const token = generateSecureToken();
+        const expiresAt = createTokenExpiration(30); // 30 minutes expiration
+        
+        // Get user's avatar URL in PNG format
+        const avatarUrl = interaction.user.displayAvatarURL({ 
+          format: 'png', 
+          size: 128 
+        });
+        
+        // Store the token in the database
+        await storage.createFormToken({
+          token,
+          discordUserId: interaction.user.id,
+          discordUsername: interaction.user.username,
+          discordDisplayName: interaction.user.displayName || interaction.user.username,
+          discordAvatar: avatarUrl,
+          guildId: interaction.guildId || '',
+          expiresAt
+        });
+        
+        // Cleanup expired tokens periodically
+        await storage.cleanupExpiredTokens();
+        
+        // Create authenticated form URL with token
+        const baseUrl = process.env.EXCHANGE_FORM_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.replit.dev`;
+        const formUrl = `${baseUrl}/exchange?token=${token}`;
+        
+        // Send ephemeral reply with authenticated form URL
         await interaction.reply({
-          content: `Please fill out the exchange form here: ${formUrl}`,
+          content: `🔗 **Personalized Exchange Form**\n\n` +
+                   `Your secure form link: ${formUrl}\n\n` +
+                   `✅ This link is personalized to your Discord account\n` +
+                   `⏰ Link expires in 30 minutes\n` +
+                   `🔒 For security, this link only works once\n\n` +
+                   `Fill out the form to create your exchange post!`,
           ephemeral: true
         });
         
-        log(`Successfully sent form URL to ${interaction.user.tag}: ${formUrl}`, "discord-bot");
+        log(`Successfully created authenticated form token for ${interaction.user.tag}`, "discord-bot");
       } catch (error) {
         log(`Error handling exchange command: ${error}`, "discord-bot");
         if (!interaction.replied) {
@@ -1498,6 +1531,7 @@ export async function createForumPost(postData: {
   lng?: number;
   userId: string;
   username: string;
+  discordAvatar?: string;
 }): Promise<{ success: boolean; threadId?: string; error?: string }> {
   try {
     if (!bot) {
@@ -1587,7 +1621,7 @@ export async function createForumPost(postData: {
       color: postData.type === 'give' ? 0x57F287 : postData.type === 'request' ? 0x3498DB : 0xF39C12,
       author: {
         name: postData.username,
-        icon_url: `https://cdn.discordapp.com/embed/avatars/0.png` // Default Discord avatar for external forms
+        icon_url: postData.discordAvatar || `https://cdn.discordapp.com/embed/avatars/0.png`
       },
       title: `${typeDisplayNames[postData.type as keyof typeof typeDisplayNames] || postData.type.charAt(0).toUpperCase() + postData.type.slice(1)} ${getArticle(postData.title)}${postData.title}`,
       description: `${postData.username} is ${postData.type === 'give' ? 'offering to give away' : postData.type === 'request' ? 'looking for' : 'looking to trade'}:\n**${postData.title}**\n\n**Description:**\n${postData.description}${locationInfo}`,

@@ -304,12 +304,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // API endpoint to validate form tokens
+  app.get("/api/validate-token/:token", async (req, res) => {
+    try {
+      const token = req.params.token;
+      
+      if (!token) {
+        return res.status(400).json({ 
+          valid: false, 
+          error: "No token provided" 
+        });
+      }
+
+      // Get the token from database
+      const formToken = await storage.getFormToken(token);
+      
+      if (!formToken) {
+        return res.status(401).json({ 
+          valid: false, 
+          error: "Invalid or expired token" 
+        });
+      }
+
+      // Return user information from token
+      res.json({
+        valid: true,
+        user: {
+          discordUserId: formToken.discordUserId,
+          discordUsername: formToken.discordUsername,
+          discordDisplayName: formToken.discordDisplayName,
+          discordAvatar: formToken.discordAvatar,
+          guildId: formToken.guildId
+        }
+      });
+    } catch (error: any) {
+      console.error("Error validating token:", error);
+      res.status(500).json({ 
+        valid: false, 
+        error: "Failed to validate token" 
+      });
+    }
+  });
+
   // API endpoint to handle new post submissions from external image upload server
   app.post("/api/new-post", async (req, res) => {
     try {
       // Validate the incoming data
       const postSchema = z.object({
-        username: z.string().min(1),
+        token: z.string().min(1),
         title: z.string().min(1),
         description: z.string().min(1),
         category: z.string().min(1),
@@ -322,10 +364,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const validatedData = postSchema.parse(req.body);
       
+      // Validate and get token information
+      const formToken = await storage.getFormToken(validatedData.token);
+      
+      if (!formToken) {
+        return res.status(401).json({ 
+          success: false, 
+          error: "Invalid or expired token" 
+        });
+      }
+
+      // Mark token as used
+      await storage.markFormTokenUsed(validatedData.token);
+      
       // Import the createForumPost function (we'll need to implement this)
       const { createForumPost } = await import('./discord-bot-fixed');
       
-      // Create forum post in Discord with the provided data
+      // Create forum post in Discord with the authenticated user data
       const result = await createForumPost({
         title: validatedData.title,
         description: validatedData.description,
@@ -335,8 +390,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         location: validatedData.location,
         lat: validatedData.lat,
         lng: validatedData.lng,
-        userId: 'external-form', // Special identifier for external submissions
-        username: validatedData.username
+        userId: formToken.discordUserId, // Real Discord user ID
+        username: formToken.discordDisplayName || formToken.discordUsername,
+        discordAvatar: formToken.discordAvatar || undefined
       });
 
       if (result.success) {

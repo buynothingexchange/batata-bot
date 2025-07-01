@@ -439,11 +439,36 @@ export class MemStorage implements IStorage {
   async getTotalDonationAmount(): Promise<number> {
     return 0;
   }
+
+  // Form Token operations for MemStorage (stub implementations)
+  async createFormToken(token: InsertFormToken): Promise<FormToken> {
+    const id = this.currentForumPostId++; // Reuse counter for simplicity
+    const formToken: FormToken = { 
+      ...token, 
+      id,
+      createdAt: new Date(),
+      used: false
+    };
+    return formToken;
+  }
+
+  async getFormToken(token: string): Promise<FormToken | undefined> {
+    // Stub implementation for MemStorage
+    return undefined;
+  }
+
+  async markFormTokenUsed(token: string): Promise<void> {
+    // Stub implementation for MemStorage
+  }
+
+  async cleanupExpiredTokens(): Promise<void> {
+    // Stub implementation for MemStorage
+  }
 }
 
 // Database storage implementation
 import { db } from "./db";
-import { and, eq, desc, gte, lte, lt, or, sum } from "drizzle-orm";
+import { and, eq, desc, gte, lte, lt, or, sum, gt } from "drizzle-orm";
 
 export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
