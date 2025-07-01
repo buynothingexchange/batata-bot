@@ -139,59 +139,85 @@ export default function ExchangeForm() {
     loadLeaflet();
   }, []);
 
-  // Initialize map when Leaflet is loaded
+  // Initialize map when both Leaflet is loaded AND container is ready
   useEffect(() => {
-    if (mapLoaded && mapRef.current && !mapInstanceRef.current) {
-      const timeoutId = setTimeout(() => {
-        if (!mapRef.current) return;
-        
-        try {
-          console.log('Initializing Leaflet map...');
-          
-          // Clear any existing content
-          mapRef.current.innerHTML = '';
-          
-          const map = window.L.map(mapRef.current).setView([43.7, -79.4], 11);
-
-          window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-          }).addTo(map);
-
-          const circle = window.L.circle([43.7, -79.4], {
-            color: 'green',
-            fillColor: '#3f9e2f',
-            fillOpacity: 0.4,
-            radius: 2000
-          }).addTo(map);
-
-          const marker = window.L.marker([43.7, -79.4], { draggable: true }).addTo(map);
-
-          marker.on('drag', function(e: any) {
-            circle.setLatLng(e.latlng);
-            form.setValue('lat', parseFloat(e.latlng.lat.toFixed(4)));
-            form.setValue('lng', parseFloat(e.latlng.lng.toFixed(4)));
-          });
-
-          // Ensure map renders properly
-          setTimeout(() => {
-            map.invalidateSize();
-            console.log('Map invalidated and should be visible');
-          }, 100);
-
-          mapInstanceRef.current = map;
-          markerRef.current = marker;
-          circleRef.current = circle;
-          setMapInitialized(true);
-          
-          console.log('Map initialized successfully');
-        } catch (error) {
-          console.error('Error initializing map:', error);
-        }
-      }, 1000); // 1 second delay
+    console.log('Map effect triggered:', { mapLoaded, hasMapRef: !!mapRef.current, hasMapInstance: !!mapInstanceRef.current });
+    
+    if (!mapLoaded || mapInstanceRef.current) return;
+    
+    // Keep checking for mapRef to become available
+    const checkMapRef = () => {
+      if (!mapRef.current) {
+        console.log('Map container not ready, checking again...');
+        setTimeout(checkMapRef, 100);
+        return;
+      }
       
-      return () => clearTimeout(timeoutId);
-    }
-  }, [mapLoaded, form]);
+      console.log('Map container is ready, starting initialization...');
+      console.log('Container dimensions:', mapRef.current.offsetWidth, 'x', mapRef.current.offsetHeight);
+      
+      // Wait for container to have proper dimensions
+      if (mapRef.current.offsetWidth === 0) {
+        console.log('Container has no width, waiting...');
+        setTimeout(checkMapRef, 200);
+        return;
+      }
+      
+      try {
+        console.log('Creating Leaflet map instance...');
+        
+        // Clear any existing content
+        mapRef.current.innerHTML = '';
+        
+        const map = window.L.map(mapRef.current, {
+          center: [43.7, -79.4],
+          zoom: 11,
+          zoomControl: true,
+          attributionControl: true
+        });
+
+        console.log('Adding tile layer...');
+        window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap contributors',
+          maxZoom: 19
+        }).addTo(map);
+
+        console.log('Adding circle and marker...');
+        const circle = window.L.circle([43.7, -79.4], {
+          color: 'green',
+          fillColor: '#3f9e2f',
+          fillOpacity: 0.4,
+          radius: 1000
+        }).addTo(map);
+
+        const marker = window.L.marker([43.7, -79.4], { draggable: true }).addTo(map);
+
+        marker.on('drag', function(e: any) {
+          circle.setLatLng(e.latlng);
+          form.setValue('lat', parseFloat(e.latlng.lat.toFixed(4)));
+          form.setValue('lng', parseFloat(e.latlng.lng.toFixed(4)));
+        });
+
+        // Force map to render properly
+        setTimeout(() => {
+          map.invalidateSize();
+          console.log('Map size invalidated and refreshed');
+        }, 200);
+
+        mapInstanceRef.current = map;
+        markerRef.current = marker;
+        circleRef.current = circle;
+        setMapInitialized(true);
+        
+        console.log('✅ Map initialized successfully');
+      } catch (error) {
+        console.error('❌ Error initializing map:', error);
+      }
+    };
+    
+    // Start checking after a short delay
+    setTimeout(checkMapRef, 500);
+  }, [mapLoaded]);
 
   // Update form validation when exchange type changes
   useEffect(() => {
@@ -485,7 +511,7 @@ export default function ExchangeForm() {
                   )}
                 </div>
                 <p className="text-sm text-gray-400">
-                  Drag the marker to select your approximate location. The green circle shows a 2km radius area.
+                  Drag the marker to select your approximate location. The green circle shows a 1km radius area.
                 </p>
               </div>
 
