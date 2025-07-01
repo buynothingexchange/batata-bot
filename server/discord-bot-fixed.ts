@@ -686,47 +686,54 @@ async function handleSlashCommand(interaction: ChatInputCommandInteraction): Pro
     } else if (commandName === 'markfulfilled') {
       log(`Processing /markfulfilled command from ${interaction.user.tag}`, "discord-bot");
       
-      const tradedWithUser = interaction.options.getUser('tradedwith', true);
-      
-      // Get user's active forum posts from storage
-      const userPosts = await storage.getForumPostsByUser(interaction.user.id);
-      const activePosts = userPosts.filter(post => post.isActive);
-      
-      if (activePosts.length === 0) {
-        await sendEphemeralWithAutoDelete(interaction,
-          "You don't have any active forum posts to mark as fulfilled. Use `/exchange` to create a new post!"
-        );
-        return;
+      try {
+        const tradedWithUser = interaction.options.getUser('tradedwith', true);
+        log(`User selected to trade with: ${tradedWithUser.username} (${tradedWithUser.id})`, "discord-bot");
+        
+        // Get user's active forum posts from storage
+        const userPosts = await storage.getForumPostsByUser(interaction.user.id);
+        const activePosts = userPosts.filter(post => post.isActive);
+        
+        if (activePosts.length === 0) {
+          await sendEphemeralWithAutoDelete(interaction,
+            "You don't have any active forum posts to mark as fulfilled. Use `/exchange` to create a new post!"
+          );
+          return;
+        }
+        
+        // If user has only one active post, mark it directly
+        if (activePosts.length === 1) {
+          const post = activePosts[0];
+          await handleMarkFulfilledDirect(interaction, post.threadId, tradedWithUser);
+          return;
+        }
+        
+        // If user has multiple posts, show selection dropdown
+        const postOptions = activePosts.slice(0, 25).map(post => ({
+          label: post.title.length > 100 ? post.title.substring(0, 97) + "..." : post.title,
+          description: `Mark as traded with ${tradedWithUser.username}`,
+          value: `fulfill:${post.threadId}:${tradedWithUser.id}`
+        }));
+        
+        const postSelectRow = new ActionRowBuilder<StringSelectMenuBuilder>()
+          .addComponents(
+            new StringSelectMenuBuilder()
+              .setCustomId('mark_fulfilled_select')
+              .setPlaceholder('Select which post to mark as fulfilled')
+              .addOptions(postOptions)
+          );
+        
+        await sendEphemeralWithAutoDelete(interaction, {
+          content: `Select which post you want to mark as fulfilled with **${tradedWithUser.username}**:`,
+          components: [postSelectRow]
+        });
+        
+        log(`Successfully sent post selection for fulfillment to ${interaction.user.tag}`, "discord-bot");
+        
+      } catch (error) {
+        log(`Error in /markfulfilled command: ${error}`, "discord-bot");
+        await sendEphemeralWithAutoDelete(interaction, "There was an error processing your command. Please try again.");
       }
-      
-      // If user has only one active post, mark it directly
-      if (activePosts.length === 1) {
-        const post = activePosts[0];
-        await handleMarkFulfilledDirect(interaction, post.threadId, tradedWithUser);
-        return;
-      }
-      
-      // If user has multiple posts, show selection dropdown
-      const postOptions = activePosts.slice(0, 25).map(post => ({
-        label: post.title.length > 100 ? post.title.substring(0, 97) + "..." : post.title,
-        description: `Mark as traded with ${tradedWithUser.username}`,
-        value: `fulfill:${post.threadId}:${tradedWithUser.id}`
-      }));
-      
-      const postSelectRow = new ActionRowBuilder<StringSelectMenuBuilder>()
-        .addComponents(
-          new StringSelectMenuBuilder()
-            .setCustomId('mark_fulfilled_select')
-            .setPlaceholder('Select which post to mark as fulfilled')
-            .addOptions(postOptions)
-        );
-      
-      await sendEphemeralWithAutoDelete(interaction, {
-        content: `Select which post you want to mark as fulfilled with **${tradedWithUser.username}**:`,
-        components: [postSelectRow]
-      });
-      
-      log(`Successfully sent post selection for fulfillment to ${interaction.user.tag}`, "discord-bot");
     
     } else if (commandName === 'contactus' || commandName === 'contactusanon') {
       const isAnonymous = commandName === 'contactusanon';
