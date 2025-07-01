@@ -154,9 +154,9 @@ export default function ExchangeForm() {
 
   // Initialize map when both Leaflet is loaded AND container is ready
   useEffect(() => {
-    console.log('Map effect triggered:', { mapLoaded, hasMapRef: !!mapRef.current, hasMapInstance: !!mapInstanceRef.current });
+    console.log('Map effect triggered:', { mapLoaded, hasMapRef: !!mapRef.current, hasMapInstance: !!mapInstanceRef.current, tokenValid: !!tokenData?.valid });
     
-    if (!mapLoaded || mapInstanceRef.current) return;
+    if (!mapLoaded || mapInstanceRef.current || !tokenData?.valid) return;
     
     // Keep checking for mapRef to become available
     const checkMapRef = () => {
@@ -230,7 +230,7 @@ export default function ExchangeForm() {
     
     // Start checking after a short delay
     setTimeout(checkMapRef, 500);
-  }, [mapLoaded]);
+  }, [mapLoaded, tokenData?.valid]);
 
   // Update form validation when exchange type changes
   useEffect(() => {
