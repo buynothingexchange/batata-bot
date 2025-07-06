@@ -1,9 +1,9 @@
 import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { initializeBot, initializeBotConfig, getBotStatus, processCommand, restartBot, updateBotConfig, ensureCategoryChannels, createForumPost } from "./discord-bot-fixed";
+import { storage } from "./storage.js";
+import { initializeBot, initializeBotConfig, getBotStatus, processCommand, restartBot, updateBotConfig, ensureCategoryChannels, createForumPost } from "./discord-bot-fixed.js";
 import { z } from "zod";
-import { insertLogSchema } from "@shared/schema";
+import { insertLogSchema } from "../shared/schema.js";
 import OpenAI from "openai";
 import multer from "multer";
 import axios from "axios";

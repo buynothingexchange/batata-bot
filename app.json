@@ -1,0 +1,48 @@
+{
+  "name": "Batata Discord Bot",
+  "description": "A sophisticated Discord bot for item exchange and community management",
+  "repository": "https://github.com/yourusername/batata-discord-bot",
+  "logo": "https://node-js-sample.herokuapp.com/node.png",
+  "keywords": ["discord", "bot", "typescript", "nodejs", "postgresql", "exchange"],
+  "image": "heroku/nodejs",
+  "addons": [
+    {
+      "plan": "heroku-postgresql:mini",
+      "as": "DATABASE"
+    }
+  ],
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ],
+  "env": {
+    "NODE_ENV": {
+      "description": "Production environment",
+      "value": "production"
+    },
+    "DISCORD_BOT_TOKEN": {
+      "description": "Discord bot token from Discord Developer Portal",
+      "required": true
+    },
+    "DISCORD_GUILD_ID": {
+      "description": "Discord server ID where the bot will operate", 
+      "required": true
+    },
+    "OPENAI_API_KEY": {
+      "description": "OpenAI API key for enhanced text processing (optional)",
+      "required": false
+    },
+    "IMGUR_CLIENT_ID": {
+      "description": "Imgur client ID for image uploads (optional)",
+      "required": false
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "stack": "heroku-22"
+}

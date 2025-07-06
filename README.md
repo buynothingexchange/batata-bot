@@ -1,86 +1,151 @@
-# Image Upload Form Server
+# Batata Discord Bot
 
-A simple Express.js server that provides an HTML form for uploading images to Imgur and sending the result to a webhook.
+A sophisticated Discord bot application designed to streamline cross-server item exchange through intelligent, multi-channel interaction workflows with advanced forum-based communication and user engagement features.
 
 ## Features
 
-- Clean, responsive HTML form interface
-- Image upload to Imgur with automatic hosting
-- Send image URL + form data to external webhook
-- Drag & drop file upload support
-- Image preview before upload
-- Real-time upload progress feedback
-- Error handling and validation
+- **Item Exchange System** - ISO request processing with OpenAI categorization
+- **Forum Management** - Auto-bumping, post tracking, claim management  
+- **Donation Tracking** - Real-time Ko-fi integration with progress bars
+- **Moderation Tools** - Exchange oversight, channel management
+- **Statistics & Reporting** - User stats, exchange history, donation totals
+- **Interactive Web Form** - External form for creating exchange posts
+- **Location-based Exchanges** - Neighborhood detection and mapping
 
-## How to Use
+## Tech Stack
 
-1. **Start the server:**
-   ```bash
-   node server.js
-   ```
+- **Backend**: Node.js, Express, TypeScript
+- **Database**: PostgreSQL with Drizzle ORM
+- **Frontend**: React, Vite, Tailwind CSS, shadcn/ui
+- **External APIs**: Discord.js, OpenAI, Imgur, Ko-fi webhooks
 
-2. **Access the form:**
-   Open your browser to `http://localhost:3000`
+## Quick Deploy to Heroku
 
-3. **Fill out the form:**
-   - **Title**: Optional title for your image
-   - **Description**: Optional description for your image
-   - **Webhook URL**: Required - the URL where the data will be sent
-   - **Image**: Required - select an image file (JPG, PNG, GIF, etc.)
+### 1. Prerequisites
+- [Heroku CLI](https://devcenter.heroku.com/articles/heroku-cli) installed
+- Git installed
+- Discord Bot Token and Guild ID
+- PostgreSQL database (Heroku Postgres recommended)
 
-4. **Submit:**
-   - Click "Upload & Send to Webhook"
-   - The image will be uploaded to Imgur
-   - The form data + image URL will be sent to your webhook
-
-## Webhook Payload
-
-Your webhook will receive a JSON POST request with this structure:
-
-```json
-{
-  "title": "Image Title",
-  "description": "Image Description", 
-  "imageUrl": "https://i.imgur.com/xxxxxx.jpg",
-  "timestamp": "2023-12-07T12:34:56.789Z"
-}
+### 2. Clone and Setup
+```bash
+git clone <your-repo-url>
+cd batata-discord-bot
 ```
+
+### 3. Deploy to Heroku
+```bash
+# Login to Heroku
+heroku login
+
+# Create Heroku app
+heroku create your-app-name
+
+# Add PostgreSQL addon
+heroku addons:create heroku-postgresql:mini
+
+# Set environment variables
+heroku config:set DISCORD_BOT_TOKEN=your_bot_token
+heroku config:set DISCORD_GUILD_ID=your_guild_id
+heroku config:set NODE_ENV=production
+heroku config:set OPENAI_API_KEY=your_openai_key  # Optional
+heroku config:set IMGUR_CLIENT_ID=your_imgur_id   # Optional
+
+# Deploy
+git push heroku main
+
+# Run database migrations
+heroku run npm run db:push
+```
+
+### 4. Bot Setup
+1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
+2. Create a new application and bot
+3. Copy the bot token to `DISCORD_BOT_TOKEN`
+4. Get your Discord server ID for `DISCORD_GUILD_ID`
+5. Invite bot to your server with required permissions
+
+## Required Bot Permissions
+- Read Messages/View Channels
+- Send Messages  
+- Read Message History
+- Add Reactions
+- Embed Links
+- Attach Files
+- Use Slash Commands
+- Manage Messages (for moderation)
+- Create Public Threads
+- Send Messages in Threads
 
 ## Environment Variables
 
-- `IMGUR_CLIENT_ID`: Optional - Your Imgur API client ID (defaults to a public one)
-- `PORT`: Optional - Server port (defaults to 3000)
+Copy `.env.example` to `.env` and fill in your values:
 
-## File Size Limits
+```env
+# Required
+DISCORD_BOT_TOKEN=your_discord_bot_token
+DISCORD_GUILD_ID=your_discord_guild_id  
+DATABASE_URL=your_postgresql_url
 
-- Maximum file size: 10MB
-- Supported formats: All image types (JPG, PNG, GIF, WebP, etc.)
+# Optional but recommended
+OPENAI_API_KEY=your_openai_key
+IMGUR_CLIENT_ID=your_imgur_client_id
 
-## API Endpoints
+# Production settings
+NODE_ENV=production
+PORT=5000
+```
 
-- `GET /` - Serves the HTML form
-- `POST /upload` - Handles image upload and webhook sending
+## Bot Commands
 
-## Dependencies
+### User Commands
+- `/exchange` - Create exchange post via web form
+- `/markfulfilled @user` - Mark exchange as completed
+- `/mystats` - View your exchange statistics
+- `/contactus` - Send message to moderators
+- `/help` - Show all available commands
 
-- express: Web server framework
-- multer: File upload handling
-- axios: HTTP requests
-- form-data: Multipart form data for Imgur API
-- cors: Cross-origin resource sharing
+### Donation Commands  
+- `/donate` - Show Ko-fi donation link
+- `/initgoal amount` - Create donation goal (admin)
+- `/resetgoal` - Reset donation progress (admin)
 
-## Error Handling
+### Admin Commands
+- `/exchanges` - View all confirmed exchanges
+- `/testautobump` - Test auto-bump system
+- `/testkofi` - Test Ko-fi webhook
 
-The server includes comprehensive error handling for:
-- Invalid file types
-- File size limits
-- Imgur API failures
-- Webhook delivery failures
-- Network connectivity issues
+## Development
 
-## Security Notes
+### Local Setup
+```bash
+npm install
+cp .env.example .env
+# Fill in your environment variables
+npm run db:push
+npm run dev
+```
 
-- Files are processed in memory (not saved to disk)
-- File type validation prevents non-image uploads
-- CORS enabled for cross-origin requests
-- Input validation on all form fields
+### Project Structure
+```
+├── server/           # Backend API and Discord bot
+├── client/          # React frontend
+├── shared/          # Shared types and schemas  
+├── public/          # Static assets
+└── dist/           # Built files (auto-generated)
+```
+
+## Ko-fi Integration
+
+Set up Ko-fi webhook:
+1. Go to Ko-fi Settings → Webhooks
+2. Set webhook URL to: `https://your-app.herokuapp.com/kofi`
+3. Test with `/testkofi` command
+
+## Support
+
+For issues or questions, use the `/contactus` command in Discord or create a GitHub issue.
+
+## License
+
+MIT License - see LICENSE file for details.

@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { log } from "./vite";
+import { log } from "./vite.js";
 
 // Initialize the OpenAI client with fallback
 const openai = new OpenAI({ 

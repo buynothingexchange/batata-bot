@@ -10,7 +10,7 @@ import {
   donations, type Donation, type InsertDonation,
   formTokens, type FormToken, type InsertFormToken,
   pendingClaims, type PendingClaim, type InsertPendingClaim
-} from "@shared/schema";
+} from "../shared/schema.js";
 
 // Storage interface for bot-related data
 export interface IStorage {
@@ -525,7 +525,7 @@ export class MemStorage implements IStorage {
 }
 
 // Database storage implementation
-import { db } from "./db";
+import { db } from "./db.js";
 import { and, eq, desc, gte, lte, lt, or, sum, gt } from "drizzle-orm";
 
 export class DatabaseStorage implements IStorage {

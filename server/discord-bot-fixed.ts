@@ -11,13 +11,13 @@ import {
   REST, Routes, ChatInputCommandInteraction
 } from 'discord.js';
 import { WebSocketServer } from 'ws';
-import { log } from './vite';
-import { storage } from './storage';
-import { analyzeISORequest } from './openai-service';
+import { log } from './vite.js';
+import { storage } from './storage.js';
+import { analyzeISORequest } from './openai-service.js';
 import { Server } from 'http';
-import type { InsertDonation } from '@shared/schema';
-import { db } from './db';
-import { donationGoals } from '@shared/schema';
+import type { InsertDonation } from '../shared/schema.js';
+import { db } from './db.js';
+import { donationGoals } from '../shared/schema.js';
 import { eq } from 'drizzle-orm';
 
 // Bot instance
