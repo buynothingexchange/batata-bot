@@ -1,140 +1,158 @@
-import express from 'express';
-import multer from 'multer';
-import axios from 'axios';
-import FormData from 'form-data';
-import cors from 'cors';
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
+// Production entry point for Heroku deployment
+// This file avoids importing any Vite dependencies
+
+import express from "express";
+import path from "path";
+import { fileURLToPath } from "url";
+// Import path resolution for production
+const isProduction = process.env.NODE_ENV === 'production';
+const basePath = isProduction ? './dist' : './server';
+
+const { registerRoutes } = await import(`${basePath}/routes.js`);
+const { initializeBot, processKofiDonation } = await import(`${basePath}/discord-bot-fixed.js`);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Simple logging function for production
+function log(message, source = "express") {
+  const formattedTime = new Date().toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit", 
+    second: "2-digit",
+    hour12: true,
+  });
+  console.log(`${formattedTime} [${source}] ${message}`);
+}
+
+// Track server start time for uptime calculations
+const SERVER_START_TIME = new Date();
+
 const app = express();
-const port = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static('public'));
+// Parse JSON with larger limit for image uploads
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Configure multer for file upload
-const storage = multer.memoryStorage();
-const upload = multer({ 
-  storage: storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    // Accept images only
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed!'), false);
-    }
-  }
-});
-
-// Routes
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.post('/upload', upload.single('image'), async (req, res) => {
+// Ko-fi webhook endpoint (must be before other middleware)
+app.post('/kofi', async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No image file provided' });
-    }
-
-    const { title, description, webhookUrl } = req.body;
-
-    if (!webhookUrl) {
-      return res.status(400).json({ error: 'Webhook URL is required' });
-    }
-
-    // Upload image to Imgur
-    console.log('Uploading image to Imgur...');
-    const imgurResponse = await uploadToImgur(req.file.buffer);
+    const data = JSON.parse(req.body.data || '{}');
     
-    if (!imgurResponse.success) {
-      return res.status(500).json({ error: 'Failed to upload image to Imgur' });
+    if (data.verification_token) {
+      log(`Ko-fi webhook received: ${data.type} - $${data.amount} from ${data.from_name}`, "kofi");
+      
+      await processKofiDonation({
+        amount: parseFloat(data.amount) * 100, // Convert to cents
+        kofiTransactionId: data.kofi_transaction_id,
+        message: data.message,
+        donorName: data.from_name,
+        email: data.email,
+        isPublic: data.is_public !== false
+      });
+      
+      log(`Processed Ko-fi donation of $${data.amount} from ${data.from_name}`, "kofi");
     }
-
-    const imageUrl = imgurResponse.data.link;
-    console.log('Image uploaded to Imgur:', imageUrl);
-
-    // Send data to webhook
-    console.log('Sending data to webhook...');
-    const webhookData = {
-      title: title || '',
-      description: description || '',
-      imageUrl: imageUrl,
-      timestamp: new Date().toISOString()
-    };
-
-    const webhookResponse = await axios.post(webhookUrl, webhookData, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-
-    console.log('Webhook response status:', webhookResponse.status);
-
-    res.json({
-      success: true,
-      message: 'Image uploaded and webhook sent successfully',
-      imageUrl: imageUrl,
-      webhookResponse: {
-        status: webhookResponse.status,
-        statusText: webhookResponse.statusText
-      }
-    });
-
+    
+    res.status(200).send('OK');
   } catch (error) {
-    console.error('Error processing upload:', error.message);
-    res.status(500).json({ 
-      error: 'Upload failed', 
-      details: error.message 
-    });
+    log(`Ko-fi webhook error: ${error}`, "kofi");
+    res.status(500).send('Error processing donation');
   }
 });
 
-async function uploadToImgur(imageBuffer) {
-  try {
-    const formData = new FormData();
-    formData.append('image', imageBuffer, {
-      filename: 'upload.jpg',
-      contentType: 'image/jpeg'
-    });
+// Request logging middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  const path = req.path;
+  let capturedJsonResponse;
 
-    const response = await axios.post('https://api.imgur.com/3/image', formData, {
-      headers: {
-        ...formData.getHeaders(),
-        'Authorization': `Client-ID ${process.env.IMGUR_CLIENT_ID || '546c25a59c58ad7'}`
+  const originalResJson = res.json;
+  res.json = function (bodyJson, ...args) {
+    capturedJsonResponse = bodyJson;
+    return originalResJson.apply(res, [bodyJson, ...args]);
+  };
+
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    if (path.startsWith("/api")) {
+      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+      if (capturedJsonResponse) {
+        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
-    });
 
-    return response.data;
+      if (logLine.length > 80) {
+        logLine = logLine.slice(0, 79) + "…";
+      }
+
+      log(logLine);
+    }
+  });
+
+  next();
+});
+
+// Serve static files from dist (production build output)
+const staticPath = path.join(__dirname, 'dist');
+app.use(express.static(staticPath));
+
+// Catch-all handler: serve index.html for SPA routing
+app.get('*', (req, res) => {
+  const indexPath = path.join(staticPath, 'index.html');
+  res.sendFile(indexPath, (err) => {
+    if (err) {
+      res.status(404).send(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Batata Discord Bot</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+          </head>
+          <body>
+            <div id="root">
+              <h1>Batata Discord Bot</h1>
+              <p>Bot is running in production mode.</p>
+              <p>API endpoints available at /api/*</p>
+            </div>
+          </body>
+        </html>
+      `);
+    }
+  });
+});
+
+// Error handling middleware
+app.use((err, _req, res, _next) => {
+  const status = err.status || err.statusCode || 500;
+  const message = err.message || "Internal Server Error";
+  res.status(status).json({ message });
+  console.error('Server error:', err);
+});
+
+// Main startup function
+async function startServer() {
+  try {
+    // Initialize Discord bot first
+    log("Initializing Discord bot...", "server");
+    await initializeBot();
+    log("Discord bot initialized successfully", "server");
+    
+    // Register API routes
+    const server = await registerRoutes(app);
+
+    // Start server
+    const port = process.env.PORT || 5000;
+    server.listen(port, '0.0.0.0', () => {
+      log(`serving on port ${port}`);
+      log(`Bot dashboard available at http://localhost:${port}`, "server");
+    });
   } catch (error) {
-    console.error('Imgur upload error:', error.response?.data || error.message);
-    return { success: false, error: error.message };
+    log(`Failed to start server: ${error}`, "server");
+    console.error("Server startup error:", error);
+    process.exit(1);
   }
 }
 
-// Error handling middleware
-app.use((error, req, res, next) => {
-  if (error instanceof multer.MulterError) {
-    if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
-    }
-  }
-  
-  console.error('Server error:', error);
-  res.status(500).json({ error: 'Internal server error' });
-});
-
-app.listen(port, '0.0.0.0', () => {
-  console.log(`Server running on http://0.0.0.0:${port}`);
-  console.log('Ready to accept image uploads and send to webhooks');
-});
+// Start the server
+startServer();

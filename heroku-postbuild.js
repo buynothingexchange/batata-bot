@@ -12,35 +12,33 @@ try {
   console.log('📦 Building frontend...');
   execSync('npx vite build', { stdio: 'inherit' });
   
-  // 2. Build backend with esbuild
-  console.log('⚙️ Building backend...');
-  execSync('npx esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --minify', { stdio: 'inherit' });
-  
-  // 3. Copy any necessary static files
-  console.log('📁 Copying static assets...');
-  
-  // Copy shared schema for runtime access
+  // 2. Build server files for production 
+  console.log('⚙️ Building server files...');
+  execSync('npx esbuild server/routes.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/routes.js --minify', { stdio: 'inherit' });
+  execSync('npx esbuild server/discord-bot-fixed.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/discord-bot-fixed.js --minify', { stdio: 'inherit' });
+  execSync('npx esbuild server/storage.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/storage.js --minify', { stdio: 'inherit' });
+  execSync('npx esbuild server/db.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/db.js --minify', { stdio: 'inherit' });
+  execSync('npx esbuild server/utils.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/utils.js --minify', { stdio: 'inherit' });
+  execSync('npx esbuild server/openai-service.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/openai-service.js --minify', { stdio: 'inherit' });
+
+  // 3. Copy shared schema for runtime access
+  console.log('📁 Copying shared schema...');
   if (fs.existsSync('shared')) {
+    if (!fs.existsSync('dist')) {
+      fs.mkdirSync('dist', { recursive: true });
+    }
     fs.cpSync('shared', 'dist/shared', { recursive: true });
   }
   
-  // 4. Optimize for production
-  console.log('🔧 Production optimizations...');
-  
-  // Create a simple health check endpoint file
-  const healthCheck = `
-export function getServerHealth() {
-  return {
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    memory: process.memoryUsage()
-  };
-}`;
-  
-  fs.writeFileSync('dist/health.js', healthCheck);
+  // 3. Verify production entry point exists
+  console.log('🔧 Verifying production setup...');
+  if (!fs.existsSync('server.js')) {
+    console.error('❌ Production entry point server.js not found!');
+    process.exit(1);
+  }
   
   console.log('✅ Heroku post-build completed successfully!');
+  console.log('📝 Production server will start with: node server.js');
   
 } catch (error) {
   console.error('❌ Build failed:', error.message);

@@ -1,7 +1,32 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.js";
-import { setupVite, serveStatic, log } from "./vite.js";
 import { initializeBot, processKofiDonation } from "./discord-bot-fixed.js";
+
+// Environment-based server setup function
+async function setupEnvironmentServer(app: any, server: any) {
+  if (process.env.NODE_ENV === 'production') {
+    const { setupProduction } = await import("./production.js");
+    return setupProduction(app);
+  } else {
+    const { setupVite } = await import("./vite.js");
+    return setupVite(app, server);
+  }
+}
+
+// Environment-based logging function
+function getLogger() {
+  return (message: string, source = "express") => {
+    const formattedTime = new Date().toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit", 
+      second: "2-digit",
+      hour12: true,
+    });
+    console.log(`${formattedTime} [${source}] ${message}`);
+  };
+}
+
+const log = getLogger();
 
 // Track server start time for uptime calculations
 const SERVER_START_TIME = new Date();
@@ -96,14 +121,8 @@ app.use((req, res, next) => {
       throw err;
     });
 
-    // importantly only setup vite in development and after
-    // setting up all the other routes so the catch-all route
-    // doesn't interfere with the other routes
-    if (app.get("env") === "development") {
-      await setupVite(app, server);
-    } else {
-      serveStatic(app);
-    }
+    // Setup server based on environment - development uses Vite, production serves static files
+    await setupEnvironmentServer(app, server);
 
     // ALWAYS serve the app on port 5000
     // this serves both the API and the client.
