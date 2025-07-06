@@ -13,6 +13,13 @@ A sophisticated Discord bot application designed to streamline cross-server item
 
 ## Recent Changes (Latest Updates)
 
+### OpenAI Usage Clarification - July 2, 2025
+- ✅ **Current OpenAI usage documented** - bot uses OpenAI for ISO text message processing only
+- ✅ **Primary workflow is OpenAI-free** - `/exchange` command uses structured web forms, no AI needed
+- ✅ **Optional API key** - OpenAI has fallback parsing, bot works without API key but with reduced accuracy
+- ✅ **Cost consideration** - OpenAI only used for legacy ISO text processing, can be removed to eliminate API costs
+- ✅ **User choice** - keep OpenAI for smarter categorization or remove for cost savings while maintaining full functionality
+
 ### Replaced `/updatepost` with Streamlined `/markfulfilled` Command - July 1, 2025
 - ✅ **Removed `/updatepost` command entirely** - eliminated the complex multi-step workflow that wasn't providing value
 - ✅ **Enhanced `/markfulfilled` workflow** - now requires `tradedwith:@username` parameter upfront for more efficient processing
