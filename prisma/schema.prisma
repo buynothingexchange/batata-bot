@@ -1,0 +1,142 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Guild {
+  id        String   @id @map("_id")
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  welcomeChannelId   String?
+  modLogChannelID    String?
+  serverLogChannelID String?
+  modRoleId          String?
+  mainRoleId         String?
+
+  modLogWebhookUrl    String?
+  serverLogWebhookUrl String?
+
+  CurrentCounter   Int     @default(0)
+  GoalCounter      Int     @default(1000)
+  CounterChannelId String?
+
+  IsForceLockdown     Boolean @default(false)
+  ForcedLockdownArray Json[]  @default([])
+
+  // Verification System
+  verificationChannelId String?
+  verificationRoleId    String?
+  verificationMode      VerificationMode @default(INSTANT)
+  verificationEnabled   Boolean          @default(false)
+
+  MusicSettings MusicSettings?
+  ModCases      ModCases[]
+
+  // Exchange System
+  ExchangePosts          ExchangePosts[]
+  exchangeForumChannelId String?
+  exchangeEnabled        Boolean         @default(false)
+
+  @@map("guilds")
+}
+
+model ExchangePosts {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  guildId String
+  guild   Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  threadId String @unique // Discord forum thread ID
+  userId   String // Discord user ID who created the post
+
+  title            String
+  description      String
+  exchangeCategory ExchangeCategory
+  exchangeType     ExchangeType
+  location         String
+  imageUrl         String?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("exchange_posts")
+}
+
+// TODO: Make use of this MusicSettings Later On...
+model MusicSettings {
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String @unique
+  guild   Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  defaultVolume    Int     @default(50)
+  maxQueueSize     Int     @default(100)
+  allowDuplicates  Boolean @default(true)
+  djRole           String?
+  musicChannelOnly String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("music_settings")
+}
+
+model ModCases {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  guildId String
+  guild   Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  caseNumber      Int
+  TargetUserID    String
+  ModeratorUserID String
+
+  action ModActionType
+
+  reason String @default("No reason provided")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("mod_cases")
+}
+
+enum ModActionType {
+  WARN
+  TIMEOUT
+  KICK
+  BAN
+  HACKBAN // target non-members in server to be banned
+  UNBAN
+  UNTIMEOUT
+}
+
+enum VerificationMode {
+  INSTANT
+  CAPTCHA
+}
+
+enum ExchangeCategory {
+  ELECTRONICS
+  CLOTHING
+  ACCESSORIES
+  HOME_FURNITURE
+  FOOTWEAR
+  MISC
+}
+
+enum ExchangeType {
+  GIVE
+  REQUEST
+  TRADE
+}

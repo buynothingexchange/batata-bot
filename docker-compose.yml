@@ -1,0 +1,59 @@
+services:
+  dhb-v2-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dhb-v2-bot
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
+    depends_on:
+      - dhb-mongo
+      - dhb-lavalink
+    networks:
+      - dhb-v2-bot-Network
+
+  dhb-mongo:
+    image: mongo:latest
+    container_name: dhb-v2-bot-mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: password
+    volumes:
+      - mongo-data:/data/db
+      - mongo-config:/data/configdb
+    networks:
+      - dhb-v2-bot-Network
+
+  dhb-lavalink:
+    image: ghcr.io/lavalink-devs/lavalink:4
+    container_name: dhb-v2-bot-lavalink
+    restart: unless-stopped
+    environment:
+      - _JAVA_OPTIONS=-Xmx6G
+      - SERVER_PORT=2333
+      - LAVALINK_SERVER_PASSWORD=youshallnotpass
+    volumes:
+      - ./application.yml:/opt/Lavalink/application.yml:ro
+      - ./plugins/:/opt/Lavalink/plugins/
+    networks:
+      - dhb-v2-bot-Network
+    expose:
+      - 2333
+    ports:
+      - "2333:2333"
+
+volumes:
+  mongo-data:
+    driver: local
+  mongo-config:
+    driver: local
+
+networks:
+  dhb-v2-bot-Network:
+    driver: bridge
