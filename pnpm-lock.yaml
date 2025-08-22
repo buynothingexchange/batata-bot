@@ -32,9 +32,6 @@ importers:
       prisma:
         specifier: ^6.8.2
         version: 6.8.2(typescript@5.8.3)
-      shoukaku:
-        specifier: github:shipgirlproject/Shoukaku#cd319abde19b23a93d9367a6b28be5077e22e953
-        version: https://codeload.github.com/shipgirlproject/Shoukaku/tar.gz/cd319abde19b23a93d9367a6b28be5077e22e953
       zod:
         specifier: ^3.25.46
         version: 3.25.46
@@ -515,11 +512,6 @@ packages:
   shebang-regex@3.0.0:
     resolution: {integrity: sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==}
     engines: {node: '>=8'}
-
-  shoukaku@https://codeload.github.com/shipgirlproject/Shoukaku/tar.gz/cd319abde19b23a93d9367a6b28be5077e22e953:
-    resolution: {tarball: https://codeload.github.com/shipgirlproject/Shoukaku/tar.gz/cd319abde19b23a93d9367a6b28be5077e22e953}
-    version: 5.0.0-dev
-    engines: {node: '>=18.0.0', npm: '>=7.0.0'}
 
   signal-exit@4.1.0:
     resolution: {integrity: sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==}
@@ -1008,13 +1000,6 @@ snapshots:
       shebang-regex: 3.0.0
 
   shebang-regex@3.0.0: {}
-
-  shoukaku@https://codeload.github.com/shipgirlproject/Shoukaku/tar.gz/cd319abde19b23a93d9367a6b28be5077e22e953:
-    dependencies:
-      ws: 8.18.2
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
 
   signal-exit@4.1.0: {}
 
