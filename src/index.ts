@@ -6,7 +6,6 @@ import {
   loadEvents,
   registerSlashCommands,
 } from "./utils";
-import { destroyMusicManager } from "./utils/musicManager";
 import prisma from "./utils/prisma";
 
 async function initialiseBot() {

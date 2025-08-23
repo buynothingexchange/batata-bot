@@ -6,7 +6,6 @@ import {
   SlashCommandBuilder,
 } from "discord.js";
 import type { Command } from "../interface/command.js";
-import { getMusicManager } from "../utils/musicManager.js";
 import prisma from "../utils/prisma.js";
 
 const statusEmoji: Record<PresenceStatus, string> = {
@@ -21,30 +20,30 @@ export default {
   data: new SlashCommandBuilder()
     .setName("info")
     .setDescription("Get information about users, server, or lavalink")
-    .addSubcommand(subcommand =>
+    .addSubcommand((subcommand) =>
       subcommand
         .setName("user")
         .setDescription("Get information about a user")
-        .addUserOption(option =>
+        .addUserOption((option) =>
           option
             .setName("target")
             .setDescription("The user to get information about")
             .setRequired(false),
         ),
     )
-    .addSubcommand(subcommand =>
+    .addSubcommand((subcommand) =>
       subcommand
         .setName("guild")
         .setDescription("Get information about this server"),
     )
-    .addSubcommand(subcommand =>
+    .addSubcommand((subcommand) =>
       subcommand
         .setName("lavalink")
         .setDescription("Get lavalink node information"),
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.SendMessages),
 
-  execute: async interaction => {
+  execute: async (interaction) => {
     if (!interaction.guild) {
       await interaction.reply({
         content: "Guild not found.",
@@ -90,8 +89,8 @@ export default {
         );
 
       const roles = member.roles.cache
-        .filter(role => role.id !== interaction.guild?.id)
-        .map(role => role.toString())
+        .filter((role) => role.id !== interaction.guild?.id)
+        .map((role) => role.toString())
         .slice(0, 10);
 
       if (roles.length > 0) {
@@ -165,7 +164,7 @@ export default {
           value: `**Total Cases:** ${cases.length}\n**Recent:** ${cases
             .slice(0, 3)
             .map(
-              c =>
+              (c) =>
                 `${c.action} - ${c.reason} - (${new Date(
                   c.createdAt,
                 ).toLocaleDateString()})`,
@@ -193,8 +192,8 @@ export default {
           {
             name: "👥 Members",
             value: `**Total:** ${guild.memberCount}\n**Humans:** ${
-              guild.members.cache.filter(m => !m.user.bot).size
-            }\n**Bots:** ${guild.members.cache.filter(m => m.user.bot).size}`,
+              guild.members.cache.filter((m) => !m.user.bot).size
+            }\n**Bots:** ${guild.members.cache.filter((m) => m.user.bot).size}`,
             inline: true,
           },
           {
@@ -205,11 +204,11 @@ export default {
           {
             name: "📝 Channels",
             value: `**Text:** ${
-              guild.channels.cache.filter(c => c.type === 0).size
+              guild.channels.cache.filter((c) => c.type === 0).size
             }\n**Voice:** ${
-              guild.channels.cache.filter(c => c.type === 2).size
+              guild.channels.cache.filter((c) => c.type === 2).size
             }\n**Categories:** ${
-              guild.channels.cache.filter(c => c.type === 4).size
+              guild.channels.cache.filter((c) => c.type === 4).size
             }`,
             inline: true,
           },
@@ -231,65 +230,6 @@ export default {
           value: `**Level:** ${guild.premiumTier}\n**Boosts:** ${guild.premiumSubscriptionCount}`,
           inline: true,
         });
-      }
-
-      await interaction.reply({ embeds: [embed] });
-    } else if (subcommand === "lavalink") {
-      const musicManager = getMusicManager();
-      const node = musicManager.shoukaku.getIdealNode();
-      const queue = musicManager.getQueue(interaction.guild.id);
-
-      const embed = new EmbedBuilder()
-        .setColor("#ff6b6b")
-        .setTitle("🎵 Lavalink Information");
-
-      if (node) {
-        const stats = node.stats;
-        embed.addFields(
-          {
-            name: "🔗 Node Status",
-            value: `**State:** ${node.state}\n**Name:** ${node.name}`,
-            inline: true,
-          },
-          {
-            name: "⚡ Performance",
-            value: `**Players:** ${stats?.players || 0}\n**Playing:** ${
-              stats?.playingPlayers || 0
-            }`,
-            inline: true,
-          },
-          {
-            name: "💾 Memory",
-            value: `**Used:** ${
-              stats ? Math.round(stats.memory.used / 1024 / 1024) : 0
-            } MB\n**Available:** ${
-              stats ? Math.round(stats.memory.free / 1024 / 1024) : 0
-            } MB`,
-            inline: true,
-          },
-          {
-            name: "🔧 System",
-            value: `**CPU Load:** ${
-              stats ? (stats.cpu.lavalinkLoad * 100).toFixed(2) : 0
-            }%\n**Uptime:** ${
-              stats ? Math.floor(stats.uptime / 1000 / 60) : 0
-            } minutes`,
-            inline: true,
-          },
-        );
-
-        if (queue?.player) {
-          const player = await queue.player.getData();
-          embed.addFields({
-            name: "🎶 Current Queue",
-            value: `**Songs:** ${queue.tracks.length}\n**Current:** ${
-              queue.currentTrack?.info.title || "None"
-            }\n**Volume:** ${player.volume * 100}%`,
-            inline: false,
-          });
-        }
-      } else {
-        embed.setDescription("❌ No lavalink nodes available");
       }
 
       await interaction.reply({ embeds: [embed] });
