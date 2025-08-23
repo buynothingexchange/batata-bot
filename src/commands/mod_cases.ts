@@ -9,28 +9,16 @@ import type { Command } from "../interface/command.js";
 import { ModerationService } from "../service-classes/ModHelper.js";
 import prisma from "../utils/prisma.js";
 
-interface ModCase {
-  id: string;
-  guildId: string;
-  caseNumber: number;
-  TargetUserID: string;
-  ModeratorUserID: string;
-  action: string;
-  reason: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
 export default {
   data: new SlashCommandBuilder()
     .setName("cases")
     .setDescription("View moderation cases")
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
-    .addSubcommand(subcommand =>
+    .addSubcommand((subcommand) =>
       subcommand
         .setName("info")
         .setDescription("Get detailed information about a specific case")
-        .addIntegerOption(option =>
+        .addIntegerOption((option) =>
           option
             .setName("case-number")
             .setDescription("The case number to look up")
@@ -38,17 +26,17 @@ export default {
             .setMinValue(1),
         ),
     )
-    .addSubcommand(subcommand =>
+    .addSubcommand((subcommand) =>
       subcommand
         .setName("user")
         .setDescription("View cases for a specific user")
-        .addUserOption(option =>
+        .addUserOption((option) =>
           option
             .setName("user")
             .setDescription("The user to view cases for")
             .setRequired(true),
         )
-        .addIntegerOption(option =>
+        .addIntegerOption((option) =>
           option
             .setName("page")
             .setDescription("Page number (each page shows 10 cases)")
@@ -56,11 +44,11 @@ export default {
             .setMinValue(1),
         ),
     )
-    .addSubcommand(subcommand =>
+    .addSubcommand((subcommand) =>
       subcommand
         .setName("recent")
         .setDescription("View recent moderation cases")
-        .addIntegerOption(option =>
+        .addIntegerOption((option) =>
           option
             .setName("page")
             .setDescription("Page number (each page shows 10 cases)")
@@ -200,7 +188,7 @@ export default {
           .setDescription(
             userCases
               .map(
-                (c: ModCase) =>
+                (c) =>
                   `**#${c.caseNumber}** • ${c.action} • <t:${Math.floor(
                     c.createdAt.getTime() / 1000,
                   )}:R>\n${c.reason.substring(0, 50)}${
@@ -247,7 +235,7 @@ export default {
         const totalPages = Math.ceil(totalCases / limit);
 
         const casesText = await Promise.all(
-          recentCases.map(async (c: ModCase) => {
+          recentCases.map(async (c) => {
             const targetUser = await interaction.client.users
               .fetch(c.TargetUserID)
               .catch(() => null);

@@ -589,7 +589,9 @@ async function handleServerUnlock(interaction: ChatInputCommandInteraction) {
 
   if (!TGuild.ForcedLockdownArray) return;
 
-  const guildChannelPerms = TGuild.ForcedLockdownArray || [];
+  const guildChannelPerms = Array.isArray(TGuild.ForcedLockdownArray)
+    ? TGuild.ForcedLockdownArray
+    : [];
 
   const unlockedChannels = await unlockAllChannels(
     interaction.guild,
@@ -604,7 +606,7 @@ async function handleServerUnlock(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  if (guildChannelPerms.length) {
+  if (Array.isArray(guildChannelPerms) && guildChannelPerms.length) {
     await prisma.guild.update({
       where: { id: interaction.guild.id },
       data: {

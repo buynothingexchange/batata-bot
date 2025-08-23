@@ -1,5 +1,4 @@
 import { ActivityType, type Client, Events } from "discord.js";
-import { initializeMusicManager } from "../utils/musicManager";
 
 export default {
   name: Events.ClientReady,

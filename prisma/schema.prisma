@@ -6,19 +6,19 @@ generator client {
 }
 
 datasource db {
-  provider = "mongodb"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
 model Guild {
-  id        String   @id @map("_id")
+  id        String   @id
   name      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   welcomeChannelId   String?
-  modLogChannelID    String?
-  serverLogChannelID String?
+  modLogChannelId    String?
+  serverLogChannelId String?
   modRoleId          String?
   mainRoleId         String?
 
@@ -30,7 +30,7 @@ model Guild {
   CounterChannelId String?
 
   IsForceLockdown     Boolean @default(false)
-  ForcedLockdownArray Json[]  @default([])
+  ForcedLockdownArray Json?
 
   // Verification System
   verificationChannelId String?
@@ -49,7 +49,7 @@ model Guild {
 }
 
 model ExchangePosts {
-  id String @id @default(auto()) @map("_id") @db.ObjectId
+  id Int @id @default(autoincrement())
 
   guildId String
   guild   Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
@@ -62,7 +62,7 @@ model ExchangePosts {
   exchangeCategory ExchangeCategory
   exchangeType     ExchangeType
   location         String
-  imageUrl         String?
+  imageUrl         String?          @db.Text
 
   isActive Boolean @default(true)
 
@@ -73,7 +73,7 @@ model ExchangePosts {
 }
 
 model ModCases {
-  id String @id @default(auto()) @map("_id") @db.ObjectId
+  id Int @id @default(autoincrement())
 
   guildId String
   guild   Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)

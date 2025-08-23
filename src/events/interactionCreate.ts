@@ -16,7 +16,7 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from "discord.js";
-import type { Command, MusicCommand } from "../interface";
+import type { Command } from "../interface";
 import prisma from "../utils/prisma.js";
 
 export default {
@@ -25,7 +25,7 @@ export default {
 
   async execute(
     interaction: Interaction,
-    commands: Collection<string, Command | MusicCommand>,
+    commands: Collection<string, Command>,
     client: Client,
   ) {
     try {

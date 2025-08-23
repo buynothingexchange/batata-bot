@@ -29,8 +29,8 @@ export interface ModerationAction {
 
 export interface ModCaseData {
   caseNumber: number;
-  targetUserId: string;
-  moderatorUserId: string;
+  targetUserID: string;
+  moderatorUserID: string;
   action: ModActionType;
   reason: string;
   guildId: string;
@@ -121,8 +121,8 @@ export class ModerationService {
     return (await prisma.modCases.create({
       data: {
         caseNumber: nextCaseNumber,
-        TargetUserID: data.targetUserId,
-        ModeratorUserID: data.moderatorUserId,
+        TargetUserID: data.targetUserID,
+        ModeratorUserID: data.moderatorUserID,
         action: data.action,
         reason: data.reason,
         guildId: data.guildId,
@@ -214,8 +214,8 @@ export class ModerationService {
   ): Promise<PrismaModCase> {
     try {
       const modCase = await ModerationService.createModCase({
-        targetUserId: action.target.id,
-        moderatorUserId: action.moderator.id,
+        targetUserID: action.target.id,
+        moderatorUserID: action.moderator.id,
         action: action.type,
         reason: action.reason || "No reason provided",
         guildId: action.guild.id,
